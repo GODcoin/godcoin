@@ -1,5 +1,5 @@
 # GODcoin
-[![Build Status](https://travis-ci.org/GODcoin/GODcoin-rs.svg?branch=master)](https://travis-ci.org/GODcoin/GODcoin-rs)
+[![Build Status](https://travis-ci.com/GODcoin/GODcoin-rs.svg?branch=master)](https://travis-ci.com/GODcoin/GODcoin-rs)
 
 https://godcoin.gold
 
