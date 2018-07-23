@@ -1,0 +1,19 @@
+[package]
+name = "godcoin"
+version = "0.0.1"
+authors = ["Samuel Grenier <samrg472@gmail.com>"]
+
+[lib]
+name = "godcoin"
+path = "src/godcoin/lib.rs"
+
+[[bin]]
+name = "godcoin"
+test = false
+doc = false
+
+[dependencies]
+bs58 = "0.2.1"
+num-bigint = "0.2.0"
+num-traits = "0.2.5"
+sodiumoxide = { version="0.1.0", default-features=false, features=["std"] }
