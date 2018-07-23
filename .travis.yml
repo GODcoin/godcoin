@@ -1,3 +1,5 @@
 language: rust
 rust:
   - stable
+before_install:
+  - sudo apt-get install -y libsodium-dev
