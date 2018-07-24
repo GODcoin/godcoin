@@ -131,7 +131,7 @@ impl KeyPair {
         KeyPair(PublicKey {
             key: pk
         }, PrivateKey {
-            seed: seed,
+            seed,
             key: sk
         })
     }

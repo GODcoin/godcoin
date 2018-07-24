@@ -1,3 +1,4 @@
+#[repr(u8)]
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum AssetSymbol {
     GOLD,
@@ -5,7 +6,7 @@ pub enum AssetSymbol {
 }
 
 impl AssetSymbol {
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_str(s: &str) -> Option<Self> {
         match s {
             "GOLD" => Some(AssetSymbol::GOLD),
             "SILVER" => Some(AssetSymbol::SILVER),
@@ -13,7 +14,7 @@ impl AssetSymbol {
         }
     }
 
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             AssetSymbol::GOLD => "GOLD",
             AssetSymbol::SILVER => "SILVER"

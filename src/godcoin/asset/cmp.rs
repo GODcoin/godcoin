@@ -1,8 +1,6 @@
 use std::cmp;
 use asset::*;
 
-use self::precision::*;
-
 impl Asset {
     pub fn gt(&self, other: &Asset) -> Option<bool> {
         if self.symbol != other.symbol { return None }

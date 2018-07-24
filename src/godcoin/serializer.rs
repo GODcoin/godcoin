@@ -1,7 +1,8 @@
-use ::sodiumoxide::crypto::sign::Signature;
+use sodiumoxide::crypto::sign::Signature;
 use crypto::{SigPair, PublicKey};
-use ::std::io::{Read, Cursor};
-use asset::{Asset};
+use std::io::{Read, Cursor};
+use std::str::FromStr;
+use asset::Asset;
 
 trait DecodeTx<T> {
     /**
@@ -38,7 +39,7 @@ impl BufWrite for Vec<u8> {
     }
 
     fn push_bytes(&mut self, other: &[u8]) {
-        if other.len() == 0 {
+        if other.is_empty() {
             self.push_u32(0);
             return
         }
@@ -81,21 +82,21 @@ impl<'a, T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     fn take_u16(&mut self) -> Option<u16> {
         let mut buf = [0u8;2];
         self.read_exact(&mut buf).ok()?;
-        Some(((buf[0] as u16) << 8) | (buf[1] as u16))
+        Some((u16::from(buf[0]) << 8) | u16::from(buf[1]))
     }
 
     fn take_u32(&mut self) -> Option<u32> {
         let mut buf = [0u8;4];
         self.read_exact(&mut buf).ok()?;
 
-        Some(((buf[0] as u32) << 24)
-                | ((buf[1] as u32) << 16)
-                | ((buf[2] as u32) << 8)
-                | (buf[3] as u32))
+        Some((u32::from(buf[0]) << 24)
+                | (u32::from(buf[1]) << 16)
+                | (u32::from(buf[2]) << 8)
+                | (u32::from(buf[3])))
     }
 
     fn take_u64(&mut self) -> Option<u64> {
-        Some(((self.take_u32()? as u64) << 32) | (self.take_u32()? as u64))
+        Some((u64::from(self.take_u32()?) << 32) | u64::from(self.take_u32()?))
     }
 
     fn take_bytes(&mut self) -> Option<Vec<u8>> {
