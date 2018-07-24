@@ -1,4 +1,4 @@
-use ::sodiumoxide::crypto::hash::sha256;
+use ::sodiumoxide::crypto::hash;
 use ::sodiumoxide::crypto::sign;
 use ::sodiumoxide::randombytes;
 use ::std::io::{Cursor, Read};
@@ -49,8 +49,7 @@ impl Wif<PublicKey> for PublicKey {
         let prefixed_key = &raw[0..raw.len() - 4];
         {
             let checksum_a = &raw[raw.len() - 4 .. raw.len()];
-            let hash = sha256::hash(prefixed_key);
-            let checksum_b = &sha256::hash(hash.as_ref())[0..4];
+            let checksum_b = &double_sha256(prefixed_key)[0..4];
             if checksum_a != checksum_b { return None }
         }
 
@@ -65,7 +64,7 @@ impl Wif<PublicKey> for PublicKey {
         buf.push(PUB_BUF_PREFIX);
         buf.extend_from_slice(self.key.as_ref());
 
-        let checksum = &sha256::hash(sha256::hash(&buf).as_ref())[0..4];
+        let checksum = &double_sha256(&buf)[0..4];
         buf.extend_from_slice(checksum);
 
         let mut s = bs58::encode(buf).into_string();
@@ -93,8 +92,7 @@ impl Wif<KeyPair> for PrivateKey {
         let key = &raw[0..raw.len() - 4];
         {
             let checksum_a = &raw[raw.len() - 4 .. raw.len()];
-            let hash = sha256::hash(key);
-            let checksum_b = &sha256::hash(hash.as_ref())[0..4];
+            let checksum_b = &double_sha256(key)[0..4];
             if checksum_a != checksum_b { return None }
         }
 
@@ -113,7 +111,7 @@ impl Wif<KeyPair> for PrivateKey {
         buf.push(PRIV_BUF_PREFIX);
         buf.extend_from_slice(&self.seed.0);
 
-        let checksum = &sha256::hash(sha256::hash(&buf).as_ref())[0..4];
+        let checksum = &double_sha256(&buf)[0..4];
         buf.extend_from_slice(checksum);
 
         bs58::encode(buf).into_string().into_boxed_str()
@@ -150,7 +148,7 @@ impl SigPair {
         }
     }
 
-    pub fn decode_from_bytes<T> (cur: &mut Cursor<T>) -> Option<Vec<SigPair>>
+    pub fn decode_from_bytes<T>(cur: &mut Cursor<T>) -> Option<Vec<SigPair>>
             where T: AsRef<[u8]> + Read {
         let len = cur.take_u16()?;
         let mut vec = Vec::with_capacity(len as usize);
@@ -159,6 +157,11 @@ impl SigPair {
         }
         Some(vec)
     }
+}
+
+#[inline]
+fn double_sha256(buf: &[u8]) -> hash::sha256::Digest {
+    hash::sha256::hash(hash::sha256::hash(buf).as_ref())
 }
 
 #[cfg(test)]
