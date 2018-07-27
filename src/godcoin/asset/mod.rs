@@ -111,8 +111,16 @@ impl Asset {
         let mut s = self.amount.to_string();
         if self.decimals > 0 {
             let len = s.len();
-            if len == self.decimals as usize { s.insert_str(0, "0."); }
-            else { s.insert(len - (self.decimals as usize), '.'); }
+            if len < self.decimals as usize {
+                let start = if self.amount < 0 { 1 } else { 0 };
+                let diff = self.decimals as usize - len + start;
+                s.insert_str(start, "0.");
+                s.insert_str(start + 2, &"0".repeat(diff));
+            } else if len == self.decimals as usize {
+                s.insert_str(0, "0.");
+            } else {
+                s.insert(len - (self.decimals as usize), '.');
+            }
         }
         s.push(' ');
         s.push_str(self.symbol.as_str());
@@ -191,6 +199,19 @@ mod tests {
         c(get_asset("0 SILVER"), "0", 0, AssetSymbol::SILVER);
         c(get_asset("-0.0 SILVER"), "0", 1, AssetSymbol::SILVER);
         c(get_asset("-1.0 SILVER"), "-10", 1, AssetSymbol::SILVER);
+    }
+
+    #[test]
+    fn test_asset_to_str() {
+        let c = |asset: Asset, s: &str| {
+            assert_eq!(&*asset.to_str(), s);
+        };
+        c(get_asset("1.00001 GOLD"), "1.00001 GOLD");
+        c(get_asset("0.00001 GOLD"), "0.00001 GOLD");
+        c(get_asset("-0.00001 GOLD"), "-0.00001 GOLD");
+        c(get_asset(".00001 GOLD"), "0.00001 GOLD");
+        c(get_asset(".1 GOLD"), "0.1 GOLD");
+        c(get_asset("1.0 GOLD"), "1.0 GOLD");
     }
 
     #[test]
