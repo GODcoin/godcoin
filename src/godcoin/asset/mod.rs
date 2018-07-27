@@ -26,6 +26,15 @@ pub struct Asset {
 }
 
 impl Asset {
+    #[inline(always)]
+    pub fn new(amount: i64, decimals: u8, symbol: AssetSymbol) -> Option<Asset> {
+        if decimals > MAX_PRECISION { return None }
+        Some(Asset {
+            amount,
+            decimals,
+            symbol
+        })
+    }
 
     pub fn add(&self, other: &Self) -> Option<Self> {
         if self.symbol != other.symbol { return None }
@@ -44,7 +53,7 @@ impl Asset {
     }
 
     pub fn mul(&self, other: &Self, precision: u8) -> Option<Self> {
-        if self.symbol != other.symbol { return None }
+        if self.symbol != other.symbol || precision > MAX_PRECISION { return None }
         let decimals = self.decimals + other.decimals;
 
         let mul = i128::from(self.amount).checked_mul(i128::from(other.amount))?;
@@ -58,7 +67,9 @@ impl Asset {
     }
 
     pub fn div(&self, other: &Self, precision: u8) -> Option<Self> {
-        if self.symbol != other.symbol || other.amount == 0 { return None }
+        if self.symbol != other.symbol
+            || other.amount == 0
+            || precision > MAX_PRECISION { return None }
         let decimals = max(max(self.decimals, other.decimals), precision);
         let a = set_decimals_i64(self.amount, self.decimals, decimals * 2)?;
         let b = set_decimals_i64(other.amount, other.decimals, decimals)?;
@@ -70,6 +81,7 @@ impl Asset {
     }
 
     pub fn pow(&self, num: u16, precision: u8) -> Option<Self> {
+        if precision > MAX_PRECISION { return None }
         if num == 0 {
             return Some(Asset {
                 amount: set_decimals_i64(1, 0, precision)?,

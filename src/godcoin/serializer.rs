@@ -168,11 +168,7 @@ impl<'a, T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
             1 => AssetSymbol::SILVER,
             _ => return None
         };
-        Some(Asset {
-            amount,
-            decimals,
-            symbol
-        })
+        Asset::new(amount, decimals, symbol)
     }
 }
 
