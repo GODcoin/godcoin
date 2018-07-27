@@ -1,4 +1,4 @@
-use ::sodiumoxide::crypto::hash;
+use ::sodiumoxide::crypto::hash::sha256;
 use ::sodiumoxide::crypto::sign;
 use ::sodiumoxide::randombytes;
 use ::std::io::{Cursor, Read};
@@ -26,15 +26,18 @@ impl PublicKey {
         self.key.as_ref()
     }
 
+    #[inline]
     pub fn verify(&self, msg: &[u8], sig: &sign::Signature) -> bool {
         sign::verify_detached(sig, msg, &self.key)
     }
 
+    #[inline]
     pub fn from_bytes(bytes: &[u8]) -> Option<PublicKey> {
         let key = sign::PublicKey::from_slice(bytes)?;
         Some(PublicKey { key })
     }
 
+    #[inline]
     pub fn verify_sig_pair(pair: &SigPair, msg: &[u8]) -> bool {
         sign::verify_detached(&pair.signature, msg, &pair.pub_key.key)
     }
@@ -79,6 +82,7 @@ pub struct PrivateKey {
 }
 
 impl PrivateKey {
+    #[inline]
     pub fn sign(&self, msg: &[u8]) -> sign::Signature {
         sign::sign_detached(msg, &self.key)
     }
@@ -160,8 +164,8 @@ impl SigPair {
 }
 
 #[inline]
-fn double_sha256(buf: &[u8]) -> hash::sha256::Digest {
-    hash::sha256::hash(hash::sha256::hash(buf).as_ref())
+fn double_sha256(buf: &[u8]) -> sha256::Digest {
+    sha256::hash(sha256::hash(buf).as_ref())
 }
 
 #[cfg(test)]
