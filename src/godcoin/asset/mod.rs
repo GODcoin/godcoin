@@ -101,15 +101,6 @@ impl Asset {
         })
     }
 
-    pub fn set_decimals(&self, decimals: u8) -> Option<Self> {
-        let amount = set_decimals_i64(self.amount, self.decimals, decimals)?;
-        Some(Asset {
-            amount,
-            decimals,
-            symbol: self.symbol
-        })
-    }
-
     pub fn to_str(&self) -> Box<str> {
         let mut s = self.amount.to_string();
         if self.decimals > 0 {
@@ -241,18 +232,21 @@ mod tests {
         assert_eq!(a.decimals, 4);
         assert_eq!(a.amount.to_string(), "15678");
 
-        let a = a.set_decimals(2).unwrap();
+        let a = a.mul(&get_asset("10000 GOLD"), 0).unwrap();
+        assert_eq!(a.decimals, 0);
+        assert_eq!(a.amount.to_string(), "15678");
 
+        let a = a.div(&get_asset("100 GOLD"), 0).unwrap();
+        assert_eq!(a.decimals, 0);
+        assert_eq!(a.amount.to_string(), "156");
+
+        let a = a.div(&get_asset("100 GOLD"), 2).unwrap();
         assert_eq!(a.decimals, 2);
         assert_eq!(a.amount.to_string(), "156");
 
-        let a = a.set_decimals(0).unwrap();
-        assert_eq!(a.decimals, 0);
+        let a = a.div(&get_asset("100 GOLD"), 2).unwrap();
+        assert_eq!(a.decimals, 2);
         assert_eq!(a.amount.to_string(), "1");
-
-        let a = a.set_decimals(4).unwrap();
-        assert_eq!(a.decimals, 4);
-        assert_eq!(a.amount.to_string(), "10000");
     }
 
     #[test]
