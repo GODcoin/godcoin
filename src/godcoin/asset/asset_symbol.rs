@@ -1,8 +1,8 @@
 #[repr(u8)]
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum AssetSymbol {
-    GOLD,
-    SILVER
+    GOLD = 0u8,
+    SILVER = 1u8
 }
 
 impl AssetSymbol {
