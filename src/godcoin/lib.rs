@@ -4,7 +4,7 @@ extern crate num_traits;
 extern crate bs58;
 
 pub mod asset;
-pub use self::asset::*;
+pub use self::asset::{Asset, AssetSymbol};
 
 pub mod crypto;
 pub use self::crypto::*;
