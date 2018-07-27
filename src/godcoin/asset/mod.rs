@@ -297,4 +297,3 @@ mod tests {
         Asset::from_str(s).unwrap()
     }
 }
-
