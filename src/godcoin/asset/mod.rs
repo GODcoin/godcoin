@@ -15,6 +15,9 @@ pub use self::cmp::*;
 pub mod error;
 pub use self::error::*;
 
+pub const MAX_STR_LEN: usize = 32;
+pub const MAX_PRECISION: u8 = 8;
+
 #[derive(Debug, Clone)]
 pub struct Asset {
     pub amount: i64,
@@ -132,7 +135,7 @@ impl FromStr for Asset {
     type Err = AssetError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.len() > 32 {
+        if s.len() > MAX_STR_LEN {
             return Err(AssetError { kind: AssetErrorKind::StrTooLarge })
         }
         let mut split = s.trim().splitn(2, ' ');
@@ -146,7 +149,7 @@ impl FromStr for Asset {
                     if pos > 0 { decimals = (len - pos) as u8; }
                     else { decimals = len as u8; }
 
-                    if decimals > 8 {
+                    if decimals > MAX_PRECISION {
                         return Err(AssetError { kind: AssetErrorKind::InvalidAmount })
                     }
 
