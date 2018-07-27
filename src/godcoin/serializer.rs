@@ -4,14 +4,6 @@ use std::io::{Read, Cursor};
 use std::str::FromStr;
 use asset::Asset;
 
-trait DecodeTx<T> {
-    /**
-     * Returns the deserialized type T and the bytes read. Otherwise None is
-     * returned if there's a decoding failure.
-     */
-    fn decode(c: &mut Cursor<Vec<u8>>) -> Option<(T, u16)>;
-}
-
 pub trait BufWrite {
     fn push_u16(&mut self, num: u16);
     fn push_u32(&mut self, num: u32);
