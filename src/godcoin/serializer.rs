@@ -189,12 +189,27 @@ mod tests {
 
     #[test]
     fn test_asset_serialization() {
-        let a = Asset::from_str("12.34 GOLD").unwrap();
-        let mut v = vec![];
-        v.push_asset(&a);
+        {
+            let a = Asset::from_str("12.34 GOLD").unwrap();
+            let mut v = vec![];
+            v.push_asset(&a);
 
-        let mut c = Cursor::<&[u8]>::new(&v);
-        let b = c.take_asset().unwrap();
-        assert_eq!(a.to_str(), b.to_str());
+            let mut c = Cursor::<&[u8]>::new(&v);
+            let b = c.take_asset().unwrap();
+            assert_eq!(a.to_str(), b.to_str());
+        }
+        {
+            let a = Asset {
+                amount: 1,
+                decimals: ::asset::MAX_PRECISION + 1,
+                symbol: ::asset::AssetSymbol::GOLD
+            };
+            let mut v = vec![];
+            v.push_asset(&a);
+
+            let mut c = Cursor::<&[u8]>::new(&v);
+            let b = c.take_asset();
+            assert!(b.is_none());
+        }
     }
 }
