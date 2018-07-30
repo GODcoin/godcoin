@@ -10,7 +10,7 @@ const PUB_ADDRESS_PREFIX: &str = "GOD";
 const PRIV_BUF_PREFIX: u8 = 0x01;
 const PUB_BUF_PREFIX: u8 = 0x02;
 
-trait Wif<T> {
+pub trait Wif<T> {
     fn from_wif(s: &str) -> Option<T>;
     fn to_wif(&self) -> Box<str>;
 }
