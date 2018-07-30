@@ -16,4 +16,5 @@ doc = false
 bs58 = "0.2.1"
 num-bigint = "0.2.0"
 num-traits = "0.2.5"
+rocksdb = "0.10.1"
 sodiumoxide = { version="0.1.0", default-features=false, features=["std"] }

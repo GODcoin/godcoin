@@ -17,6 +17,12 @@ pub trait DecodeTx<T> {
     fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<T>;
 }
 
+pub enum TxVariant {
+    RewardTx(RewardTx),
+    BondTx(BondTx),
+    TransferTx(TransferTx)
+}
+
 pub struct Tx {
     pub tx_type: TxType,
     pub timestamp: u32,
