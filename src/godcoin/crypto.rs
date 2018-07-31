@@ -1,10 +1,7 @@
 use ::sodiumoxide::crypto::hash::sha256;
 use ::sodiumoxide::crypto::sign;
 use ::sodiumoxide::randombytes;
-use ::std::io::{Cursor, Read};
 use ::bs58;
-
-use serializer::*;
 
 const PUB_ADDRESS_PREFIX: &str = "GOD";
 const PRIV_BUF_PREFIX: u8 = 0x01;
@@ -15,7 +12,7 @@ pub trait Wif<T> {
     fn to_wif(&self) -> Box<str>;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PublicKey {
     key: sign::PublicKey
 }
@@ -125,6 +122,14 @@ impl Wif<KeyPair> for PrivateKey {
 pub struct KeyPair(pub PublicKey, pub PrivateKey);
 
 impl KeyPair {
+    #[inline]
+    pub fn sign(&self, msg: &[u8]) -> SigPair {
+        SigPair {
+            pub_key: self.0.clone(),
+            signature: self.1.sign(msg)
+        }
+    }
+
     pub fn gen_keypair() -> KeyPair {
         let mut raw_seed: [u8; sign::SEEDBYTES] = [0; sign::SEEDBYTES];
         randombytes::randombytes_into(&mut raw_seed);
@@ -139,32 +144,14 @@ impl KeyPair {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct SigPair {
     pub pub_key: PublicKey,
     pub signature: sign::Signature
 }
 
-impl SigPair {
-    pub fn encode_as_bytes(vec: &mut Vec<u8>, pairs: &[SigPair]) {
-        vec.push_u16(pairs.len() as u16);
-        for sig in pairs {
-            vec.push_sig_pair(sig);
-        }
-    }
-
-    pub fn decode_from_bytes<T>(cur: &mut Cursor<T>) -> Option<Vec<SigPair>>
-            where T: AsRef<[u8]> + Read {
-        let len = cur.take_u16()?;
-        let mut vec = Vec::with_capacity(len as usize);
-        for _ in 0..len {
-            vec.push(cur.take_sig_pair()?);
-        }
-        Some(vec)
-    }
-}
-
 #[inline]
-fn double_sha256(buf: &[u8]) -> sha256::Digest {
+pub fn double_sha256(buf: &[u8]) -> sha256::Digest {
     sha256::hash(sha256::hash(buf).as_ref())
 }
 

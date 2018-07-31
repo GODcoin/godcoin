@@ -8,7 +8,7 @@ pub mod asset;
 pub use self::asset::{Asset, AssetSymbol};
 
 pub mod crypto;
-pub use self::crypto::*;
+pub use self::crypto::{KeyPair, PublicKey, PrivateKey, SigPair, Wif};
 
 pub mod serializer;
 pub use self::serializer::*;

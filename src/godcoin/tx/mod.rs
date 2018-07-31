@@ -1,6 +1,6 @@
 use ::std::io::Cursor;
 
-use crypto::{PublicKey, SigPair};
+use crypto::{PublicKey, KeyPair, SigPair};
 use serializer::*;
 use asset::Asset;
 
@@ -17,10 +17,51 @@ pub trait DecodeTx<T> {
     fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<T>;
 }
 
+pub trait SignTx {
+    fn sign(&self, key_pair: &KeyPair) -> SigPair;
+    fn append_sign(&mut self, key_pair: &KeyPair);
+}
+
 pub enum TxVariant {
     RewardTx(RewardTx),
     BondTx(BondTx),
     TransferTx(TransferTx)
+}
+
+impl TxVariant {
+    pub fn encode_with_sigs(&self, v: &mut Vec<u8>) {
+        macro_rules! encode_sigs {
+            ($name:expr, $vec:expr) => {
+                {
+                    $vec.push_u16($name.signature_pairs.len() as u16);
+                    for sig in &$name.signature_pairs { $vec.push_sig_pair(sig) };
+                    $name.encode($vec);
+                }
+            }
+        }
+
+        match self {
+            TxVariant::RewardTx(tx) => { encode_sigs!(tx, v) },
+            TxVariant::BondTx(tx) => { encode_sigs!(tx, v) },
+            TxVariant::TransferTx(tx) => { encode_sigs!(tx, v) }
+        };
+    }
+
+    pub fn decode_with_sigs(cur: &mut Cursor<&[u8]>) -> Option<TxVariant> {
+        let sigs = {
+            let len = cur.take_u16()?;
+            let mut vec = Vec::with_capacity(len as usize);
+            for _ in 0..len { vec.push(cur.take_sig_pair()?) };
+            vec
+        };
+        let mut base = Tx::decode_base(cur)?;
+        base.signature_pairs = sigs;
+        match base.tx_type {
+            TxType::REWARD => Some(TxVariant::RewardTx(RewardTx::decode(cur, base)?)),
+            TxType::BOND => Some(TxVariant::BondTx(BondTx::decode(cur, base)?)),
+            TxType::TRANSFER => Some(TxVariant::TransferTx(TransferTx::decode(cur, base)?))
+        }
+    }
 }
 
 pub struct Tx {
@@ -31,13 +72,13 @@ pub struct Tx {
 }
 
 impl Tx {
-    pub fn encode_base(&self, v: &mut Vec<u8>) {
+    fn encode_base(&self, v: &mut Vec<u8>) {
         v.push(self.tx_type as u8);
         v.push_u32(self.timestamp);
         v.push_asset(&self.fee);
     }
 
-    pub fn decode_base(cur: &mut Cursor<&[u8]>) -> Option<Tx> {
+    fn decode_base(cur: &mut Cursor<&[u8]>) -> Option<Tx> {
         let tx_type = match cur.take_u8()? {
             t if t == TxType::REWARD as u8 => TxType::REWARD,
             t if t == TxType::BOND as u8 => TxType::BOND,
@@ -64,12 +105,11 @@ pub struct RewardTx {
 
 impl EncodeTx for RewardTx {
     fn encode(&self, v: &mut Vec<u8>) {
+        debug_assert_eq!(self.base.signature_pairs.len(), 0);
         self.encode_base(v);
         v.push_pub_key(&self.to);
         v.push_u32(self.rewards.len() as u32);
-        for r in &self.rewards {
-            v.push_asset(r);
-        }
+        for r in &self.rewards { v.push_asset(r) };
     }
 }
 
@@ -166,6 +206,9 @@ tx_deref!(RewardTx);
 tx_deref!(BondTx);
 tx_deref!(TransferTx);
 
+tx_sign!(BondTx);
+tx_sign!(TransferTx);
+
 #[cfg(test)]
 mod tests {
     use ::std::str::FromStr;
@@ -178,6 +221,27 @@ mod tests {
             assert_eq!($id.timestamp, $ts);
             assert_eq!(&*$id.fee.to_str(), $fee);
         }
+    }
+
+    #[test]
+    fn test_encode_tx_with_sigs() {
+        let to = crypto::KeyPair::gen_keypair();
+        let reward_tx = TxVariant::RewardTx(RewardTx {
+            base: Tx {
+                tx_type: TxType::REWARD,
+                timestamp: 123,
+                fee: get_asset("123 GOLD"),
+                signature_pairs: vec![]
+            },
+            to: to.0,
+            rewards: vec![get_asset("1.50 GOLD"), get_asset("1.0 SILVER")]
+        });
+
+        let mut v = vec![];
+        reward_tx.encode_with_sigs(&mut v);
+
+        let mut c = Cursor::<&[u8]>::new(&v);
+        TxVariant::decode_with_sigs(&mut c).unwrap();
     }
 
     #[test]
