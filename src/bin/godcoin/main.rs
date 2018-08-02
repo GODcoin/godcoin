@@ -1,6 +1,7 @@
 extern crate num_traits;
 extern crate godcoin;
 extern crate tokio;
+extern crate dirs;
 extern crate clap;
 
 use clap::{Arg, App, AppSettings, SubCommand};
@@ -23,7 +24,20 @@ fn generate_keypair() {
 }
 
 fn start_node(node_opts: StartNode) {
+    use std::{env, path::Path, path::PathBuf};
     use godcoin::net::*;
+
+    let home: PathBuf = {
+        use dirs;
+        let home = env::var("GODCOIN_HOME");
+        let home = match home {
+            Ok(home) => PathBuf::from(home),
+            Err(_) => Path::join(&dirs::data_local_dir().unwrap(), "godcoin")
+        };
+        if !Path::is_dir(&home) { std::fs::create_dir(&home).unwrap(); }
+        home
+    }.canonicalize().unwrap();
+    println!("Found GODcoin home at {:?}", &home);
 
     if let Some(bind) = node_opts.bind_address {
         let addr = bind.parse();
