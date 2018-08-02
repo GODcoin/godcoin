@@ -2,7 +2,11 @@ extern crate sodiumoxide;
 extern crate num_bigint;
 extern crate num_traits;
 extern crate rocksdb;
+extern crate bytes;
 extern crate bs58;
+
+extern crate tokio;
+extern crate tokio_codec;
 
 pub mod asset;
 pub use self::asset::{Asset, AssetSymbol};
@@ -16,6 +20,7 @@ pub use self::serializer::*;
 pub mod tx;
 pub use self::tx::*;
 
+pub mod net;
 pub mod blockchain;
 
 pub fn init() -> Result<(), ()> {
