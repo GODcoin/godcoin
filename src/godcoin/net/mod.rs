@@ -32,6 +32,5 @@ pub fn start_server(addr: &SocketAddr) {
     }).map_err(|err| {
         println!("Server accept error: {:?}", err);
     });
-
-    ::tokio::runtime::run(server);
+    ::tokio::spawn(server);
 }
