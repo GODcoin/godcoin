@@ -29,14 +29,14 @@ impl Indexer {
             key
         }).unwrap()?;
 
-        Some(u64::from_be((u64::from(buf[0]) << 56)
+        Some((u64::from(buf[0]) << 56)
                 | (u64::from(buf[1]) << 48)
                 | (u64::from(buf[2]) << 40)
                 | (u64::from(buf[3]) << 32)
                 | (u64::from(buf[4]) << 24)
                 | (u64::from(buf[5]) << 16)
                 | (u64::from(buf[6]) << 8)
-                | u64::from(buf[7])))
+                | u64::from(buf[7]))
     }
 
     pub fn set_block_byte_pos(&self, height: u64, pos: u64) {

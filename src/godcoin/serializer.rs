@@ -15,22 +15,19 @@ pub trait BufWrite {
 }
 
 impl BufWrite for Vec<u8> {
-    fn push_u16(&mut self, mut num: u16) {
-        num = num.to_be();
+    fn push_u16(&mut self, num: u16) {
         self.push((num >> 8) as u8);
         self.push(num as u8);
     }
 
-    fn push_u32(&mut self, mut num: u32) {
-        num = num.to_be();
+    fn push_u32(&mut self, num: u32) {
         self.push((num >> 24) as u8);
         self.push((num >> 16) as u8);
         self.push((num >> 8) as u8);
         self.push(num as u8);
     }
 
-    fn push_i64(&mut self, mut num: i64) {
-        num = num.to_be();
+    fn push_i64(&mut self, num: i64) {
         self.push((num >> 56) as u8);
         self.push((num >> 48) as u8);
         self.push((num >> 40) as u8);
@@ -41,8 +38,7 @@ impl BufWrite for Vec<u8> {
         self.push(num as u8);
     }
 
-    fn push_u64(&mut self, mut num: u64) {
-        num = num.to_be();
+    fn push_u64(&mut self, num: u64) {
         self.push((num >> 56) as u8);
         self.push((num >> 48) as u8);
         self.push((num >> 40) as u8);
@@ -100,42 +96,42 @@ impl<'a, T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     fn take_u16(&mut self) -> Option<u16> {
         let mut buf = [0u8;2];
         self.read_exact(&mut buf).ok()?;
-        Some(u16::from_be((u16::from(buf[0]) << 8) | u16::from(buf[1])))
+        Some((u16::from(buf[0]) << 8) | u16::from(buf[1]))
     }
 
     fn take_u32(&mut self) -> Option<u32> {
         let mut buf = [0u8;4];
         self.read_exact(&mut buf).ok()?;
-        Some(u32::from_be((u32::from(buf[0]) << 24)
+        Some((u32::from(buf[0]) << 24)
                 | (u32::from(buf[1]) << 16)
                 | (u32::from(buf[2]) << 8)
-                | (u32::from(buf[3]))))
+                | (u32::from(buf[3])))
     }
 
     fn take_i64(&mut self) -> Option<i64> {
         let mut buf = [0u8;8];
         self.read_exact(&mut buf).ok()?;
-        Some(i64::from_be((i64::from(buf[0]) << 56)
+        Some((i64::from(buf[0]) << 56)
                 | (i64::from(buf[1]) << 48)
                 | (i64::from(buf[2]) << 40)
                 | (i64::from(buf[3]) << 32)
                 | (i64::from(buf[4]) << 24)
                 | (i64::from(buf[5]) << 16)
                 | (i64::from(buf[6]) << 8)
-                | i64::from(buf[7])))
+                | i64::from(buf[7]))
     }
 
     fn take_u64(&mut self) -> Option<u64> {
         let mut buf = [0u8;8];
         self.read_exact(&mut buf).ok()?;
-        Some(u64::from_be((u64::from(buf[0]) << 56)
+        Some((u64::from(buf[0]) << 56)
                 | (u64::from(buf[1]) << 48)
                 | (u64::from(buf[2]) << 40)
                 | (u64::from(buf[3]) << 32)
                 | (u64::from(buf[4]) << 24)
                 | (u64::from(buf[5]) << 16)
                 | (u64::from(buf[6]) << 8)
-                | u64::from(buf[7])))
+                | u64::from(buf[7]))
     }
 
     fn take_bytes(&mut self) -> Option<Vec<u8>> {
@@ -178,11 +174,20 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
+    fn test_u32_serialization() {
+        let num: u32 = 0x0A0B0C0D;
+        let mut v = Vec::with_capacity(4);
+        v.push_u32(num);
+        assert_eq!(v, [0x0A, 0x0B, 0x0C, 0x0D]);
+    }
+
+    #[test]
     fn test_u64_serialization() {
-        let num: u64 = 0xFF000000_FFFFFFFF;
+        let num: u64 = 0x0A0B0C0D_0A0B0C0D;
         let mut v = Vec::with_capacity(8);
         v.push_u64(num);
 
+        assert_eq!(v, [0x0A, 0x0B, 0x0C, 0x0D, 0x0A, 0x0B, 0x0C, 0x0D]);
         let dec = Cursor::<&[u8]>::new(&v).take_u64().unwrap();
         assert_eq!(num, dec);
     }
