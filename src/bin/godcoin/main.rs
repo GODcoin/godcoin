@@ -29,12 +29,15 @@ fn start_node(node_opts: StartNode) {
 
     let home: PathBuf = {
         use dirs;
-        let home = env::var("GODCOIN_HOME");
-        let home = match home {
-            Ok(home) => PathBuf::from(home),
-            Err(_) => Path::join(&dirs::data_local_dir().unwrap(), "godcoin")
-        };
-        if !Path::is_dir(&home) { std::fs::create_dir(&home).unwrap(); }
+        let home = env::var("GODCOIN_HOME").map(|s| {
+            PathBuf::from(s)
+        }).unwrap_or_else(|_| {
+            Path::join(&dirs::data_local_dir().unwrap(), "godcoin")
+        });
+        if !Path::is_dir(&home) {
+            let res = std::fs::create_dir(&home);
+            res.expect(&format!("Failed to create dir at {:?}", &home));
+        }
         home
     }.canonicalize().unwrap();
     println!("Found GODcoin home at {:?}", &home);
