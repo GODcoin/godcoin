@@ -33,11 +33,6 @@ impl PublicKey {
         let key = sign::PublicKey::from_slice(bytes)?;
         Some(PublicKey { key })
     }
-
-    #[inline]
-    pub fn verify_sig_pair(pair: &SigPair, msg: &[u8]) -> bool {
-        sign::verify_detached(&pair.signature, msg, &pair.pub_key.key)
-    }
 }
 
 impl Wif<PublicKey> for PublicKey {
@@ -130,6 +125,11 @@ impl KeyPair {
         }
     }
 
+    #[inline]
+    pub fn verify(&self, msg: &[u8], sig: &sign::Signature) -> bool {
+        PublicKey::verify(&self.0, msg, sig)
+    }
+
     pub fn gen_keypair() -> KeyPair {
         let mut raw_seed: [u8; sign::SEEDBYTES] = [0; sign::SEEDBYTES];
         randombytes::randombytes_into(&mut raw_seed);
@@ -148,6 +148,13 @@ impl KeyPair {
 pub struct SigPair {
     pub pub_key: PublicKey,
     pub signature: sign::Signature
+}
+
+impl SigPair {
+    #[inline]
+    pub fn verify(&self, msg: &[u8]) -> bool {
+        sign::verify_detached(&self.signature, msg, &self.pub_key.key)
+    }
 }
 
 #[inline]
@@ -189,10 +196,10 @@ mod tests {
             pub_key: kp.0,
             signature: *sig
         };
-        assert!(PublicKey::verify_sig_pair(&pair, msg));
+        assert!(pair.verify(msg));
 
         // Test bad keys
         let kp = KeyPair::gen_keypair();
-        assert!(!kp.0.verify(msg, sig));
+        assert!(!kp.verify(msg, sig));
     }
 }
