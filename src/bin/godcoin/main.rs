@@ -37,17 +37,17 @@ fn start_node(node_opts: StartNode) {
         if !Path::is_dir(&home) {
             let res = std::fs::create_dir(&home);
             res.expect(&format!("Failed to create dir at {:?}", &home));
+            println!("Created GODcoin home at {:?}", &home);
+        } else {
+            println!("Found GODcoin home at {:?}", &home);
         }
         home
     }.canonicalize().unwrap();
-    println!("Found GODcoin home at {:?}", &home);
 
     if let Some(bind) = node_opts.bind_address {
-        let addr = bind.parse();
-        match addr {
-            Ok(ref addr) => start_server(addr),
-            Err(e) => panic!("Failed to parse address: {:?}", e)
-        }
+        let addr = bind.parse()
+                        .expect(&format!("Failed to parse address: {:?}", bind));
+        net::start_server(&addr);
     }
 }
 
