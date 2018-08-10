@@ -2,6 +2,7 @@ extern crate sodiumoxide;
 extern crate num_bigint;
 extern crate num_traits;
 extern crate rocksdb;
+extern crate crc32c;
 extern crate bytes;
 extern crate bs58;
 
@@ -9,7 +10,7 @@ extern crate tokio;
 extern crate tokio_codec;
 
 pub mod asset;
-pub use self::asset::{Asset, AssetSymbol};
+pub use self::asset::{Asset, AssetSymbol, EMPTY_GOLD, EMPTY_SILVER};
 
 pub mod crypto;
 pub use self::crypto::{KeyPair, PublicKey, PrivateKey, SigPair, Wif};

@@ -8,6 +8,7 @@ use serializer::*;
 use crypto;
 use tx::*;
 
+#[derive(Debug, Clone)]
 pub struct Block {
     pub previous_hash: Digest,
     pub height: u64,
@@ -62,6 +63,7 @@ impl Block {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct SignedBlock {
     pub base: Block,
     pub sig_pair: crypto::SigPair

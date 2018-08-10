@@ -18,6 +18,18 @@ pub use self::error::*;
 pub const MAX_STR_LEN: usize = 32;
 pub const MAX_PRECISION: u8 = 8;
 
+pub const EMPTY_GOLD: Asset = Asset {
+    amount: 0,
+    decimals: 0,
+    symbol: AssetSymbol::GOLD
+};
+
+pub const EMPTY_SILVER: Asset = Asset {
+    amount: 0,
+    decimals: 0,
+    symbol: AssetSymbol::SILVER
+};
+
 #[derive(Debug, Clone)]
 pub struct Asset {
     pub amount: i64,

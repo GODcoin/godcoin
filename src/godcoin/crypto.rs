@@ -144,7 +144,7 @@ impl KeyPair {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SigPair {
     pub pub_key: PublicKey,
     pub signature: sign::Signature

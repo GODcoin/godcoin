@@ -22,6 +22,7 @@ pub trait SignTx {
     fn append_sign(&mut self, key_pair: &KeyPair);
 }
 
+#[derive(Debug, Clone)]
 pub enum TxVariant {
     RewardTx(RewardTx),
     BondTx(BondTx),
@@ -64,6 +65,7 @@ impl TxVariant {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Tx {
     pub tx_type: TxType,
     pub timestamp: u32,
@@ -97,6 +99,7 @@ impl Tx {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct RewardTx {
     pub base: Tx,
     pub to: PublicKey,
@@ -132,6 +135,7 @@ impl DecodeTx<RewardTx> for RewardTx {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct BondTx {
     pub base: Tx,
     pub minter: PublicKey, // Key that signs blocks
@@ -167,6 +171,7 @@ impl DecodeTx<BondTx> for BondTx {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct TransferTx {
     pub base: Tx,
     pub from: PublicKey,
