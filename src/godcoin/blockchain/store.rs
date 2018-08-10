@@ -5,10 +5,11 @@ use std::cell::RefCell;
 use std::borrow::Cow;
 use std::path::Path;
 use std::fs::File;
+use std::rc::Rc;
 use crc32c::*;
 
-pub struct BlockStore<'a> {
-    indexer: &'a Indexer,
+pub struct BlockStore {
+    indexer: Rc<Indexer>,
 
     height: u64,
     blocks: HashMap<u64, SignedBlock>,
@@ -17,9 +18,9 @@ pub struct BlockStore<'a> {
     byte_pos_tail: u64
 }
 
-impl<'a> BlockStore<'a> {
+impl BlockStore {
 
-    pub fn new<'b>(path: &Path, indexer: &'b Indexer) -> BlockStore<'b> {
+    pub fn new(path: &Path, indexer: Rc<Indexer>) -> BlockStore {
         let (file, tail) = if !path.is_file() {
             (File::create(path).unwrap(), 0u64)
         } else {
@@ -27,12 +28,14 @@ impl<'a> BlockStore<'a> {
             let m = f.metadata().unwrap();
             (File::open(path).unwrap(), m.len())
         };
-        let height = indexer.get_block_byte_pos(0).unwrap_or(0);
 
+        let height = indexer.get_block_byte_pos(0).unwrap_or(0);
         let mut store = BlockStore {
-            height,
             indexer,
+
+            height,
             blocks: HashMap::new(),
+
             file: RefCell::new(file),
             byte_pos_tail: tail
         };
@@ -97,7 +100,10 @@ impl<'a> BlockStore<'a> {
 
     pub fn insert(&mut self, block: SignedBlock) {
         assert_eq!(self.height + 1, block.height, "invalid block height");
+        self.insert_raw(block);
+    }
 
+    fn insert_raw(&mut self, block: SignedBlock) {
         { // Write to disk
             let vec = &mut Vec::with_capacity(1048576);
             block.encode_with_tx(vec);

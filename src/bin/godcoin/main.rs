@@ -47,10 +47,7 @@ fn start_node(node_opts: StartNode) {
         home
     }.canonicalize().unwrap();
 
-    let indexer = Indexer::new(&Path::join(&home, "index"));
-    let store = BlockStore::new(&Path::join(&home, "blklog"), &indexer);
-    let mut blockchain = Blockchain::new(&store, &indexer);
-
+    let mut blockchain = Blockchain::new(&home);
     if blockchain.genesis_block.is_none() {
         println!("=> Generating new block chain");
         let keys = crypto::KeyPair::gen_keypair();
