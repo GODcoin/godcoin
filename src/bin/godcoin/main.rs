@@ -6,7 +6,6 @@ extern crate dirs;
 extern crate clap;
 
 use clap::{Arg, App, AppSettings, SubCommand};
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::prelude::*;
 use godcoin::*;
 
@@ -26,9 +25,8 @@ fn generate_keypair() {
 }
 
 fn start_node(node_opts: StartNode) {
-    use std::{env, path::Path, path::PathBuf, str::FromStr};
-    use sodiumoxide::crypto::hash::sha256::Digest;
     use godcoin::blockchain::*;
+    use std::{env, path::*};
 
     let home: PathBuf = {
         use dirs;
@@ -48,50 +46,10 @@ fn start_node(node_opts: StartNode) {
     }.canonicalize().unwrap();
 
     let mut blockchain = Blockchain::new(&home);
-    if blockchain.genesis_block.is_none() {
-        println!("=> Generating new block chain");
-        let keys = crypto::KeyPair::gen_keypair();
-        println!("=> Staker private key: {}", keys.1.to_wif());
-        println!("=> Staker public key: {}", keys.0.to_wif());
-
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32;
-        let transactions = {
-            let mut vec = Vec::new();
-            vec.push(TxVariant::RewardTx(RewardTx {
-                base: Tx {
-                    tx_type: TxType::REWARD,
-                    fee: Asset::from_str("0 GOLD").unwrap(),
-                    timestamp,
-                    signature_pairs: Vec::new()
-                },
-                to: keys.0.clone(),
-                rewards: vec![Asset::from_str("1 GOLD").unwrap()]
-            }));
-            vec.push(TxVariant::BondTx(BondTx {
-                base: Tx {
-                    tx_type: TxType::BOND,
-                    fee: Asset::from_str("0 GOLD").unwrap(),
-                    timestamp,
-                    signature_pairs: Vec::new()
-                },
-                minter: keys.0.clone(),
-                staker: keys.0.clone(),
-                bond_fee: EMPTY_GOLD,
-                stake_amt: Asset::from_str("1 GOLD").unwrap()
-            }));
-            vec
-        };
-
-        let minter = node_opts.minter_key.expect("missing minter key to generate new block chain");
-        let block = (Block {
-            height: 0,
-            previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
-            tx_merkle_root: Digest::from_slice(&[0u8; 32]).unwrap(),
-            timestamp: timestamp as u32,
-            transactions
-        }).sign(&minter);
-
-        blockchain.genesis_block = Some(block);
+    if blockchain.store.borrow().get(0).is_none()
+            && node_opts.minter_key.is_some() {
+        let key = &node_opts.minter_key.unwrap();
+        blockchain.create_genesis_block(key);
     }
 
     if let Some(bind) = node_opts.bind_address {
@@ -123,7 +81,7 @@ fn main() {
                                 .value_name("key")));
     let matches = app.get_matches();
 
-    ::tokio::run(future::lazy(move || {
+    tokio::run(future::lazy(move || {
         use ::std::io::{Error, ErrorKind};
 
         if let Some(_) = matches.subcommand_matches("keygen") {

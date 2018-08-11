@@ -102,10 +102,7 @@ impl<'a, T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     fn take_u32(&mut self) -> Option<u32> {
         let mut buf = [0u8;4];
         self.read_exact(&mut buf).ok()?;
-        Some((u32::from(buf[0]) << 24)
-                | (u32::from(buf[1]) << 16)
-                | (u32::from(buf[2]) << 8)
-                | (u32::from(buf[3])))
+        Some(u32_from_buf!(buf))
     }
 
     fn take_i64(&mut self) -> Option<i64> {
@@ -124,14 +121,7 @@ impl<'a, T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     fn take_u64(&mut self) -> Option<u64> {
         let mut buf = [0u8;8];
         self.read_exact(&mut buf).ok()?;
-        Some((u64::from(buf[0]) << 56)
-                | (u64::from(buf[1]) << 48)
-                | (u64::from(buf[2]) << 40)
-                | (u64::from(buf[3]) << 32)
-                | (u64::from(buf[4]) << 24)
-                | (u64::from(buf[5]) << 16)
-                | (u64::from(buf[6]) << 8)
-                | u64::from(buf[7]))
+        Some(u64_from_buf!(buf))
     }
 
     fn take_bytes(&mut self) -> Option<Vec<u8>> {

@@ -42,10 +42,7 @@ impl Decoder for RpcCodec {
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Self::Item>, Error> {
         if self.msg_len == 0 && buf.len() >= 4 {
             let buf = buf.split_to(4);
-            self.msg_len = (u32::from(buf[0]) << 24)
-                            | (u32::from(buf[1]) << 16)
-                            | (u32::from(buf[2]) << 8)
-                            | (u32::from(buf[3]));
+            self.msg_len = u32_from_buf!(buf);
             if self.msg_len <= 4 {
                 return Err(Error::new(ErrorKind::Other, "payload must be >4 bytes"))
             } else if self.msg_len > MAX_PAYLOAD_LEN {

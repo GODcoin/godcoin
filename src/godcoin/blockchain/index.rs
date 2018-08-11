@@ -4,6 +4,8 @@ use serializer::*;
 
 const CF_BLOCK_BYTE_POS: &str = "block_byte_pos";
 
+const KEY_CHAIN_HEIGHT: &[u8] = b"chain_height";
+
 pub struct Indexer {
     db: DB
 }
@@ -29,14 +31,7 @@ impl Indexer {
             key
         }).unwrap()?;
 
-        Some((u64::from(buf[0]) << 56)
-                | (u64::from(buf[1]) << 48)
-                | (u64::from(buf[2]) << 40)
-                | (u64::from(buf[3]) << 32)
-                | (u64::from(buf[4]) << 24)
-                | (u64::from(buf[5]) << 16)
-                | (u64::from(buf[6]) << 8)
-                | u64::from(buf[7]))
+        Some(u64_from_buf!(buf))
     }
 
     pub fn set_block_byte_pos(&self, height: u64, pos: u64) {
@@ -47,6 +42,19 @@ impl Indexer {
 
         let cf = self.db.cf_handle(CF_BLOCK_BYTE_POS).unwrap();
         self.db.put_cf(cf, &key, &val).unwrap();
+    }
+
+    pub fn get_block_height(&self) -> u64 {
+        match self.db.get(KEY_CHAIN_HEIGHT).unwrap() {
+            Some(val) => u64_from_buf!(val),
+            None => 0,
+        }
+    }
+
+    pub fn set_block_height(&self, height: u64) {
+        let mut val = Vec::with_capacity(8);
+        val.push_u64(height);
+        self.db.put(KEY_CHAIN_HEIGHT, &val).unwrap();
     }
 }
 

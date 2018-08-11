@@ -13,6 +13,7 @@ pub struct BlockStore {
 
     height: u64,
     blocks: HashMap<u64, SignedBlock>,
+    genesis_block: Option<SignedBlock>,
 
     file: RefCell<File>,
     byte_pos_tail: u64
@@ -29,16 +30,18 @@ impl BlockStore {
             (File::open(path).unwrap(), m.len())
         };
 
-        let height = indexer.get_block_byte_pos(0).unwrap_or(0);
+        let height = indexer.get_block_height();
         let mut store = BlockStore {
             indexer,
 
             height,
             blocks: HashMap::new(),
+            genesis_block: None,
 
             file: RefCell::new(file),
             byte_pos_tail: tail
         };
+        store.genesis_block = store.get(0).map(|b| b.into_owned());
 
         { // Initialize the cache
             let min = if height <= 100 { height } else { height - 100 };
@@ -56,7 +59,13 @@ impl BlockStore {
     }
 
     pub fn get(&self, height: u64) -> Option<Cow<'_, SignedBlock>> {
-        if height > self.height { return None }
+        if height > self.height {
+            return None
+        } else if height == 0 {
+            if let Some(ref block) = self.genesis_block {
+                return Some(Cow::Borrowed(block))
+            }
+        }
         if let Some(block) = self.blocks.get(&height) {
             Some(Cow::Borrowed(block))
         } else {
@@ -74,14 +83,8 @@ impl BlockStore {
         let (block_len, crc) = {
             let mut meta = [0u8; 8];
             f.read_exact(&mut meta).unwrap();
-            let len = ((u32::from(meta[0]) << 24)
-                        | (u32::from(meta[1]) << 16)
-                        | (u32::from(meta[2]) << 8)
-                        | u32::from(meta[3])) as usize;
-            let crc = (u32::from(meta[4]) << 24)
-                        | (u32::from(meta[5]) << 16)
-                        | (u32::from(meta[6]) << 8)
-                        | u32::from(meta[7]);
+            let len = u32_from_buf!(meta, 0) as usize;
+            let crc = u32_from_buf!(meta, 4);
             (len, crc)
         };
 
@@ -101,6 +104,13 @@ impl BlockStore {
     pub fn insert(&mut self, block: SignedBlock) {
         assert_eq!(self.height + 1, block.height, "invalid block height");
         self.insert_raw(block);
+    }
+
+    pub fn insert_genesis(&mut self, block: SignedBlock) {
+        assert_eq!(block.height, 0, "expected to be 0");
+        assert!(self.genesis_block.is_none(), "expected genesis block to not exist");
+        self.insert_raw(block.clone());
+        self.genesis_block = Some(block);
     }
 
     fn insert_raw(&mut self, block: SignedBlock) {

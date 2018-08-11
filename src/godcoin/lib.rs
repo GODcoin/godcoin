@@ -9,6 +9,9 @@ extern crate bs58;
 extern crate tokio;
 extern crate tokio_codec;
 
+#[macro_use]
+mod buf_util;
+
 pub mod asset;
 pub use self::asset::{Asset, AssetSymbol, EMPTY_GOLD, EMPTY_SILVER};
 
