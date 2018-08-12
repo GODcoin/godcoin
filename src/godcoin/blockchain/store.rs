@@ -30,7 +30,7 @@ impl BlockStore {
             (File::open(path).unwrap(), m.len())
         };
 
-        let height = indexer.get_block_height();
+        let height = indexer.get_chain_height();
         let mut store = BlockStore {
             indexer,
 

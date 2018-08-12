@@ -44,14 +44,14 @@ impl Indexer {
         self.db.put_cf(cf, &key, &val).unwrap();
     }
 
-    pub fn get_block_height(&self) -> u64 {
+    pub fn get_chain_height(&self) -> u64 {
         match self.db.get(KEY_CHAIN_HEIGHT).unwrap() {
             Some(val) => u64_from_buf!(val),
-            None => 0,
+            None => 0
         }
     }
 
-    pub fn set_block_height(&self, height: u64) {
+    pub fn set_chain_height(&self, height: u64) {
         let mut val = Vec::with_capacity(8);
         val.push_u64(height);
         self.db.put(KEY_CHAIN_HEIGHT, &val).unwrap();
@@ -60,24 +60,42 @@ impl Indexer {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use rand::{thread_rng, Rng, distributions::Alphanumeric};
     use std::{env, fs, panic};
+    use super::*;
 
     #[test]
     fn test_get_block_pos() {
-        let mut tmp_dir = env::temp_dir();
-        tmp_dir.push("godcoin_test");
-        fs::create_dir(&tmp_dir).expect(&format!("Could not create temp dir {:?}", &tmp_dir));
-        let indexer = Indexer::new(&tmp_dir);
-
-        let result = panic::catch_unwind(|| {
+        run_test(|indexer| {
             indexer.set_block_byte_pos(1, 327);
             assert!(indexer.get_block_byte_pos(0).is_none());
             assert_eq!(indexer.get_block_byte_pos(1).unwrap(), 327);
         });
+    }
+
+    #[test]
+    fn test_get_chain_height() {
+        run_test(|indexer| {
+            assert_eq!(indexer.get_chain_height(), 0);
+            indexer.set_chain_height(42);
+            assert_eq!(indexer.get_chain_height(), 42);
+        });
+    }
+
+    fn run_test<F>(func: F)
+            where F: FnOnce(Indexer) -> () + panic::UnwindSafe {
+        let mut tmp_dir = env::temp_dir();
+        let mut s = String::from("godcoin_test_");
+        s.push_str(&thread_rng().sample_iter(&Alphanumeric).take(4).collect::<String>());
+        tmp_dir.push(s);
+        fs::create_dir(&tmp_dir).expect(&format!("Could not create temp dir {:?}", &tmp_dir));
+
+        let result = panic::catch_unwind(|| {
+            let indexer = Indexer::new(&tmp_dir);
+            func(indexer);
+        });
 
         fs::remove_dir_all(&tmp_dir).expect("Failed to rm dir");
-
         assert!(result.is_ok());
     }
 }

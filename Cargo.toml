@@ -27,3 +27,6 @@ tokio-codec = "0.1.0"
 [dependencies.clap]
 version = "2.32.0"
 default-features = false
+
+[dev-dependencies]
+rand = "0.5.5"
