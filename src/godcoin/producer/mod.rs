@@ -44,9 +44,8 @@ impl Producer {
         let blockchain = &*self.chain;
 
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32;
-        let transactions = {
-            let mut vec = Vec::new();
-            vec.push(TxVariant::RewardTx(RewardTx {
+        let transactions = vec![
+            TxVariant::RewardTx(RewardTx {
                 base: Tx {
                     tx_type: TxType::REWARD,
                     fee: Asset::from_str("0 GOLD").unwrap(),
@@ -55,9 +54,8 @@ impl Producer {
                 },
                 to: self.staker.clone(),
                 rewards: vec![Asset::from_str("1 GOLD").unwrap()]
-            }));
-            vec
-        };
+            })
+        ];
 
         let head = blockchain.get_chain_head();
         let block = head.new_child(transactions).sign(&self.minter);
