@@ -77,7 +77,7 @@ impl Blockchain {
                 timestamp,
                 signature_pairs: Vec::new()
             },
-            minter: staker_key.0.clone(),
+            minter: minter_key.0.clone(),
             staker: staker_key.0.clone(),
             bond_fee: EMPTY_GOLD,
             stake_amt: Asset::from_str("1 GOLD").unwrap()
