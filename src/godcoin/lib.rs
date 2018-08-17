@@ -29,6 +29,7 @@ pub use self::tx::*;
 
 pub mod net;
 pub mod blockchain;
+pub mod producer;
 
 pub fn init() -> Result<(), ()> {
     sodiumoxide::init()

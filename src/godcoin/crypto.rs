@@ -68,6 +68,7 @@ impl Wif<PublicKey> for PublicKey {
     }
 }
 
+#[derive(Clone)]
 pub struct PrivateKey {
     seed: sign::Seed,
     key: sign::SecretKey
@@ -114,6 +115,7 @@ impl Wif<KeyPair> for PrivateKey {
     }
 }
 
+#[derive(Clone)]
 pub struct KeyPair(pub PublicKey, pub PrivateKey);
 
 impl KeyPair {

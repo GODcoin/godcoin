@@ -7,6 +7,7 @@ extern crate clap;
 
 use clap::{Arg, App, AppSettings, SubCommand};
 use tokio::prelude::*;
+use std::sync::Arc;
 use godcoin::*;
 
 struct StartNode<'a> {
@@ -46,10 +47,25 @@ fn start_node(node_opts: StartNode) {
     }.canonicalize().unwrap();
 
     let mut blockchain = Blockchain::new(&home);
-    if blockchain.store.borrow().get(0).is_none()
-            && node_opts.minter_key.is_some() {
-        let key = &node_opts.minter_key.unwrap();
-        blockchain.create_genesis_block(key);
+    {
+        let create_genesis = {
+            let lock = blockchain.store.lock().unwrap();
+            let store = lock.borrow();
+            store.get(0).is_none()
+        };
+        if create_genesis && node_opts.minter_key.is_some() {
+            if let Some(ref key) = node_opts.minter_key {
+                blockchain.create_genesis_block(key);
+            }
+        }
+    }
+
+    if let Some(ref key) = node_opts.minter_key {
+        let bond = blockchain.indexer.get_bond(&key.0).expect("No bond found for minter key");
+        let minter = key.clone();
+        let staker = bond.staker;
+        let producer = producer::Producer::new(Arc::new(blockchain), minter, staker);
+        producer.start_timer();
     }
 
     if let Some(bind) = node_opts.bind_address {

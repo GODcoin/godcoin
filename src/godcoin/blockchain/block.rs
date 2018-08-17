@@ -70,10 +70,10 @@ pub struct SignedBlock {
 }
 
 impl SignedBlock {
-    pub fn new_child(&self, prev_block: &Self, txs: Vec<TxVariant>) -> Block {
+    pub fn new_child(&self, txs: Vec<TxVariant>) -> Block {
         let previous_hash = {
             let mut buf = Vec::new();
-            prev_block.base.encode(&mut buf);
+            self.base.encode(&mut buf);
             double_sha256(&buf)
         };
         let tx_merkle_root = {
@@ -84,7 +84,7 @@ impl SignedBlock {
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
         Block {
             previous_hash,
-            height: prev_block.height + 1,
+            height: self.height + 1,
             timestamp: timestamp as u32,
             tx_merkle_root,
             transactions: txs

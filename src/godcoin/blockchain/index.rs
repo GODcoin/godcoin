@@ -1,8 +1,13 @@
 use rocksdb::{DB, ColumnFamilyDescriptor, Options};
 use std::path::Path;
+use std::io::Cursor;
+
+use tx::{TxVariant, BondTx};
+use crypto::PublicKey;
 use serializer::*;
 
 const CF_BLOCK_BYTE_POS: &str = "block_byte_pos";
+const CF_BOND: &str = "bond";
 
 const KEY_CHAIN_HEIGHT: &[u8] = b"chain_height";
 
@@ -17,7 +22,8 @@ impl Indexer {
         db_opts.create_if_missing(true);
 
         let col_families = vec![
-            ColumnFamilyDescriptor::new(CF_BLOCK_BYTE_POS, Options::default())
+            ColumnFamilyDescriptor::new(CF_BLOCK_BYTE_POS, Options::default()),
+            ColumnFamilyDescriptor::new(CF_BOND, Options::default())
         ];
         let db = DB::open_cf_descriptors(&db_opts, path, col_families).unwrap();
         Indexer { db }
@@ -55,6 +61,29 @@ impl Indexer {
         let mut val = Vec::with_capacity(8);
         val.push_u64(height);
         self.db.put(KEY_CHAIN_HEIGHT, &val).unwrap();
+    }
+
+    pub fn get_bond(&self, minter: &PublicKey) -> Option<BondTx> {
+        let cf = self.db.cf_handle(CF_BOND).unwrap();
+        let tx_buf = self.db.get_cf(cf, minter.as_bytes()).unwrap()?;
+        let cur = &mut Cursor::<&[u8]>::new(&tx_buf);
+        let tx = TxVariant::decode_with_sigs(cur).unwrap();
+        match tx {
+            TxVariant::BondTx(bond) => Some(bond),
+            _ => panic!("expected bond transaction")
+        }
+    }
+
+    pub fn set_bond(&self, bond: &BondTx) {
+        let cf = self.db.cf_handle(CF_BOND).unwrap();
+        let key = bond.minter.as_bytes();
+        let val = {
+            let mut vec = Vec::with_capacity(2048);
+            TxVariant::BondTx(bond.clone()).encode_with_sigs(&mut vec);
+            vec
+        };
+
+        self.db.put_cf(cf, key, &val).unwrap();
     }
 }
 

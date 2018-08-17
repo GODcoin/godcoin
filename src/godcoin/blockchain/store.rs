@@ -2,18 +2,17 @@ use std::io::{Read, Cursor, Seek, SeekFrom, Write};
 use blockchain::{block::*, index::*};
 use std::collections::HashMap;
 use std::cell::RefCell;
-use std::borrow::Cow;
 use std::path::Path;
+use std::sync::Arc;
 use std::fs::File;
-use std::rc::Rc;
 use crc32c::*;
 
 pub struct BlockStore {
-    indexer: Rc<Indexer>,
+    indexer: Arc<Indexer>,
 
     height: u64,
-    blocks: HashMap<u64, SignedBlock>,
-    genesis_block: Option<SignedBlock>,
+    blocks: HashMap<u64, Arc<SignedBlock>>,
+    genesis_block: Option<Arc<SignedBlock>>,
 
     file: RefCell<File>,
     byte_pos_tail: u64
@@ -21,7 +20,7 @@ pub struct BlockStore {
 
 impl BlockStore {
 
-    pub fn new(path: &Path, indexer: Rc<Indexer>) -> BlockStore {
+    pub fn new(path: &Path, indexer: Arc<Indexer>) -> BlockStore {
         let (file, tail) = if !path.is_file() {
             (File::create(path).unwrap(), 0u64)
         } else {
@@ -41,14 +40,14 @@ impl BlockStore {
             file: RefCell::new(file),
             byte_pos_tail: tail
         };
-        store.genesis_block = store.get(0).map(|b| b.into_owned());
+        store.genesis_block = store.get(0);
 
         { // Initialize the cache
             let min = if height <= 100 { height } else { height - 100 };
             let max = min + 100;
             for height in min..max {
                 if let Some(block) = store.get_from_disk(height) {
-                    store.blocks.insert(height, block);
+                    store.blocks.insert(height, Arc::new(block));
                 } else {
                     break;
                 }
@@ -58,18 +57,23 @@ impl BlockStore {
         store
     }
 
-    pub fn get(&self, height: u64) -> Option<Cow<'_, SignedBlock>> {
+    #[inline(always)]
+    pub fn get_chain_height(&self) -> u64 {
+        self.height
+    }
+
+    pub fn get(&self, height: u64) -> Option<Arc<SignedBlock>> {
         if height > self.height {
             return None
         } else if height == 0 {
             if let Some(ref block) = self.genesis_block {
-                return Some(Cow::Borrowed(block))
+                return Some(Arc::clone(block))
             }
         }
         if let Some(block) = self.blocks.get(&height) {
-            Some(Cow::Borrowed(block))
+            Some(Arc::clone(block))
         } else {
-            Some(Cow::Owned(self.get_from_disk(height)?))
+            Some(Arc::new(self.get_from_disk(height)?))
         }
     }
 
@@ -110,7 +114,7 @@ impl BlockStore {
         assert_eq!(block.height, 0, "expected to be 0");
         assert!(self.genesis_block.is_none(), "expected genesis block to not exist");
         self.insert_raw(block.clone());
-        self.genesis_block = Some(block);
+        self.genesis_block = Some(Arc::new(block));
     }
 
     fn insert_raw(&mut self, block: SignedBlock) {
@@ -145,7 +149,7 @@ impl BlockStore {
         { // Update internal cache
             let height = block.height;
             self.height = height;
-            let opt = self.blocks.insert(height, block);
+            let opt = self.blocks.insert(height, Arc::new(block));
             if self.blocks.len() > 100 {
                 let b = self.blocks.remove(&(height - 100));
                 debug_assert!(b.is_some(), "nothing removed from cache");
