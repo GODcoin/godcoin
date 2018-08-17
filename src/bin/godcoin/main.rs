@@ -60,6 +60,8 @@ fn start_node(node_opts: StartNode) {
         }
     }
 
+    println!("Using height in block log at {}", blockchain.indexer.get_chain_height());
+
     if let Some(ref key) = node_opts.minter_key {
         let bond = blockchain.indexer.get_bond(&key.0).expect("No bond found for minter key");
         let minter = key.clone();

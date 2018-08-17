@@ -17,7 +17,9 @@ pub struct Producer {
 
 impl Producer {
 
-    pub fn new(chain: Arc<Blockchain>, minter: KeyPair, staker: PublicKey) -> Producer {
+    pub fn new(chain: Arc<Blockchain>,
+                minter: KeyPair,
+                staker: PublicKey) -> Producer {
         Producer {
             chain,
             minter,
@@ -59,6 +61,11 @@ impl Producer {
 
         let head = blockchain.get_chain_head();
         let block = head.new_child(transactions).sign(&self.minter);
+
+        let height = block.height;
+        let tx_len = block.transactions.len();
+
         blockchain.insert_block(block);
+        println!("Produced block at height {} with {} txs", height, tx_len);
     }
 }
