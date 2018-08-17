@@ -110,48 +110,15 @@ impl BlockStore {
 
     pub fn insert(&mut self, block: SignedBlock) {
         assert_eq!(self.height + 1, block.height, "invalid block height");
-        self.insert_raw(block);
-    }
-
-    pub fn insert_genesis(&mut self, block: SignedBlock) {
-        assert_eq!(block.height, 0, "expected to be 0");
-        assert!(self.genesis_block.is_none(), "expected genesis block to not exist");
-        self.insert_raw(block.clone());
-        self.genesis_block = Some(Arc::new(block));
-    }
-
-    fn insert_raw(&mut self, block: SignedBlock) {
-        { // Write to disk
-            let vec = &mut Vec::with_capacity(1048576);
-            block.encode_with_tx(vec);
-            let len = vec.len() as u32;
-            let crc = crc32c(vec);
-
-            let mut f = self.file.borrow_mut();
-            {
-                let mut buf = [0u8; 8];
-                buf[0] = (len >> 24) as u8;
-                buf[1] = (len >> 16) as u8;
-                buf[2] = (len >> 8) as u8;
-                buf[3] = len as u8;
-
-                buf[4] = (crc >> 24) as u8;
-                buf[5] = (crc >> 16) as u8;
-                buf[6] = (crc >> 8) as u8;
-                buf[7] = crc as u8;
-
-                f.write_all(&buf).unwrap();
-            }
-
-            f.write_all(vec).unwrap();
-            f.flush().unwrap();
-
-            self.byte_pos_tail += (len as u64) + 8;
-        }
+        let byte_pos = self.byte_pos_tail;
+        self.write_to_disk(&block);
 
         { // Update internal cache
             let height = block.height;
             self.height = height;
+            self.indexer.set_block_byte_pos(height, byte_pos);
+            self.indexer.set_chain_height(height);
+
             let opt = self.blocks.insert(height, Arc::new(block));
             if self.blocks.len() > 100 {
                 let b = self.blocks.remove(&(height - 100));
@@ -159,5 +126,41 @@ impl BlockStore {
             }
             debug_assert!(opt.is_none(), "block already in the chain");
         }
+    }
+
+    pub fn insert_genesis(&mut self, block: SignedBlock) {
+        assert_eq!(block.height, 0, "expected to be 0");
+        assert!(self.genesis_block.is_none(), "expected genesis block to not exist");
+        self.write_to_disk(&block);
+        self.genesis_block = Some(Arc::new(block));
+        self.indexer.set_block_byte_pos(0, 0);
+    }
+
+    fn write_to_disk(&mut self, block: &SignedBlock) {
+        let vec = &mut Vec::with_capacity(1048576);
+        block.encode_with_tx(vec);
+        let len = vec.len() as u32;
+        let crc = crc32c(vec);
+
+        let mut f = self.file.borrow_mut();
+        {
+            let mut buf = [0u8; 8];
+            buf[0] = (len >> 24) as u8;
+            buf[1] = (len >> 16) as u8;
+            buf[2] = (len >> 8) as u8;
+            buf[3] = len as u8;
+
+            buf[4] = (crc >> 24) as u8;
+            buf[5] = (crc >> 16) as u8;
+            buf[6] = (crc >> 8) as u8;
+            buf[7] = crc as u8;
+
+            f.write_all(&buf).unwrap();
+        }
+
+        f.write_all(vec).unwrap();
+        f.flush().unwrap();
+
+        self.byte_pos_tail += (len as u64) + 8;
     }
 }
