@@ -63,10 +63,10 @@ impl Blockchain {
     pub fn create_genesis_block(&mut self, minter_key: &KeyPair) {
         use sodiumoxide::crypto::hash::sha256::Digest;
 
-        println!("=> Generating new block chain");
+        info!("=> Generating new block chain");
         let staker_key = KeyPair::gen_keypair();
-        println!("=> Staker private key: {}", staker_key.1.to_wif());
-        println!("=> Staker public key: {}", staker_key.0.to_wif());
+        info!("=> Staker private key: {}", staker_key.1.to_wif());
+        info!("=> Staker public key: {}", staker_key.0.to_wif());
 
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32;
 

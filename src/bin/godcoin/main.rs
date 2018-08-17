@@ -1,9 +1,13 @@
 extern crate sodiumoxide;
 extern crate num_traits;
+extern crate env_logger;
 extern crate godcoin;
 extern crate tokio;
 extern crate dirs;
 extern crate clap;
+
+#[macro_use]
+extern crate log;
 
 use clap::{Arg, App, AppSettings, SubCommand};
 use tokio::prelude::*;
@@ -17,12 +21,12 @@ struct StartNode<'a> {
 
 fn generate_keypair() {
     let pair = KeyPair::gen_keypair();
-    println!("~~ Keys have been generated ~~");
-    println!("Private key WIF: {}", pair.1.to_wif());
-    println!("Public key WIF: {}", pair.0.to_wif());
-    println!("- Make sure the keys are securely stored");
-    println!("- Coins cannot be recovered if you lose your private key");
-    println!("- Never give private keys to anyone");
+    info!("~~ Keys have been generated ~~");
+    info!("Private key WIF: {}", pair.1.to_wif());
+    info!("Public key WIF: {}", pair.0.to_wif());
+    info!("- Make sure the keys are securely stored");
+    info!("- Coins cannot be recovered if you lose your private key");
+    info!("- Never give private keys to anyone");
 }
 
 fn start_node(node_opts: StartNode) {
@@ -39,9 +43,9 @@ fn start_node(node_opts: StartNode) {
         if !Path::is_dir(&home) {
             let res = std::fs::create_dir(&home);
             res.expect(&format!("Failed to create dir at {:?}", &home));
-            println!("Created GODcoin home at {:?}", &home);
+            info!("Created GODcoin home at {:?}", &home);
         } else {
-            println!("Found GODcoin home at {:?}", &home);
+            info!("Found GODcoin home at {:?}", &home);
         }
         home
     }.canonicalize().unwrap();
@@ -60,7 +64,7 @@ fn start_node(node_opts: StartNode) {
         }
     }
 
-    println!("Using height in block log at {}", blockchain.indexer.get_chain_height());
+    info!("Using height in block log at {}", blockchain.indexer.get_chain_height());
 
     if let Some(ref key) = node_opts.minter_key {
         let bond = blockchain.indexer.get_bond(&key.0).expect("No bond found for minter key");
@@ -78,8 +82,10 @@ fn start_node(node_opts: StartNode) {
 }
 
 fn main() {
-    godcoin::init().unwrap();
+    let env = env_logger::Env::new().filter_or(env_logger::DEFAULT_FILTER_ENV, "godcoin=info");
+    env_logger::init_from_env(env);
 
+    godcoin::init().unwrap();
     let app = App::new("godcoin")
                 .about("GODcoin core CLI")
                 .version(env!("CARGO_PKG_VERSION"))
@@ -118,6 +124,6 @@ fn main() {
 
         Ok(())
     }).map_err(|err| {
-        println!("Startup failure: {:?}", err);
+        error!("Startup failure: {:?}", err);
     }));
 }

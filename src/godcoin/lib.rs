@@ -9,6 +9,9 @@ extern crate bs58;
 extern crate tokio;
 extern crate tokio_codec;
 
+#[macro_use]
+extern crate log;
+
 #[cfg(test)]
 extern crate rand;
 

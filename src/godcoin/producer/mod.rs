@@ -36,7 +36,7 @@ impl Producer {
             Producer::produce(&self);
             Ok(())
         }).map_err(|err| {
-            println!("Unknown error in producer: {:?}", err);
+            error!("Unknown error in producer: {:?}", err);
         }));
     }
 
@@ -64,6 +64,6 @@ impl Producer {
         let tx_len = block.transactions.len();
 
         blockchain.insert_block(block);
-        println!("Produced block at height {} with {} txs", height, tx_len);
+        info!("Produced block at height {} with {} txs", height, tx_len);
     }
 }
