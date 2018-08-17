@@ -1,11 +1,12 @@
 use std::io::{Read, Cursor, Seek, SeekFrom, Write};
-use blockchain::{block::*, index::*};
+use std::fs::{OpenOptions, File};
 use std::collections::HashMap;
 use std::cell::RefCell;
 use std::path::Path;
 use std::sync::Arc;
-use std::fs::File;
 use crc32c::*;
+
+use blockchain::{block::*, index::*};
 
 pub struct BlockStore {
     indexer: Arc<Indexer>,
@@ -21,12 +22,14 @@ pub struct BlockStore {
 impl BlockStore {
 
     pub fn new(path: &Path, indexer: Arc<Indexer>) -> BlockStore {
-        let (file, tail) = if !path.is_file() {
-            (File::create(path).unwrap(), 0u64)
-        } else {
-            let f = File::open(path).unwrap();
+        let (file, tail) = {
+            let f = OpenOptions::new()
+                                .create(true)
+                                .read(true)
+                                .append(true)
+                                .open(path).unwrap();
             let m = f.metadata().unwrap();
-            (File::open(path).unwrap(), m.len())
+            (f, m.len())
         };
 
         let height = indexer.get_chain_height();
