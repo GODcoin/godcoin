@@ -8,6 +8,8 @@ use crc32c::*;
 
 use blockchain::{block::*, index::*};
 
+const MAX_CACHE_SIZE: u64 = 100;
+
 pub struct BlockStore {
     indexer: Arc<Indexer>,
 
@@ -46,9 +48,9 @@ impl BlockStore {
         store.genesis_block = store.get(0);
 
         { // Initialize the cache
-            let min = if height <= 100 { height } else { height - 100 };
-            let max = min + 100;
-            for height in min..max {
+            let min = if height < MAX_CACHE_SIZE { height } else { height - 100 };
+            let max = min + MAX_CACHE_SIZE;
+            for height in min..(max + 1) {
                 if let Some(block) = store.get_from_disk(height) {
                     store.blocks.insert(height, Arc::new(block));
                 } else {
@@ -120,8 +122,8 @@ impl BlockStore {
             self.indexer.set_chain_height(height);
 
             let opt = self.blocks.insert(height, Arc::new(block));
-            if self.blocks.len() > 100 {
-                let b = self.blocks.remove(&(height - 100));
+            if self.blocks.len() > MAX_CACHE_SIZE as usize {
+                let b = self.blocks.remove(&(height - MAX_CACHE_SIZE));
                 debug_assert!(b.is_some(), "nothing removed from cache");
             }
             debug_assert!(opt.is_none(), "block already in the chain");
