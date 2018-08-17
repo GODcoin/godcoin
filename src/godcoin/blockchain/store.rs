@@ -80,7 +80,7 @@ impl BlockStore {
     fn get_from_disk(&self, height: u64) -> Option<SignedBlock> {
         if height > self.height { return None }
 
-        let pos = self.indexer.get_block_byte_pos(height).unwrap();
+        let pos = self.indexer.get_block_byte_pos(height)?;
         let mut f = self.file.borrow_mut();
         f.seek(SeekFrom::Start(pos)).unwrap();
 
