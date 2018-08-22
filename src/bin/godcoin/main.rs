@@ -130,7 +130,7 @@ fn main() {
     }));
 
     let stream = tokio_signal::ctrl_c().flatten_stream().map_err(move |e| {
-        error!("Failed to handle ctrl-c event {:?}, forcing signal event", e);
+        error!("Failed to handle ctrl-c event {:?}", e);
     });
     stream.into_future().wait().ok().unwrap();
 
