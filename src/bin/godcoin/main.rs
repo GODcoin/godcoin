@@ -1,3 +1,4 @@
+extern crate tokio_signal;
 extern crate sodiumoxide;
 extern crate num_traits;
 extern crate env_logger;
@@ -105,7 +106,8 @@ fn main() {
                                 .value_name("key")));
     let matches = app.get_matches();
 
-    tokio::run(future::lazy(move || {
+    let mut rt = tokio::runtime::Runtime::new().unwrap();
+    rt.spawn(future::lazy(move || {
         use ::std::io::{Error, ErrorKind};
 
         if let Some(_) = matches.subcommand_matches("keygen") {
@@ -126,4 +128,12 @@ fn main() {
     }).map_err(|err| {
         error!("Startup failure: {:?}", err);
     }));
+
+    let stream = tokio_signal::ctrl_c().flatten_stream().map_err(move |e| {
+        error!("Failed to handle ctrl-c event {:?}, forcing signal event", e);
+    });
+    stream.into_future().wait().ok().unwrap();
+
+    println!("Received ctrl-c signal, shutting down...");
+    rt.shutdown_now().wait().ok().unwrap();
 }

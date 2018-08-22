@@ -25,6 +25,7 @@ rocksdb = "0.10.1"
 sodiumoxide = { version = "0.1.0", default-features = false, features = ["std"] }
 tokio = "0.1.7"
 tokio-codec = "0.1.0"
+tokio-signal = "0.2.2"
 
 [dependencies.clap]
 version = "2.32.0"
