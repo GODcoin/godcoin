@@ -1,12 +1,15 @@
 use rocksdb::{DB, ColumnFamilyDescriptor, Options};
 use std::path::Path;
 use std::io::Cursor;
+use std::mem;
 
 use tx::{TxVariant, BondTx};
 use crypto::PublicKey;
+use asset::Balance;
 use serializer::*;
 
 const CF_BLOCK_BYTE_POS: &str = "block_byte_pos";
+const CF_ADDR_BAL: &str = "address_balance";
 const CF_BOND: &str = "bond";
 
 const KEY_CHAIN_HEIGHT: &[u8] = b"chain_height";
@@ -83,6 +86,27 @@ impl Indexer {
             vec
         };
 
+        self.db.put_cf(cf, key, &val).unwrap();
+    }
+
+    pub fn get_balance(&self, addr: &PublicKey) -> Option<Balance> {
+        let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
+        let bal_buf = self.db.get_cf(cf, addr.as_bytes()).unwrap()?;
+        let cur = &mut Cursor::<&[u8]>::new(&bal_buf);
+        let gold = cur.take_asset().unwrap();
+        let silver = cur.take_asset().unwrap();
+        Some(Balance { gold, silver })
+    }
+
+    pub fn set_balance(&self, addr: &PublicKey, bal: &Balance) {
+        let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
+        let key = addr.as_bytes();
+        let val = {
+            let mut vec = Vec::with_capacity(mem::size_of::<Balance>());
+            vec.push_asset(&bal.gold);
+            vec.push_asset(&bal.silver);
+            vec
+        };
         self.db.put_cf(cf, key, &val).unwrap();
     }
 }

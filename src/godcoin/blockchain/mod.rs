@@ -61,12 +61,69 @@ impl Blockchain {
 
     pub fn insert_block(&self, block: SignedBlock) -> Result<(), &'static str> {
         self.verify_block(&block, &self.get_chain_head())?;
+        for tx in &block.transactions {
+            self.index_tx(tx);
+        }
 
         let lock = self.store.lock().unwrap();
         let store = &mut lock.borrow_mut();
         store.insert(block);
 
         Ok(())
+    }
+
+    fn verify_block(&self, block: &SignedBlock, prev_block: &SignedBlock) -> Result<(), &'static str> {
+        if prev_block.height + 1 != block.height {
+            return Err("invalid block height")
+        } else if !block.verify_tx_merkle_root() {
+            return Err("invalid merkle root")
+        } else if !block.verify_previous_hash(prev_block) {
+            return Err("invalid previous hash")
+        }
+
+        if self.indexer.get_bond(&block.sig_pair.pub_key).is_none() {
+            return Err("bond not found")
+        } if !block.sig_pair.verify(block.calc_hash().as_ref()) {
+            return Err("invalid bond signature")
+        }
+
+        for tx in &block.transactions {
+            self.verify_tx(tx)?;
+        }
+
+        Ok(())
+    }
+
+    fn verify_tx(&self, tx: &TxVariant) -> Result<(), &'static str> {
+        // TODO
+        Ok(())
+    }
+
+    fn index_tx(&self, tx: &TxVariant) {
+        match tx {
+            TxVariant::BondTx(tx) => {
+                let mut bal = self.indexer.get_balance(&tx.staker).unwrap_or_default();
+                bal.sub(&tx.fee).sub(&tx.bond_fee).sub(&tx.stake_amt);
+                self.indexer.set_balance(&tx.staker, &bal);
+            },
+            TxVariant::RewardTx(tx) => {
+                let mut bal = self.indexer.get_balance(&tx.to).unwrap_or_default();
+                for r in &tx.rewards {
+                    bal.add(r);
+                }
+                self.indexer.set_balance(&tx.to, &bal);
+            },
+            TxVariant::TransferTx(tx) => {
+                let mut from_bal = self.indexer.get_balance(&tx.from).unwrap_or_default();
+                let mut to_bal = self.indexer.get_balance(&tx.to).unwrap_or_default();
+
+                from_bal.sub(&tx.fee).sub(&tx.amount);
+                to_bal.add(&tx.amount);
+
+                self.indexer.set_balance(&tx.from, &from_bal);
+                self.indexer.set_balance(&tx.to, &to_bal);
+            }
+        }
     }
 
     ///
@@ -125,32 +182,5 @@ impl Blockchain {
         let store = &mut lock.borrow_mut();
         store.insert_genesis(block);
         self.indexer.set_bond(&bond_tx);
-    }
-
-    fn verify_block(&self, block: &SignedBlock, prev_block: &SignedBlock) -> Result<(), &'static str> {
-        if prev_block.height + 1 != block.height {
-            return Err("invalid block height")
-        } else if !block.verify_tx_merkle_root() {
-            return Err("invalid merkle root")
-        } else if !block.verify_previous_hash(prev_block) {
-            return Err("invalid previous hash")
-        }
-
-        if self.indexer.get_bond(&block.sig_pair.pub_key).is_none() {
-            return Err("bond not found")
-        } if !block.sig_pair.verify(block.calc_hash().as_ref()) {
-            return Err("invalid bond signature")
-        }
-
-        for tx in &block.transactions {
-            self.verify_tx(tx)?;
-        }
-
-        Ok(())
-    }
-
-    fn verify_tx(&self, tx: &TxVariant) -> Result<(), &'static str> {
-        // TODO
-        Ok(())
     }
 }
