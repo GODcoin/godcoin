@@ -63,7 +63,7 @@ impl Producer {
         let height = block.height;
         let tx_len = block.transactions.len();
 
-        blockchain.insert_block(block);
+        blockchain.insert_block(block).unwrap();
         info!("Produced block at height {} with {} txs", height, tx_len);
     }
 }

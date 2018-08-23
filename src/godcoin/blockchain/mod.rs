@@ -59,10 +59,14 @@ impl Blockchain {
         store.get(height)
     }
 
-    pub fn insert_block(&self, block: SignedBlock) {
+    pub fn insert_block(&self, block: SignedBlock) -> Result<(), &'static str> {
+        self.verify_block(&block, &self.get_chain_head())?;
+
         let lock = self.store.lock().unwrap();
         let store = &mut lock.borrow_mut();
         store.insert(block);
+
+        Ok(())
     }
 
     ///
@@ -138,10 +142,15 @@ impl Blockchain {
             return Err("invalid bond signature")
         }
 
-        for _ in &block.transactions {
-            // TODO check transactions and verify their balances
+        for tx in &block.transactions {
+            self.verify_tx(tx)?;
         }
 
-        unimplemented!()
+        Ok(())
+    }
+
+    fn verify_tx(&self, tx: &TxVariant) -> Result<(), &'static str> {
+        // TODO
+        Ok(())
     }
 }
