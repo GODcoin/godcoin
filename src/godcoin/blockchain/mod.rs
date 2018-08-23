@@ -122,4 +122,26 @@ impl Blockchain {
         store.insert_genesis(block);
         self.indexer.set_bond(&bond_tx);
     }
+
+    fn verify_block(&self, block: &SignedBlock, prev_block: &SignedBlock) -> Result<(), &'static str> {
+        if prev_block.height + 1 != block.height {
+            return Err("invalid block height")
+        } else if !block.verify_tx_merkle_root() {
+            return Err("invalid merkle root")
+        } else if !block.verify_previous_hash(prev_block) {
+            return Err("invalid previous hash")
+        }
+
+        if self.indexer.get_bond(&block.sig_pair.pub_key).is_none() {
+            return Err("bond not found")
+        } if !block.sig_pair.verify(block.calc_hash().as_ref()) {
+            return Err("invalid bond signature")
+        }
+
+        for _ in &block.transactions {
+            // TODO check transactions and verify their balances
+        }
+
+        unimplemented!()
+    }
 }

@@ -19,11 +19,10 @@ pub struct Block {
 
 impl Block {
     pub fn sign(self, key_pair: &KeyPair) -> SignedBlock {
-        let mut buf = Vec::new();
-        self.encode(&mut buf);
+        let buf = self.calc_hash();
         SignedBlock {
             base: self,
-            sig_pair: key_pair.sign(&buf)
+            sig_pair: key_pair.sign(buf.as_ref())
         }
     }
 
@@ -61,6 +60,23 @@ impl Block {
         vec.push_u32(self.timestamp);
         vec.push_bytes(self.tx_merkle_root.as_ref());
     }
+
+    pub fn verify_tx_merkle_root(&self) -> bool {
+        let mut buf = Vec::with_capacity(4096 * self.transactions.len());
+        for tx in &self.transactions { tx.encode_with_sigs(&mut buf) };
+        let digest = double_sha256(&buf);
+        self.tx_merkle_root == digest
+    }
+
+    pub fn calc_hash(&self) -> Digest {
+        let mut buf = Vec::with_capacity(1024);
+        self.encode(&mut buf);
+        double_sha256(&buf)
+    }
+
+    pub fn verify_previous_hash(&self, prev_block: &Block) -> bool {
+        self.previous_hash == prev_block.calc_hash()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -72,12 +88,12 @@ pub struct SignedBlock {
 impl SignedBlock {
     pub fn new_child(&self, txs: Vec<TxVariant>) -> Block {
         let previous_hash = {
-            let mut buf = Vec::new();
+            let mut buf = Vec::with_capacity(1024);
             self.base.encode(&mut buf);
             double_sha256(&buf)
         };
         let tx_merkle_root = {
-            let mut buf = Vec::new();
+            let mut buf = Vec::with_capacity(4096 * txs.len());
             for tx in &txs { tx.encode_with_sigs(&mut buf) };
             double_sha256(&buf)
         };
