@@ -53,11 +53,7 @@ fn start_node(node_opts: StartNode) {
 
     let mut blockchain = Blockchain::new(&home);
     {
-        let create_genesis = {
-            let lock = blockchain.store.lock().unwrap();
-            let store = lock.borrow();
-            store.get(0).is_none()
-        };
+        let create_genesis = blockchain.get_block(0).is_none();
         if create_genesis && node_opts.minter_key.is_some() {
             if let Some(ref key) = node_opts.minter_key {
                 blockchain.create_genesis_block(key);
@@ -65,10 +61,10 @@ fn start_node(node_opts: StartNode) {
         }
     }
 
-    info!("Using height in block log at {}", blockchain.indexer.get_chain_height());
+    info!("Using height in block log at {}", blockchain.get_chain_height());
 
     if let Some(ref key) = node_opts.minter_key {
-        let bond = blockchain.indexer.get_bond(&key.0).expect("No bond found for minter key");
+        let bond = blockchain.get_bond(&key.0).expect("No bond found for minter key");
         let minter = key.clone();
         let staker = bond.staker;
         let producer = producer::Producer::new(Arc::new(blockchain), minter, staker);

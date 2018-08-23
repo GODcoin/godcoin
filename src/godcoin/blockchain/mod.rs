@@ -17,8 +17,8 @@ use asset::*;
 use tx::*;
 
 pub struct Blockchain {
-    pub indexer: Arc<Indexer>,
-    pub store: Mutex<RefCell<BlockStore>>
+    indexer: Arc<Indexer>,
+    store: Mutex<RefCell<BlockStore>>
 }
 
 impl Blockchain {
@@ -34,6 +34,16 @@ impl Blockchain {
             indexer,
             store: Mutex::new(RefCell::new(store))
         }
+    }
+
+    #[inline(always)]
+    pub fn get_bond(&self, minter: &PublicKey) -> Option<BondTx> {
+        self.indexer.get_bond(minter)
+    }
+
+    #[inline(always)]
+    pub fn get_chain_height(&self) -> u64 {
+        self.indexer.get_chain_height()
     }
 
     pub fn get_chain_head(&self) -> Arc<SignedBlock> {
