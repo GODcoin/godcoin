@@ -19,7 +19,7 @@ extern crate rand;
 mod buf_util;
 
 pub mod asset;
-pub use self::asset::{Asset, AssetSymbol, EMPTY_GOLD, EMPTY_SILVER};
+pub use self::asset::{Asset, AssetSymbol, Balance, EMPTY_GOLD, EMPTY_SILVER};
 
 pub mod crypto;
 pub use self::crypto::{KeyPair, PublicKey, PrivateKey, SigPair, Wif};

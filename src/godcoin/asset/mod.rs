@@ -196,6 +196,42 @@ impl FromStr for Asset {
     }
 }
 
+pub struct Balance {
+    pub gold: Asset,
+    pub silver: Asset
+}
+
+macro_rules! agnostic_op {
+    ($op:ident) => {
+        impl Balance {
+            #[inline]
+            pub fn $op(&mut self, asset: &Asset) -> &mut Balance {
+                match asset.symbol {
+                    AssetSymbol::GOLD => {
+                        self.gold = self.gold.$op(asset).unwrap();
+                    },
+                    AssetSymbol::SILVER => {
+                        self.silver = self.silver.$op(asset).unwrap();
+                    }
+                }
+                self
+            }
+        }
+    };
+}
+
+agnostic_op!(add);
+agnostic_op!(sub);
+
+impl Default for Balance {
+    fn default() -> Balance {
+        Balance {
+            gold: EMPTY_GOLD,
+            silver: EMPTY_SILVER
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
