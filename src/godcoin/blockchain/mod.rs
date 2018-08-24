@@ -59,11 +59,9 @@ impl Blockchain {
         store.get(height)
     }
 
-    pub fn insert_block(&self, block: SignedBlock) -> Result<(), &'static str> {
+    pub fn insert_block(&self, block: SignedBlock) -> Result<(), String> {
         self.verify_block(&block, &self.get_chain_head())?;
-        for tx in &block.transactions {
-            self.index_tx(tx);
-        }
+        for tx in &block.transactions { self.index_tx(tx); }
 
         let lock = self.store.lock().unwrap();
         let store = &mut lock.borrow_mut();
@@ -72,46 +70,63 @@ impl Blockchain {
         Ok(())
     }
 
-    fn verify_block(&self, block: &SignedBlock, prev_block: &SignedBlock) -> Result<(), &'static str> {
+    fn verify_block(&self, block: &SignedBlock, prev_block: &SignedBlock) -> Result<(), String> {
         if prev_block.height + 1 != block.height {
-            return Err("invalid block height")
+            return Err("invalid block height".to_owned())
         } else if !block.verify_tx_merkle_root() {
-            return Err("invalid merkle root")
+            return Err("invalid merkle root".to_owned())
         } else if !block.verify_previous_hash(prev_block) {
-            return Err("invalid previous hash")
+            return Err("invalid previous hash".to_owned())
         }
 
         if self.indexer.get_bond(&block.sig_pair.pub_key).is_none() {
-            return Err("bond not found")
-        } if !block.sig_pair.verify(block.calc_hash().as_ref()) {
-            return Err("invalid bond signature")
+            return Err("bond not found".to_owned())
+        } else if !block.sig_pair.verify(block.calc_hash().as_ref()) {
+            return Err("invalid bond signature".to_owned())
         }
 
         for tx in &block.transactions {
-            self.verify_tx(tx)?;
+            if let Err(s) = self.verify_tx(tx) {
+                return Err(format!("tx verification failed: {}", s))
+            }
         }
 
         Ok(())
     }
 
-    fn verify_tx(&self, tx: &TxVariant) -> Result<(), &'static str> {
-        // TODO
+    fn verify_tx(&self, tx: &TxVariant) -> Result<(), String> {
+        match tx {
+            TxVariant::RewardTx(tx) => {
+                if tx.signature_pairs.len() != 0 {
+                    return Err("reward transaction must not be signed".to_owned())
+                }
+            },
+            TxVariant::BondTx(tx) => {
+                // TODO get address fee
+                // TODO validate bond fee is sufficient
+                // TODO validate stake amt is greater than 0
+            },
+            TxVariant::TransferTx(tx) => {
+                // TODO get address fee
+                // TODO validate "from" has enough balance
+            }
+        }
         Ok(())
     }
 
     fn index_tx(&self, tx: &TxVariant) {
         match tx {
-            TxVariant::BondTx(tx) => {
-                let mut bal = self.indexer.get_balance(&tx.staker).unwrap_or_default();
-                bal.sub(&tx.fee).sub(&tx.bond_fee).sub(&tx.stake_amt);
-                self.indexer.set_balance(&tx.staker, &bal);
-            },
             TxVariant::RewardTx(tx) => {
                 let mut bal = self.indexer.get_balance(&tx.to).unwrap_or_default();
                 for r in &tx.rewards {
                     bal.add(r);
                 }
                 self.indexer.set_balance(&tx.to, &bal);
+            },
+            TxVariant::BondTx(tx) => {
+                let mut bal = self.indexer.get_balance(&tx.staker).unwrap_or_default();
+                bal.sub(&tx.fee).sub(&tx.bond_fee).sub(&tx.stake_amt);
+                self.indexer.set_balance(&tx.staker, &bal);
             },
             TxVariant::TransferTx(tx) => {
                 let mut from_bal = self.indexer.get_balance(&tx.from).unwrap_or_default();
