@@ -103,7 +103,7 @@ fn main() {
     let matches = app.get_matches();
 
     let mut rt = tokio::runtime::Runtime::new().unwrap();
-    rt.spawn(future::lazy(move || {
+    rt.block_on(future::lazy(move || {
         use ::std::io::{Error, ErrorKind};
 
         if let Some(_) = matches.subcommand_matches("keygen") {
@@ -123,7 +123,7 @@ fn main() {
         Ok(())
     }).map_err(|err| {
         error!("Startup failure: {:?}", err);
-    }));
+    })).unwrap();
 
     let stream = tokio_signal::ctrl_c().flatten_stream().map_err(move |e| {
         error!("Failed to handle ctrl-c event {:?}", e);
