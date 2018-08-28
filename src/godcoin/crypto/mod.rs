@@ -89,6 +89,10 @@ pub struct PrivateKey {
 }
 
 impl PrivateKey {
+    pub fn as_bytes(&self) -> ([u8; sign::SEEDBYTES], [u8; sign::SECRETKEYBYTES]) {
+        (self.seed.0, self.key.0)
+    }
+
     #[inline]
     pub fn sign(&self, msg: &[u8]) -> sign::Signature {
         sign::sign_detached(msg, &self.key)
