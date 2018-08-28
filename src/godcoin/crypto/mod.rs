@@ -224,6 +224,26 @@ mod tests {
     }
 
     #[test]
+    fn test_invalid_checksum() {
+        let mut bytes = bs58::decode("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").into_vec().unwrap();
+        let len = bytes.len();
+        for i in 1..5 {
+            bytes[len - i] = 0;
+        }
+        let wif = bs58::encode(bytes).into_string();
+        assert_eq!(PrivateKey::from_wif(&wif).unwrap_err().kind, WifErrorKind::InvalidChecksum);
+
+        let mut bytes = bs58::decode("52QZDBUStV5CudxvKf6bPsQeN7oeKTkEm2nAU1vAUqNVexGTb8").into_vec().unwrap();
+        let len = bytes.len();
+        for i in 1..5 {
+            bytes[len - i] = 0;
+        }
+        let mut wif = bs58::encode(bytes).into_string();
+        wif.insert_str(0, PUB_ADDRESS_PREFIX);
+        assert_eq!(PublicKey::from_wif(&wif).unwrap_err().kind, WifErrorKind::InvalidChecksum);
+    }
+
+    #[test]
     fn test_sign_message() {
         let msg = "Hello world!".as_bytes();
         let kp = KeyPair::gen_keypair();
