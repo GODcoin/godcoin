@@ -89,13 +89,23 @@ pub struct PrivateKey {
 }
 
 impl PrivateKey {
+    #[inline]
+    pub fn sign(&self, msg: &[u8]) -> sign::Signature {
+        sign::sign_detached(msg, &self.key)
+    }
+
+    #[inline]
     pub fn as_bytes(&self) -> ([u8; sign::SEEDBYTES], [u8; sign::SECRETKEYBYTES]) {
         (self.seed.0, self.key.0)
     }
 
-    #[inline]
-    pub fn sign(&self, msg: &[u8]) -> sign::Signature {
-        sign::sign_detached(msg, &self.key)
+    pub fn from_bytes(&self,
+                        seed: &[u8; sign::SEEDBYTES],
+                        key: &[u8; sign::SECRETKEYBYTES]) -> Option<PrivateKey> {
+        Some(PrivateKey {
+            seed: sign::Seed::from_slice(seed)?,
+            key: sign::SecretKey::from_slice(key)?
+        })
     }
 }
 
