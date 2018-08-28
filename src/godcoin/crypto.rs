@@ -1,7 +1,7 @@
-use ::sodiumoxide::crypto::hash::sha256;
-use ::sodiumoxide::crypto::sign;
-use ::sodiumoxide::randombytes;
-use ::bs58;
+use sodiumoxide::crypto::hash::sha256;
+use sodiumoxide::crypto::sign;
+use sodiumoxide::randombytes;
+use bs58;
 
 const PUB_ADDRESS_PREFIX: &str = "GOD";
 const PRIV_BUF_PREFIX: u8 = 0x01;
@@ -184,6 +184,20 @@ mod tests {
         let kp = PrivateKey::from_wif("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").unwrap();
         assert_eq!(&*kp.1.to_wif(), "3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM");
         assert_eq!(&*kp.0.to_wif(), "GOD52QZDBUStV5CudxvKf6bPsQeN7oeKTkEm2nAU1vAUqNVexGTb8");
+    }
+
+    #[test]
+    fn test_invalid_prefix() {
+        let mut bytes = bs58::decode("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").into_vec().unwrap();
+        bytes[0] = 255;
+        let wif = bs58::encode(bytes).into_string();
+        assert!(PrivateKey::from_wif(&wif).is_none());
+
+        let mut bytes = bs58::decode("52QZDBUStV5CudxvKf6bPsQeN7oeKTkEm2nAU1vAUqNVexGTb8").into_vec().unwrap();
+        bytes[0] = 255;
+        let mut wif = bs58::encode(bytes).into_string();
+        wif.insert_str(0, PUB_ADDRESS_PREFIX);
+        assert!(PublicKey::from_wif(&wif).is_none());
     }
 
     #[test]
