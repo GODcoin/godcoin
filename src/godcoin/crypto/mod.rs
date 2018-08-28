@@ -99,8 +99,7 @@ impl PrivateKey {
         (self.seed.0, self.key.0)
     }
 
-    pub fn from_bytes(&self,
-                        seed: &[u8; sign::SEEDBYTES],
+    pub fn from_bytes(seed: &[u8; sign::SEEDBYTES],
                         key: &[u8; sign::SECRETKEYBYTES]) -> Option<PrivateKey> {
         Some(PrivateKey {
             seed: sign::Seed::from_slice(seed)?,
