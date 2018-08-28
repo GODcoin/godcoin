@@ -3,16 +3,19 @@ use sodiumoxide::crypto::sign;
 use sodiumoxide::randombytes;
 use bs58;
 
+mod error;
+pub use self::error::*;
+
 const PUB_ADDRESS_PREFIX: &str = "GOD";
 const PRIV_BUF_PREFIX: u8 = 0x01;
 const PUB_BUF_PREFIX: u8 = 0x02;
 
 pub trait Wif<T> {
-    fn from_wif(s: &str) -> Option<T>;
+    fn from_wif(s: &str) -> Result<T, WifError>;
     fn to_wif(&self) -> Box<str>;
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PublicKey {
     key: sign::PublicKey
 }
@@ -36,21 +39,32 @@ impl PublicKey {
 }
 
 impl Wif<PublicKey> for PublicKey {
-    fn from_wif(s: &str) -> Option<PublicKey> {
-        if s.len() < 3 || &s[0..3] != PUB_ADDRESS_PREFIX { return None }
-        let raw = bs58::decode(&s[3..]).into_vec().ok()?;
-        if raw.len() != 37 || raw[0] != PUB_BUF_PREFIX { return None }
+    fn from_wif(s: &str) -> Result<PublicKey, WifError> {
+        if s.len() < 3 || &s[0..3] != PUB_ADDRESS_PREFIX {
+            return Err(WifError::new(WifErrorKind::InvalidPrefix))
+        }
+        let raw = match bs58::decode(&s[3..]).into_vec() {
+            Ok(bytes) => bytes,
+            Err(_) => return Err(WifError::new(WifErrorKind::InvalidBs58Encoding))
+        };
+        if raw.len() != 37 {
+            return Err(WifError::new(WifErrorKind::InvalidLen))
+        } else if raw[0] != PUB_BUF_PREFIX {
+            return Err(WifError::new(WifErrorKind::InvalidPrefix))
+        }
 
         let prefixed_key = &raw[0..raw.len() - 4];
         {
             let checksum_a = &raw[raw.len() - 4 .. raw.len()];
             let checksum_b = &double_sha256(prefixed_key)[0..4];
-            if checksum_a != checksum_b { return None }
+            if checksum_a != checksum_b {
+                return Err(WifError::new(WifErrorKind::InvalidChecksum))
+            }
         }
 
         let key = &prefixed_key[1 .. prefixed_key.len()];
-        Some(PublicKey {
-            key: sign::PublicKey::from_slice(key)?
+        Ok(PublicKey {
+            key: sign::PublicKey::from_slice(key).unwrap()
         })
     }
 
@@ -68,7 +82,7 @@ impl Wif<PublicKey> for PublicKey {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PrivateKey {
     seed: sign::Seed,
     key: sign::SecretKey
@@ -82,20 +96,29 @@ impl PrivateKey {
 }
 
 impl Wif<KeyPair> for PrivateKey {
-    fn from_wif(s: &str) -> Option<KeyPair> {
-        let raw = bs58::decode(s).into_vec().ok()?;
-        if raw.len() != 37 || raw[0] != PRIV_BUF_PREFIX { return None }
+    fn from_wif(s: &str) -> Result<KeyPair, WifError> {
+        let raw = match bs58::decode(s).into_vec() {
+            Ok(bytes) => bytes,
+            Err(_) => return Err(WifError::new(WifErrorKind::InvalidBs58Encoding))
+        };
+        if raw.len() != 37 {
+            return Err(WifError::new(WifErrorKind::InvalidLen))
+        } else if raw[0] != PRIV_BUF_PREFIX {
+            return Err(WifError::new(WifErrorKind::InvalidPrefix))
+        }
 
         let key = &raw[0..raw.len() - 4];
         {
             let checksum_a = &raw[raw.len() - 4 .. raw.len()];
             let checksum_b = &double_sha256(key)[0..4];
-            if checksum_a != checksum_b { return None }
+            if checksum_a != checksum_b {
+                return Err(WifError::new(WifErrorKind::InvalidChecksum))
+            }
         }
 
-        let seed = sign::Seed::from_slice(&key[1..])?;
+        let seed = sign::Seed::from_slice(&key[1..]).unwrap();
         let (pk, sk) = sign::keypair_from_seed(&seed);
-        Some(KeyPair(PublicKey {
+        Ok(KeyPair(PublicKey {
             key: pk
         }, PrivateKey {
             seed,
@@ -115,7 +138,7 @@ impl Wif<KeyPair> for PrivateKey {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct KeyPair(pub PublicKey, pub PrivateKey);
 
 impl KeyPair {
@@ -191,13 +214,13 @@ mod tests {
         let mut bytes = bs58::decode("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").into_vec().unwrap();
         bytes[0] = 255;
         let wif = bs58::encode(bytes).into_string();
-        assert!(PrivateKey::from_wif(&wif).is_none());
+        assert_eq!(PrivateKey::from_wif(&wif).unwrap_err().kind, WifErrorKind::InvalidPrefix);
 
         let mut bytes = bs58::decode("52QZDBUStV5CudxvKf6bPsQeN7oeKTkEm2nAU1vAUqNVexGTb8").into_vec().unwrap();
         bytes[0] = 255;
         let mut wif = bs58::encode(bytes).into_string();
         wif.insert_str(0, PUB_ADDRESS_PREFIX);
-        assert!(PublicKey::from_wif(&wif).is_none());
+        assert_eq!(PublicKey::from_wif(&wif).unwrap_err().kind, WifErrorKind::InvalidPrefix);
     }
 
     #[test]
