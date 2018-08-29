@@ -124,8 +124,10 @@ impl Asset {
             symbol: self.symbol
         })
     }
+}
 
-    pub fn to_str(&self) -> Box<str> {
+impl ToString for Asset {
+    fn to_string(&self) -> String {
         let mut s = self.amount.to_string();
         if self.decimals > 0 {
             let len = s.len();
@@ -142,7 +144,7 @@ impl Asset {
         }
         s.push(' ');
         s.push_str(self.symbol.as_str());
-        s.into_boxed_str()
+        s
     }
 }
 
@@ -258,7 +260,7 @@ mod tests {
     #[test]
     fn test_asset_to_str() {
         let c = |asset: Asset, s: &str| {
-            assert_eq!(&*asset.to_str(), s);
+            assert_eq!(asset.to_string(), s);
         };
         c(get_asset("1.00001 GOLD"), "1.00001 GOLD");
         c(get_asset("0.00001 GOLD"), "0.00001 GOLD");
@@ -312,7 +314,7 @@ mod tests {
     #[test]
     fn test_perform_arithmetic() {
         let c = |asset: &Asset, amount: &str| {
-            assert_eq!(&*asset.to_str(), amount);
+            assert_eq!(asset.to_string(), amount);
         };
 
         let a = get_asset("123.456 GOLD");

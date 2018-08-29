@@ -224,7 +224,7 @@ mod tests {
         ($id:ident, $ty:expr, $ts:expr, $fee:expr) => {
             assert_eq!($id.tx_type, $ty);
             assert_eq!($id.timestamp, $ts);
-            assert_eq!(&*$id.fee.to_str(), $fee);
+            assert_eq!($id.fee.to_string(), $fee);
         }
     }
 
@@ -273,8 +273,8 @@ mod tests {
         cmp_base_tx!(dec, TxType::REWARD, 123, "123 GOLD");
         assert_eq!(reward_tx.to, dec.to);
         assert_eq!(reward_tx.rewards.len(), dec.rewards.len());
-        assert_eq!(reward_tx.rewards[0].to_str(), dec.rewards[0].to_str());
-        assert_eq!(reward_tx.rewards[1].to_str(), dec.rewards[1].to_str());
+        assert_eq!(reward_tx.rewards[0].to_string(), dec.rewards[0].to_string());
+        assert_eq!(reward_tx.rewards[1].to_string(), dec.rewards[1].to_string());
     }
 
     #[test]
@@ -304,8 +304,8 @@ mod tests {
         cmp_base_tx!(dec, TxType::BOND, 1230, "123 GOLD");
         assert_eq!(bond_tx.minter, dec.minter);
         assert_eq!(bond_tx.staker, dec.staker);
-        assert_eq!(bond_tx.stake_amt.to_str(), dec.stake_amt.to_str());
-        assert_eq!(bond_tx.bond_fee.to_str(), dec.bond_fee.to_str());
+        assert_eq!(bond_tx.stake_amt.to_string(), dec.stake_amt.to_string());
+        assert_eq!(bond_tx.bond_fee.to_string(), dec.bond_fee.to_string());
     }
 
     #[test]
@@ -335,7 +335,7 @@ mod tests {
         cmp_base_tx!(dec, TxType::TRANSFER, 1234567890, "1.23 GOLD");
         assert_eq!(transfer_tx.from, dec.from);
         assert_eq!(transfer_tx.to, dec.to);
-        assert_eq!(transfer_tx.amount.to_str(), dec.amount.to_str());
+        assert_eq!(transfer_tx.amount.to_string(), dec.amount.to_string());
         assert_eq!(transfer_tx.memo, dec.memo);
     }
 

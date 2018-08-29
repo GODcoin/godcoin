@@ -191,7 +191,7 @@ mod tests {
 
             let mut c = Cursor::<&[u8]>::new(&v);
             let b = c.take_asset().unwrap();
-            assert_eq!(a.to_str(), b.to_str());
+            assert_eq!(a.to_string(), b.to_string());
         }
         {
             let a = Asset {
