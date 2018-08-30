@@ -191,6 +191,7 @@ impl Blockchain {
                 let mut bal = self.get_balance(&tx.staker);
                 bal.sub(&tx.fee).sub(&tx.bond_fee).sub(&tx.stake_amt);
                 self.indexer.set_balance(&tx.staker, &bal);
+                self.indexer.set_bond(tx);
             },
             TxVariant::TransferTx(tx) => {
                 let mut from_bal = self.get_balance(&tx.from);
