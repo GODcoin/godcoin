@@ -30,6 +30,14 @@ pub enum TxVariant {
 }
 
 impl TxVariant {
+    pub fn encode(&self, v: &mut Vec<u8>) {
+        match self {
+            TxVariant::RewardTx(tx) => { tx.encode(v) },
+            TxVariant::BondTx(tx) => { tx.encode(v) },
+            TxVariant::TransferTx(tx) => { tx.encode(v) }
+        };
+    }
+
     pub fn encode_with_sigs(&self, v: &mut Vec<u8>) {
         macro_rules! encode_sigs {
             ($name:expr, $vec:expr) => {
@@ -61,6 +69,18 @@ impl TxVariant {
             TxType::REWARD => Some(TxVariant::RewardTx(RewardTx::decode(cur, base)?)),
             TxType::BOND => Some(TxVariant::BondTx(BondTx::decode(cur, base)?)),
             TxType::TRANSFER => Some(TxVariant::TransferTx(TransferTx::decode(cur, base)?))
+        }
+    }
+}
+
+impl ::std::ops::Deref for TxVariant {
+    type Target = Tx;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            TxVariant::RewardTx(tx) => &tx.base,
+            TxVariant::BondTx(tx) => &tx.base,
+            TxVariant::TransferTx(tx) => &tx.base
         }
     }
 }

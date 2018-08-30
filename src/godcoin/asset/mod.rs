@@ -207,16 +207,16 @@ macro_rules! agnostic_op {
     ($op:ident) => {
         impl Balance {
             #[inline]
-            pub fn $op(&mut self, asset: &Asset) -> &mut Balance {
+            pub fn $op(&mut self, asset: &Asset) -> Option<&mut Balance> {
                 match asset.symbol {
                     AssetSymbol::GOLD => {
-                        self.gold = self.gold.$op(asset).unwrap();
+                        self.gold = self.gold.$op(asset)?;
                     },
                     AssetSymbol::SILVER => {
-                        self.silver = self.silver.$op(asset).unwrap();
+                        self.silver = self.silver.$op(asset)?;
                     }
                 }
-                self
+                Some(self)
             }
         }
     };

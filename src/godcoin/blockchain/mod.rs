@@ -12,7 +12,8 @@ pub use self::store::BlockStore;
 pub use self::index::Indexer;
 pub use self::block::*;
 
-use asset::{self, Asset, Balance, EMPTY_GOLD};
+use asset::{self, Asset, AssetSymbol, Balance, EMPTY_GOLD};
+use constants;
 use crypto::*;
 use tx::*;
 
@@ -159,6 +160,31 @@ impl Blockchain {
     }
 
     fn verify_tx(&self, tx: &TxVariant) -> Result<(), String> {
+        macro_rules! check_amt {
+            ($asset:expr, $name:expr) => {
+                if $asset.amount < 0 { return Err(format!("{} must be greater than 0", $name)) }
+            }
+        }
+
+        macro_rules! check_suf_bal {
+            ($asset:expr) => {
+                if $asset.amount < 0 { return Err("insufficient balance".to_owned()) }
+            }
+        }
+
+        check_amt!(tx.fee, "fee");
+        if tx.tx_type != TxType::REWARD {
+            if tx.signature_pairs.len() != 1 {
+                return Err("must have 1 signature".to_owned())
+            }
+
+            let mut v = Vec::with_capacity(4096);
+            tx.encode(&mut v);
+            if !tx.signature_pairs[0].verify(&v) {
+                return Err("signature verification failed".to_owned())
+            }
+        }
+
         match tx {
             TxVariant::RewardTx(tx) => {
                 if tx.signature_pairs.len() != 0 {
@@ -166,13 +192,33 @@ impl Blockchain {
                 }
             },
             TxVariant::BondTx(tx) => {
-                // TODO get address fee
-                // TODO validate bond fee is sufficient
-                // TODO validate stake amt is greater than 0
+                if !(tx.bond_fee.symbol == AssetSymbol::GOLD
+                        && tx.stake_amt.symbol == AssetSymbol::GOLD
+                        && tx.fee.symbol == AssetSymbol::GOLD) {
+                    return Err("fees and stake amount must be in gold".to_owned())
+                }
+                check_amt!(&tx.bond_fee, "bond_fee");
+                check_amt!(&tx.stake_amt, "stake_amt");
+
+                if tx.bond_fee.lt(&constants::BOND_FEE).unwrap() {
+                    return Err("bond_fee is too small".to_owned())
+                }
+
+                let mut bal = self.get_balance(&tx.staker);
+                bal.sub(&tx.fee).ok_or("failed to subtract fee")?
+                    .sub(&tx.bond_fee).ok_or("failed to subtract bond_fee")?
+                    .sub(&tx.stake_amt).ok_or("failed to subtract stake_amt")?;
+                check_suf_bal!(bal.gold);
             },
             TxVariant::TransferTx(tx) => {
-                // TODO get address fee
-                // TODO validate "from" has enough balance
+                if tx.fee.symbol != tx.amount.symbol {
+                    return Err("symbol mismatch between fee and amount".to_owned())
+                }
+                let mut bal = self.get_balance(&tx.from);
+                bal.sub(&tx.fee).ok_or("failed to subtract fee")?
+                    .sub(&tx.amount).ok_or("failed to subtract amount")?;
+                check_suf_bal!(&bal.gold);
+                check_suf_bal!(&bal.silver);
             }
         }
         Ok(())
@@ -189,7 +235,9 @@ impl Blockchain {
             },
             TxVariant::BondTx(tx) => {
                 let mut bal = self.get_balance(&tx.staker);
-                bal.sub(&tx.fee).sub(&tx.bond_fee).sub(&tx.stake_amt);
+                bal.sub(&tx.fee).unwrap()
+                    .sub(&tx.bond_fee).unwrap()
+                    .sub(&tx.stake_amt).unwrap();
                 self.indexer.set_balance(&tx.staker, &bal);
                 self.indexer.set_bond(tx);
             },
@@ -197,7 +245,8 @@ impl Blockchain {
                 let mut from_bal = self.get_balance(&tx.from);
                 let mut to_bal = self.get_balance(&tx.to);
 
-                from_bal.sub(&tx.fee).sub(&tx.amount);
+                from_bal.sub(&tx.fee).unwrap()
+                        .sub(&tx.amount).unwrap();
                 to_bal.add(&tx.amount);
 
                 self.indexer.set_balance(&tx.from, &from_bal);
