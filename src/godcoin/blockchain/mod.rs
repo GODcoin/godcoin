@@ -12,8 +12,8 @@ pub use self::store::BlockStore;
 pub use self::index::Indexer;
 pub use self::block::*;
 
+use asset::{self, Asset, Balance, EMPTY_GOLD};
 use crypto::*;
-use asset::*;
 use tx::*;
 
 pub struct Blockchain {
@@ -57,6 +57,70 @@ impl Blockchain {
         let lock = self.store.lock().unwrap();
         let store = lock.borrow();
         store.get(height)
+    }
+
+    pub fn get_total_fee(&self, addr: &PublicKey) -> Option<Balance> {
+        let net_fee = self.get_network_fee()?;
+        let addr_fee = self.get_address_fee(addr)?;
+        Some(Balance {
+            gold: net_fee.gold.add(&addr_fee.gold)?,
+            silver: net_fee.silver.add(&addr_fee.silver)?
+        })
+    }
+
+    pub fn get_address_fee(&self, addr: &PublicKey) -> Option<Balance> {
+        use constants::*;
+        let mut delta = 0;
+        let mut tx_count = 1;
+
+        let head = self.get_chain_height();
+        for i in (0..head + 1).rev() {
+            delta += 1;
+            let block = self.get_block(i).unwrap();
+            for tx in &block.transactions {
+                let has_match = match tx {
+                    TxVariant::RewardTx(_) => { false },
+                    TxVariant::BondTx(tx) => { &tx.staker == addr },
+                    TxVariant::TransferTx(tx) => { &tx.from == addr }
+                };
+                if has_match { tx_count += 1; }
+            }
+            if delta == FEE_RESET_WINDOW { break; }
+        }
+
+        let prec = asset::MAX_PRECISION;
+        let gold = GOLD_FEE_MIN.mul(&GOLD_FEE_MULT.pow(tx_count as u16, prec)?, prec)?;
+        let silver = SILVER_FEE_MIN.mul(&SILVER_FEE_MULT.pow(tx_count as u16, prec)?, prec)?;
+        Some(Balance { gold, silver })
+    }
+
+    pub fn get_network_fee(&self) -> Option<Balance> {
+        // The network fee adjusts every 5 blocks so that users have a bigger time
+        // frame to confirm the fee they want to spend without suddenly changing.
+        use constants::*;
+        let max_height = self.get_chain_height();
+        let max_height = max_height - (max_height % 5);
+        let min_height = if max_height > NETWORK_FEE_AVG_WINDOW {
+            max_height - NETWORK_FEE_AVG_WINDOW
+        } else {
+            0
+        };
+
+        let mut tx_count: u64 = 1;
+        for i in min_height..max_height + 1 {
+            tx_count += self.get_block(i).unwrap().transactions.len() as u64;
+        }
+        if tx_count > u64::from(u16::max_value()) { return None }
+
+        let prec = asset::MAX_PRECISION;
+        let gold = GOLD_FEE_MIN.mul(&GOLD_FEE_MULT.pow(tx_count as u16, prec)?, prec)?;
+        let silver = SILVER_FEE_MIN.mul(&SILVER_FEE_MULT.pow(tx_count as u16, prec)?, prec)?;
+
+        Some(Balance { gold, silver })
+    }
+
+    pub fn get_balance(&self, addr: &PublicKey) -> Balance {
+        self.indexer.get_balance(addr).unwrap_or_default()
     }
 
     pub fn insert_block(&self, block: SignedBlock) -> Result<(), String> {
@@ -117,20 +181,20 @@ impl Blockchain {
     fn index_tx(&self, tx: &TxVariant) {
         match tx {
             TxVariant::RewardTx(tx) => {
-                let mut bal = self.indexer.get_balance(&tx.to).unwrap_or_default();
+                let mut bal = self.get_balance(&tx.to);
                 for r in &tx.rewards {
                     bal.add(r);
                 }
                 self.indexer.set_balance(&tx.to, &bal);
             },
             TxVariant::BondTx(tx) => {
-                let mut bal = self.indexer.get_balance(&tx.staker).unwrap_or_default();
+                let mut bal = self.get_balance(&tx.staker);
                 bal.sub(&tx.fee).sub(&tx.bond_fee).sub(&tx.stake_amt);
                 self.indexer.set_balance(&tx.staker, &bal);
             },
             TxVariant::TransferTx(tx) => {
-                let mut from_bal = self.indexer.get_balance(&tx.from).unwrap_or_default();
-                let mut to_bal = self.indexer.get_balance(&tx.to).unwrap_or_default();
+                let mut from_bal = self.get_balance(&tx.from);
+                let mut to_bal = self.get_balance(&tx.to);
 
                 from_bal.sub(&tx.fee).sub(&tx.amount);
                 to_bal.add(&tx.amount);
