@@ -33,6 +33,8 @@ pub const BOND_FEE: Asset = Asset {
 pub const NETWORK_FEE_AVG_WINDOW: u64 = 10;
 pub const FEE_RESET_WINDOW: u64 = 4;
 
+pub const BLOCK_PROD_TIME: u64 = 3000;
+
 mod tests {
     #[allow(unused_imports)]
     use super::*;
