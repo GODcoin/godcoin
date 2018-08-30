@@ -19,12 +19,10 @@ impl Asset {
     }
 
     pub fn lt(&self, other: &Asset) -> Option<bool> {
-        if self.symbol != other.symbol { return None }
         Some(!(self.geq(other)?))
     }
 
     pub fn leq(&self, other: &Asset) -> Option<bool> {
-        if self.symbol != other.symbol { return None }
         Some(!(self.gt(other)?))
     }
 
