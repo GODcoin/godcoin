@@ -11,8 +11,8 @@ extern crate clap;
 extern crate log;
 
 use clap::{Arg, App, AppSettings, SubCommand};
+use std::sync::{Arc, mpsc};
 use tokio::prelude::*;
-use std::sync::Arc;
 use godcoin::*;
 
 struct StartNode<'a> {
@@ -20,7 +20,7 @@ struct StartNode<'a> {
     minter_key: Option<KeyPair>
 }
 
-fn generate_keypair() {
+fn generate_keypair(shutdown_handle: mpsc::Sender<()>) {
     let pair = KeyPair::gen_keypair();
     info!("~~ Keys have been generated ~~");
     info!("Private key WIF: {}", pair.1.to_wif());
@@ -28,6 +28,7 @@ fn generate_keypair() {
     info!("- Make sure the keys are securely stored");
     info!("- Coins cannot be recovered if you lose your private key");
     info!("- Never give private keys to anyone");
+    shutdown_handle.send(()).unwrap();
 }
 
 fn start_node(node_opts: StartNode) {
@@ -102,30 +103,34 @@ fn main() {
                                 .value_name("key")));
     let matches = app.get_matches();
 
+    let (tx, rx) = mpsc::channel::<()>();
     let mut rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(future::lazy(move || {
-        use ::std::io::{Error, ErrorKind};
 
-        if let Some(_) = matches.subcommand_matches("keygen") {
-            generate_keypair();
-        } else if let Some(matches) = matches.subcommand_matches("node") {
-            start_node(StartNode {
-                bind_address: matches.value_of("bind_address"),
-                minter_key: matches.value_of("minter_key").map(|s| {
-                    godcoin::PrivateKey::from_wif(s)
-                        .expect("Failed to parse minter key argument")
-                })
-            });
-        } else {
-            return Err(Error::new(ErrorKind::Other, "Failed to match subcommand"))
-        }
+    {
+        let tx = tx.clone();
+        rt.block_on(future::lazy(move || {
+            use ::std::io::{Error, ErrorKind};
 
-        Ok(())
-    }).map_err(|err| {
-        error!("Startup failure: {:?}", err);
-    })).unwrap();
+            if let Some(_) = matches.subcommand_matches("keygen") {
+                generate_keypair(tx);
+            } else if let Some(matches) = matches.subcommand_matches("node") {
+                start_node(StartNode {
+                    bind_address: matches.value_of("bind_address"),
+                    minter_key: matches.value_of("minter_key").map(|s| {
+                        godcoin::PrivateKey::from_wif(s)
+                            .expect("Failed to parse minter key argument")
+                    })
+                });
+            } else {
+                return Err(Error::new(ErrorKind::Other, "Failed to match subcommand"))
+            }
 
-    let (tx, rx) = ::std::sync::mpsc::channel::<()>();
+            Ok(())
+        }).map_err(|err| {
+            error!("Startup failure: {:?}", err);
+        })).unwrap();
+    }
+
     ctrlc::set_handler(move || {
         println!("Received ctrl-c signal, shutting down...");
         tx.send(()).unwrap();
