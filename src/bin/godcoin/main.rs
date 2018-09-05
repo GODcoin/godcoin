@@ -1,9 +1,9 @@
-extern crate tokio_signal;
 extern crate sodiumoxide;
 extern crate num_traits;
 extern crate env_logger;
 extern crate godcoin;
 extern crate tokio;
+extern crate ctrlc;
 extern crate dirs;
 extern crate clap;
 
@@ -125,11 +125,12 @@ fn main() {
         error!("Startup failure: {:?}", err);
     })).unwrap();
 
-    let stream = tokio_signal::ctrl_c().flatten_stream().map_err(move |e| {
-        error!("Failed to handle ctrl-c event {:?}", e);
-    });
-    stream.into_future().wait().ok().unwrap();
+    let (tx, rx) = ::std::sync::mpsc::channel::<()>();
+    ctrlc::set_handler(move || {
+        println!("Received ctrl-c signal, shutting down...");
+        tx.send(()).unwrap();
+    }).unwrap();
 
-    println!("Received ctrl-c signal, shutting down...");
+    rx.recv().unwrap();
     rt.shutdown_now().wait().ok().unwrap();
 }
