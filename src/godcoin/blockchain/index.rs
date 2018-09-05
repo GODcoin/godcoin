@@ -26,6 +26,7 @@ impl Indexer {
 
         let col_families = vec![
             ColumnFamilyDescriptor::new(CF_BLOCK_BYTE_POS, Options::default()),
+            ColumnFamilyDescriptor::new(CF_ADDR_BAL, Options::default()),
             ColumnFamilyDescriptor::new(CF_BOND, Options::default())
         ];
         let db = DB::open_cf_descriptors(&db_opts, path, col_families).unwrap();
