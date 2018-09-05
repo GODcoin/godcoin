@@ -49,7 +49,7 @@ fn start_node(node_opts: StartNode) {
             info!("Found GODcoin home at {:?}", &home);
         }
         home
-    }.canonicalize().unwrap();
+    };
 
     let mut blockchain = Blockchain::new(&home);
     {
