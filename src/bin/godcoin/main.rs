@@ -20,7 +20,7 @@ struct StartNode<'a> {
     minter_key: Option<KeyPair>
 }
 
-fn generate_keypair(shutdown_handle: mpsc::Sender<()>) {
+fn generate_keypair(shutdown_handle: &mpsc::Sender<()>) {
     let pair = KeyPair::gen_keypair();
     info!("~~ Keys have been generated ~~");
     info!("Private key WIF: {}", pair.1.to_wif());
@@ -31,7 +31,7 @@ fn generate_keypair(shutdown_handle: mpsc::Sender<()>) {
     shutdown_handle.send(()).unwrap();
 }
 
-fn start_node(node_opts: StartNode) {
+fn start_node(node_opts: &StartNode) {
     use godcoin::blockchain::*;
     use std::{env, path::*};
 
@@ -44,7 +44,7 @@ fn start_node(node_opts: StartNode) {
         });
         if !Path::is_dir(&home) {
             let res = std::fs::create_dir(&home);
-            res.expect(&format!("Failed to create dir at {:?}", &home));
+            res.unwrap_or_else(|_| panic!("Failed to create dir at {:?}", &home));
             info!("Created GODcoin home at {:?}", &home);
         } else {
             info!("Found GODcoin home at {:?}", &home);
@@ -74,7 +74,7 @@ fn start_node(node_opts: StartNode) {
 
     if let Some(bind) = node_opts.bind_address {
         let addr = bind.parse()
-                        .expect(&format!("Failed to parse address: {:?}", bind));
+                        .unwrap_or_else(|_| panic!("Failed to parse address: {:?}", bind));
         net::server::start(&addr);
     }
 }
@@ -111,10 +111,10 @@ fn main() {
         rt.block_on(future::lazy(move || {
             use ::std::io::{Error, ErrorKind};
 
-            if let Some(_) = matches.subcommand_matches("keygen") {
-                generate_keypair(tx);
+            if matches.subcommand_matches("keygen").is_some() {
+                generate_keypair(&tx);
             } else if let Some(matches) = matches.subcommand_matches("node") {
-                start_node(StartNode {
+                start_node(&StartNode {
                     bind_address: matches.value_of("bind_address"),
                     minter_key: matches.value_of("minter_key").map(|s| {
                         godcoin::PrivateKey::from_wif(s)
