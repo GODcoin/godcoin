@@ -10,7 +10,6 @@ use super::rpc::*;
 pub fn connect(addr: SocketAddr, client_type: ClientType) -> impl Future<Item = Peer, Error = Error> {
     let tcp = TcpStream::connect(&addr);
 
-    let addr = addr.clone();
     let handshake = tcp.and_then(move |stream| {
         let hs = Framed::new(stream, codec::RpcCodec::new());
         let msg = RpcPayload {

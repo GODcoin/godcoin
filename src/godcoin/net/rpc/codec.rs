@@ -7,15 +7,16 @@ use net::peer::*;
 use net::rpc::*;
 
 // 5 MiB limit
-const MAX_PAYLOAD_LEN: u32 = 5242880;
+const MAX_PAYLOAD_LEN: u32 = 5_242_880;
 
+#[derive(Default)]
 pub struct RpcCodec {
     msg_len: u32
 }
 
 impl RpcCodec {
     pub fn new() -> RpcCodec {
-        RpcCodec { msg_len: 0 }
+        RpcCodec::default()
     }
 }
 

@@ -90,7 +90,7 @@ impl Stream for Peer {
         }
         self.frame.poll_complete()?;
 
-        return Ok(Async::NotReady)
+        Ok(Async::NotReady)
     }
 }
 

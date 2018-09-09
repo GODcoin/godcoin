@@ -75,7 +75,7 @@ impl Blockchain {
         let mut tx_count = 1;
 
         let head = self.get_chain_height();
-        for i in (0..head + 1).rev() {
+        for i in (0..=head).rev() {
             delta += 1;
             let block = self.get_block(i).unwrap();
             for tx in &block.transactions {
@@ -108,7 +108,7 @@ impl Blockchain {
         };
 
         let mut tx_count: u64 = 1;
-        for i in min_height..max_height + 1 {
+        for i in min_height..=max_height {
             tx_count += self.get_block(i).unwrap().transactions.len() as u64;
         }
         if tx_count > u64::from(u16::max_value()) { return None }
@@ -187,7 +187,7 @@ impl Blockchain {
 
         match tx {
             TxVariant::RewardTx(tx) => {
-                if tx.signature_pairs.len() != 0 {
+                if !tx.signature_pairs.is_empty() {
                     return Err("reward transaction must not be signed".to_owned())
                 }
             },

@@ -13,19 +13,19 @@ pub const SILVER_FEE_MIN: Asset = Asset {
 };
 
 pub const GOLD_FEE_MULT: Asset = Asset {
-    amount: 200000000,
+    amount: 200_000_000,
     decimals: 8,
     symbol: AssetSymbol::GOLD
 };
 
 pub const SILVER_FEE_MULT: Asset = Asset {
-    amount: 200000000,
+    amount: 200_000_000,
     decimals: 8,
     symbol: AssetSymbol::SILVER
 };
 
 pub const BOND_FEE: Asset = Asset {
-    amount: 500000000,
+    amount: 500_000_000,
     decimals: 8,
     symbol: AssetSymbol::GOLD
 };

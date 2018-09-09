@@ -50,7 +50,7 @@ impl BlockStore {
         { // Initialize the cache
             let min = if height < MAX_CACHE_SIZE { height } else { height - 100 };
             let max = min + MAX_CACHE_SIZE;
-            for height in min..(max + 1) {
+            for height in min..=max {
                 if let Some(block) = store.get_from_disk(height) {
                     store.blocks.insert(height, Arc::new(block));
                 } else {
@@ -139,7 +139,7 @@ impl BlockStore {
     }
 
     fn write_to_disk(&mut self, block: &SignedBlock) {
-        let vec = &mut Vec::with_capacity(1048576);
+        let vec = &mut Vec::with_capacity(1_048_576);
         block.encode_with_tx(vec);
         let len = vec.len() as u32;
         let crc = crc32c(vec);
@@ -163,6 +163,6 @@ impl BlockStore {
         f.write_all(vec).unwrap();
         f.flush().unwrap();
 
-        self.byte_pos_tail += (len as u64) + 8;
+        self.byte_pos_tail += u64::from(len) + 8;
     }
 }
