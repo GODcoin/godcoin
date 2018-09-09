@@ -1,3 +1,4 @@
 pub mod rpc;
-pub mod codec;
+pub mod peer;
 pub mod server;
+pub mod client;

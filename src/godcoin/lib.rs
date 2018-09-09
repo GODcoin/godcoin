@@ -2,6 +2,7 @@ extern crate sodiumoxide;
 extern crate num_bigint;
 extern crate num_traits;
 extern crate rocksdb;
+extern crate futures;
 extern crate crc32c;
 extern crate bytes;
 extern crate bs58;

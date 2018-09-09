@@ -2,6 +2,7 @@ extern crate sodiumoxide;
 extern crate num_traits;
 extern crate env_logger;
 extern crate godcoin;
+extern crate futures;
 extern crate tokio;
 extern crate ctrlc;
 extern crate dirs;
@@ -17,7 +18,8 @@ use godcoin::*;
 
 struct StartNode<'a> {
     bind_address: Option<&'a str>,
-    minter_key: Option<KeyPair>
+    minter_key: Option<KeyPair>,
+    peers: Option<Vec<&'a str>>
 }
 
 fn generate_keypair(shutdown_handle: &mpsc::Sender<()>) {
@@ -97,6 +99,12 @@ fn main() {
                                 .help("Bind address endpoint (i.e 0.0.0.0:7777)")
                                 .long("bind")
                                 .value_name("address"))
+                            .arg(Arg::with_name("peers")
+                                .help("Comma-separated list of peers")
+                                .long("peers")
+                                .value_delimiter(",")
+                                .value_name("peers")
+                                .use_delimiter(true))
                             .arg(Arg::with_name("minter_key")
                                 .help("Private minting key required to mint")
                                 .long("minter-key")
@@ -116,6 +124,7 @@ fn main() {
             } else if let Some(matches) = matches.subcommand_matches("node") {
                 start_node(&StartNode {
                     bind_address: matches.value_of("bind_address"),
+                    peers: matches.values_of("peers").map(|p| { p.collect() }),
                     minter_key: matches.value_of("minter_key").map(|s| {
                         godcoin::PrivateKey::from_wif(s)
                             .expect("Failed to parse minter key argument")
