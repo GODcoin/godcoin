@@ -1,8 +1,5 @@
-extern crate sodiumoxide;
-extern crate num_traits;
 extern crate env_logger;
 extern crate godcoin;
-extern crate futures;
 extern crate tokio;
 extern crate ctrlc;
 extern crate dirs;

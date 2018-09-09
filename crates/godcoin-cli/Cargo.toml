@@ -1,0 +1,19 @@
+[package]
+name = "godcoin-cli"
+version = "0.0.1"
+authors = ["Samuel Grenier <samrg472@gmail.com>"]
+
+[dependencies]
+ctrlc = "3.1.1"
+dirs = "1.0.3"
+env_logger = "0.5.12"
+godcoin = { path = "../godcoin" }
+log = "0.4.4"
+tokio = "0.1.7"
+
+[dependencies.clap]
+version = "2.32.0"
+default-features = false
+
+[dev-dependencies]
+rand = "0.5.5"
