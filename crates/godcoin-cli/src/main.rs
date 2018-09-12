@@ -76,6 +76,10 @@ fn start_node(node_opts: &StartNode) {
                         .unwrap_or_else(|_| panic!("Failed to parse address: {:?}", bind));
         net::server::start(&addr);
     }
+
+    if let Some(_) = &node_opts.peers {
+        // TODO
+    }
 }
 
 fn main() {

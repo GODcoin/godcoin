@@ -6,15 +6,13 @@ extern crate futures;
 extern crate crc32c;
 extern crate bytes;
 extern crate bs58;
+extern crate rand;
 
 extern crate tokio;
 extern crate tokio_codec;
 
 #[macro_use]
 extern crate log;
-
-#[cfg(test)]
-extern crate rand;
 
 #[macro_use]
 mod buf_util;
