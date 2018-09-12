@@ -68,11 +68,7 @@ impl Stream for Peer {
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         if let Async::Ready(msg) = self.frame.poll()? {
-            if let Some(msg) = msg {
-                return Ok(Async::Ready(Some(msg)))
-            } else {
-                return Ok(Async::Ready(None))
-            }
+            return Ok(Async::Ready(msg))
         }
 
         while let Async::Ready(msg) = self.rx.poll().unwrap() {
