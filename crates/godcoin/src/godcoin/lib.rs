@@ -1,4 +1,6 @@
+extern crate crossbeam_channel;
 extern crate sodiumoxide;
+extern crate parking_lot;
 extern crate num_bigint;
 extern crate num_traits;
 extern crate rocksdb;
@@ -33,6 +35,8 @@ pub mod net;
 pub mod blockchain;
 pub mod producer;
 pub mod constants;
+
+pub mod fut_util;
 
 pub fn init() -> Result<(), ()> {
     sodiumoxide::init()
