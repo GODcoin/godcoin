@@ -74,7 +74,7 @@ fn start_node(node_opts: &StartNode) {
     if let Some(bind) = node_opts.bind_address {
         let addr = bind.parse()
                         .unwrap_or_else(|_| panic!("Failed to parse address: {:?}", bind));
-        net::server::start(&addr);
+        net::server::start(addr);
     }
 
     if let Some(_) = &node_opts.peers {

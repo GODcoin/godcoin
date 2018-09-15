@@ -10,7 +10,7 @@ use tokio::prelude::*;
 use net::peer::*;
 use net::rpc::*;
 
-pub fn start(addr: &SocketAddr) {
+pub fn start(addr: SocketAddr) {
     let listener = TcpListener::bind(&addr).unwrap();
     info!("Server binded to {:?}", &addr);
     let server = listener.incoming().for_each(|socket| {
