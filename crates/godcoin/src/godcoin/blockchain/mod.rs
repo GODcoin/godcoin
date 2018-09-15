@@ -22,6 +22,11 @@ pub struct Blockchain {
     store: Mutex<RefCell<BlockStore>>
 }
 
+#[derive(Clone, Debug)]
+pub struct Properties {
+    pub height: u64
+}
+
 impl Blockchain {
 
     ///
@@ -34,6 +39,12 @@ impl Blockchain {
         Blockchain {
             indexer,
             store: Mutex::new(RefCell::new(store))
+        }
+    }
+
+    pub fn get_properties(&self) -> Properties {
+        Properties {
+            height: self.get_chain_height()
         }
     }
 

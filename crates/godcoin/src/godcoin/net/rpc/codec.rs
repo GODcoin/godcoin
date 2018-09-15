@@ -1,9 +1,10 @@
 use std::io::{Cursor, Error, ErrorKind};
 use tokio_codec::{Encoder, Decoder};
 use bytes::{Buf, BufMut, BytesMut};
+use std::mem::size_of;
 use serializer::*;
 
-use net::peer::*;
+use blockchain::Properties;
 use net::rpc::*;
 
 // 5 MiB limit
@@ -33,8 +34,11 @@ impl Encoder for RpcCodec {
                     payload.push(RpcMsgType::HANDSHAKE as u8);
                     payload.push(hs.client_type as u8);
                 },
-                RpcMsg::Properties => {
+                RpcMsg::Properties(props) => {
                     payload.push(RpcMsgType::PROPERTIES as u8);
+                    if let Some(props) = props {
+                        payload.push_u64(props.height);
+                    }
                 }
             }
         }
@@ -88,7 +92,16 @@ impl Decoder for RpcCodec {
                         client_type
                     })
                 },
-                t if t == RpcMsgType::PROPERTIES as u8 => RpcMsg::Properties,
+                t if t == RpcMsgType::PROPERTIES as u8 => {
+                    if u64::from(msg_len) - cur.position() >= size_of::<u64>() as u64 {
+                        let height = cur.get_u64_be();
+                        RpcMsg::Properties(Some(Properties {
+                            height
+                        }))
+                    } else {
+                        RpcMsg::Properties(None)
+                    }
+                },
                 //t if t == RpcMsgType::BROADCAST as u8 => RpcMsg::Broadcast,
                 _ => return Err(Error::new(ErrorKind::Other, "invalid msg type"))
             };

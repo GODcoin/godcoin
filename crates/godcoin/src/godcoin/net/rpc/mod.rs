@@ -1,6 +1,7 @@
-pub mod codec;
-
+use blockchain::Properties;
 use super::peer::*;
+
+pub mod codec;
 
 #[repr(u8)]
 #[derive(Debug)]
@@ -13,7 +14,7 @@ pub enum RpcMsgType {
 #[derive(Clone, Debug)]
 pub enum RpcMsg {
     Handshake(RpcMsgHandshake),
-    Properties
+    Properties(Option<Properties>)
 }
 
 #[derive(Clone, Debug)]
