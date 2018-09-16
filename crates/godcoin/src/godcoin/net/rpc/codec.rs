@@ -86,7 +86,7 @@ impl Decoder for RpcCodec {
                     let peer_type = match cur.get_u8() {
                         t if t == PeerType::NODE as u8 => PeerType::NODE,
                         t if t == PeerType::WALLET as u8 => PeerType::WALLET,
-                        _ => return Err(Error::new(ErrorKind::Other, "invalid client type"))
+                        _ => return Err(Error::new(ErrorKind::Other, "invalid peer type"))
                     };
                     RpcMsg::Handshake(RpcMsgHandshake {
                         peer_type
