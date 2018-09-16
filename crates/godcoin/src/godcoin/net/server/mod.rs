@@ -29,20 +29,20 @@ pub fn start(addr: SocketAddr) {
                 return Err(Error::new(ErrorKind::InvalidData, "id must be 0"))
             }
             if let Some(msg) = data.msg {
-                let client_type = match msg {
-                    RpcMsg::Handshake(hs) => { hs.client_type },
+                let peer_type = match msg {
+                    RpcMsg::Handshake(hs) => { hs.peer_type },
                     _ => return Err(Error::new(ErrorKind::InvalidData, "expected handshake msg"))
                 };
 
 
-                Ok((client_type, frame))
+                Ok((peer_type, frame))
             } else {
                 Err(Error::new(ErrorKind::InvalidData, "expected handshake msg"))
             }
         });
 
-        let client = hs.and_then(move |(client_type, frame)| {
-            let peer = Peer::new(client_type, addr, frame);
+        let client = hs.and_then(move |(peer_type, frame)| {
+            let peer = Peer::new(peer_type, addr, frame);
             debug!("Handshake from client completed: {:?}", peer);
             peer.get_sender().send(RpcPayload {
                 id: 0,

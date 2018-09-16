@@ -17,15 +17,15 @@ pub mod event;
 use self::event::*;
 
 ///
-/// Connects to the `SocketAddr` with the specified `ClientType`.
+/// Connects to the `SocketAddr` with the specified `PeerType`.
 ///
-pub fn connect(addr: SocketAddr, client_type: ClientType) -> impl Future<Item = Peer, Error = Error> {
+pub fn connect(addr: SocketAddr, peer_type: PeerType) -> impl Future<Item = Peer, Error = Error> {
     TcpStream::connect(&addr).and_then(move |stream| {
         let frame = Framed::new(stream, codec::RpcCodec::new());
         let msg = RpcPayload {
             id: 0,
             msg: Some(RpcMsg::Handshake(RpcMsgHandshake {
-                client_type
+                peer_type
             }))
         };
 
@@ -40,7 +40,7 @@ pub fn connect(addr: SocketAddr, client_type: ClientType) -> impl Future<Item = 
         } else if resp.msg.is_some() {
             return Err(Error::new(ErrorKind::InvalidData, "expected msg to be empty"))
         }
-        Ok(Peer::new(client_type, addr, frame))
+        Ok(Peer::new(peer_type, addr, frame))
     })
 }
 
@@ -57,10 +57,10 @@ pub fn connect(addr: SocketAddr, client_type: ClientType) -> impl Future<Item = 
 ///
 /// When attempting to send a message that requires the connection to be open.
 ///
-pub fn connect_loop(addr: SocketAddr, client_type: ClientType) -> (ClientSender, ClientReceiver) {
+pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, ClientReceiver) {
     let (out_tx, out_rx) = channel::unbounded();
     let (in_tx, in_rx) = channel::unbounded();
-    let state = state::ConnectState::new(addr, client_type);
+    let state = state::ConnectState::new(addr, peer_type);
     start_connect_loop(state.clone(), out_tx, 0);
 
     ::tokio::spawn(in_rx.for_each({
@@ -92,7 +92,7 @@ pub fn connect_loop(addr: SocketAddr, client_type: ClientType) -> (ClientSender,
 
 fn start_connect_loop(state: state::ConnectState, out_tx: ClientSender, mut tries: u8) {
     if !state.stay_connected.load(Ordering::Acquire) { return }
-    let c = connect(state.addr, state.client_type);
+    let c = connect(state.addr, state.peer_type);
     ::tokio::spawn(c.and_then({
         let out_tx = out_tx.clone();
         let state = state.clone();

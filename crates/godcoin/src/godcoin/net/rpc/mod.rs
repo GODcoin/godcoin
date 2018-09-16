@@ -25,5 +25,5 @@ pub struct RpcPayload {
 
 #[derive(Clone, Debug)]
 pub struct RpcMsgHandshake {
-    pub client_type: ClientType
+    pub peer_type: PeerType
 }

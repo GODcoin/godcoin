@@ -32,7 +32,7 @@ impl Encoder for RpcCodec {
             match msg {
                 RpcMsg::Handshake(hs) => {
                     payload.push(RpcMsgType::HANDSHAKE as u8);
-                    payload.push(hs.client_type as u8);
+                    payload.push(hs.peer_type as u8);
                 },
                 RpcMsg::Properties(props) => {
                     payload.push(RpcMsgType::PROPERTIES as u8);
@@ -83,13 +83,13 @@ impl Decoder for RpcCodec {
 
             let msg = match cur.get_u8() {
                 t if t == RpcMsgType::HANDSHAKE as u8 => {
-                    let client_type = match cur.get_u8() {
-                        t if t == ClientType::NODE as u8 => ClientType::NODE,
-                        t if t == ClientType::WALLET as u8 => ClientType::WALLET,
+                    let peer_type = match cur.get_u8() {
+                        t if t == PeerType::NODE as u8 => PeerType::NODE,
+                        t if t == PeerType::WALLET as u8 => PeerType::WALLET,
                         _ => return Err(Error::new(ErrorKind::Other, "invalid client type"))
                     };
                     RpcMsg::Handshake(RpcMsgHandshake {
-                        client_type
+                        peer_type
                     })
                 },
                 t if t == RpcMsgType::PROPERTIES as u8 => {

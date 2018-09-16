@@ -12,9 +12,9 @@ type RpcFrame = Framed<TcpStream, codec::RpcCodec>;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug)]
-pub enum ClientType {
-    NODE,
-    WALLET
+pub enum PeerType {
+    NODE = 0,
+    WALLET = 1
 }
 
 #[derive(Clone)]
@@ -28,7 +28,7 @@ impl Sender {
 }
 
 pub struct Peer {
-    pub client_type: ClientType,
+    pub peer_type: PeerType,
     pub addr: SocketAddr,
     tx: Tx,
     rx: Rx,
@@ -36,12 +36,12 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn new(client_type: ClientType,
+    pub fn new(peer_type: PeerType,
                 addr: SocketAddr,
                 frame: RpcFrame) -> Peer {
         let (tx, rx) = mpsc::unbounded();
         Peer {
-            client_type,
+            peer_type,
             frame,
             addr,
             tx,
@@ -56,8 +56,8 @@ impl Peer {
 
 impl fmt::Debug for Peer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Peer {{ client_type: {:?}, addr: {:?} }}",
-                &self.client_type,
+        write!(f, "Peer {{ peer_type: {:?}, addr: {:?} }}",
+                &self.peer_type,
                 &self.addr)
     }
 }

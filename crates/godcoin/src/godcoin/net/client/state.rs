@@ -3,13 +3,13 @@ use std::net::SocketAddr;
 use parking_lot::Mutex;
 use std::cell::RefCell;
 
-use super::{Sender, ClientType};
+use super::{Sender, PeerType};
 use fut_util::channel;
 
 #[derive(Clone)]
 pub struct ConnectState {
     pub addr: SocketAddr,
-    pub client_type: ClientType,
+    pub peer_type: PeerType,
     pub stay_connected: Arc<AtomicBool>,
     pub inner: Arc<Mutex<RefCell<Option<InternalState>>>>
 }
@@ -21,10 +21,10 @@ pub struct InternalState {
 }
 
 impl ConnectState {
-    pub fn new(addr: SocketAddr, client_type: ClientType) -> ConnectState {
+    pub fn new(addr: SocketAddr, peer_type: PeerType) -> ConnectState {
         ConnectState {
             addr,
-            client_type,
+            peer_type,
             stay_connected: Arc::new(AtomicBool::new(true)),
             inner: Arc::new(Mutex::new(RefCell::new(None)))
         }
