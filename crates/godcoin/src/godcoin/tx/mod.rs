@@ -342,7 +342,7 @@ mod tests {
             from: from.0,
             to: to.0,
             amount: get_asset("1.0456 GOLD"),
-            memo: Vec::from(b"Hello world!")
+            memo: Vec::from(String::from("Hello world!").as_bytes())
         };
 
         let mut v = vec![];
