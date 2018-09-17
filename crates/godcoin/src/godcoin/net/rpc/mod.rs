@@ -7,17 +7,19 @@ pub mod codec;
 #[repr(u8)]
 #[derive(Debug)]
 pub enum RpcMsgType {
-    HANDSHAKE = 0,
-    PROPERTIES = 1,
-    BROADCAST = 2,
-    EVENT = 3
+    ERROR = 0,
+    EVENT = 1,
+    HANDSHAKE = 2,
+    PROPERTIES = 3,
+    BROADCAST = 4
 }
 
 #[derive(Clone, Debug)]
 pub enum RpcMsg {
+    Error(String),
+    Event(RpcEvent),
     Handshake(RpcMsgHandshake),
-    Properties(Option<Properties>),
-    Event(RpcEvent)
+    Properties(Option<Properties>)
 }
 
 #[derive(Clone, Debug)]

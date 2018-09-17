@@ -2,6 +2,7 @@ use std::io::{Cursor, Error, ErrorKind};
 use tokio_codec::{Encoder, Decoder};
 use bytes::{Buf, BufMut, BytesMut};
 use std::mem::size_of;
+use std::io::Read;
 use serializer::*;
 
 use blockchain::Properties;
@@ -30,6 +31,10 @@ impl Encoder for RpcCodec {
         payload.push_u32(pl.id);
         if let Some(msg) = pl.msg {
             match msg {
+                RpcMsg::Error(err) => {
+                    payload.push_u32(err.len() as u32);
+                    payload.push_bytes(err.as_bytes());
+                },
                 RpcMsg::Handshake(hs) => {
                     payload.push(RpcMsgType::HANDSHAKE as u8);
                     payload.push(hs.peer_type as u8);
@@ -100,25 +105,16 @@ impl Decoder for RpcCodec {
             }
 
             let msg = match cur.get_u8() {
-                t if t == RpcMsgType::HANDSHAKE as u8 => {
-                    let peer_type = match cur.get_u8() {
-                        t if t == PeerType::NODE as u8 => PeerType::NODE,
-                        t if t == PeerType::WALLET as u8 => PeerType::WALLET,
-                        _ => return Err(Error::new(ErrorKind::Other, "invalid peer type"))
-                    };
-                    RpcMsg::Handshake(RpcMsgHandshake {
-                        peer_type
-                    })
-                },
-                t if t == RpcMsgType::PROPERTIES as u8 => {
-                    if u64::from(msg_len) - cur.position() >= size_of::<u64>() as u64 {
-                        let height = cur.get_u64_be();
-                        RpcMsg::Properties(Some(Properties {
-                            height
-                        }))
-                    } else {
-                        RpcMsg::Properties(None)
+                t if t == RpcMsgType::ERROR as u8 => {
+                    let len = cur.get_u32_be();
+                    if len > MAX_PAYLOAD_LEN {
+                        return Err(Error::new(ErrorKind::Other, "error string too large"))
                     }
+                    let mut buf = Vec::with_capacity(len as usize);
+                    cur.read_exact(&mut buf).map_err(|_| {
+                        Error::new(ErrorKind::Other, "failed to read error string")
+                    })?;
+                    RpcMsg::Error(String::from_utf8_lossy(&buf).into_owned())
                 },
                 t if t == RpcMsgType::EVENT as u8 => {
                     let event_type = cur.get_u8();
@@ -141,8 +137,27 @@ impl Decoder for RpcCodec {
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid event type"))
                     }
-                }
-                //t if t == RpcMsgType::BROADCAST as u8 => RpcMsg::Broadcast,
+                },
+                t if t == RpcMsgType::HANDSHAKE as u8 => {
+                    let peer_type = match cur.get_u8() {
+                        t if t == PeerType::NODE as u8 => PeerType::NODE,
+                        t if t == PeerType::WALLET as u8 => PeerType::WALLET,
+                        _ => return Err(Error::new(ErrorKind::Other, "invalid peer type"))
+                    };
+                    RpcMsg::Handshake(RpcMsgHandshake {
+                        peer_type
+                    })
+                },
+                t if t == RpcMsgType::PROPERTIES as u8 => {
+                    if u64::from(msg_len) - cur.position() >= size_of::<u64>() as u64 {
+                        let height = cur.get_u64_be();
+                        RpcMsg::Properties(Some(Properties {
+                            height
+                        }))
+                    } else {
+                        RpcMsg::Properties(None)
+                    }
+                },
                 _ => return Err(Error::new(ErrorKind::Other, "invalid msg type"))
             };
 
