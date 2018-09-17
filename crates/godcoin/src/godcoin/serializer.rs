@@ -86,7 +86,7 @@ pub trait BufRead {
     fn take_asset(&mut self) -> Option<Asset>;
 }
 
-impl<'a, T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
+impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     fn take_u8(&mut self) -> Option<u8> {
         let mut buf = [0u8;1];
         self.read_exact(&mut buf).ok()?;
