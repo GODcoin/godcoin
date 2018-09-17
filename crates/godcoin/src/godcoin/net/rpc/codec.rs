@@ -45,19 +45,15 @@ impl Encoder for RpcCodec {
                     match evt {
                         RpcEvent::Tx(tx) => {
                             payload.push(RpcEventType::TX as u8);
-                            if let Some(tx) = tx {
-                                let mut v = Vec::with_capacity(4096);
-                                tx.encode_with_sigs(&mut v);
-                                payload.extend_from_slice(&v);
-                            }
+                            let mut v = Vec::with_capacity(4096);
+                            tx.encode_with_sigs(&mut v);
+                            payload.extend_from_slice(&v);
                         },
                         RpcEvent::Block(block) => {
                             payload.push(RpcEventType::BLOCK as u8);
-                            if let Some(block) = block {
-                                let mut v = Vec::with_capacity(10240);
-                                block.encode_with_tx(&mut v);
-                                payload.extend_from_slice(&v);
-                            }
+                            let mut v = Vec::with_capacity(10240);
+                            block.encode_with_tx(&mut v);
+                            payload.extend_from_slice(&v);
                         }
                     }
                 }
@@ -128,27 +124,19 @@ impl Decoder for RpcCodec {
                     let event_type = cur.get_u8();
                     match event_type {
                         t if t == RpcEventType::TX as u8 => {
-                            if u64::from(msg_len) - cur.position() > 0 {
-                                let tx = TxVariant::decode_with_sigs(&mut cur);
-                                if let Some(tx) = tx {
-                                    RpcMsg::Event(RpcEvent::Tx(Some(tx)))
-                                } else {
-                                    return Err(Error::new(ErrorKind::Other, "failed to decode tx"))
-                                }
+                            let tx = TxVariant::decode_with_sigs(&mut cur);
+                            if let Some(tx) = tx {
+                                RpcMsg::Event(RpcEvent::Tx(tx))
                             } else {
-                                RpcMsg::Event(RpcEvent::Tx(None))
+                                return Err(Error::new(ErrorKind::Other, "failed to decode tx"))
                             }
                         },
                         t if t == RpcEventType::BLOCK as u8 => {
-                            if u64::from(msg_len) - cur.position() > 0 {
-                                let block = SignedBlock::decode_with_tx(&mut cur);
-                                if let Some(block) = block {
-                                    RpcMsg::Event(RpcEvent::Block(Some(block)))
-                                } else {
-                                    return Err(Error::new(ErrorKind::Other, "failed to decode signed block"))
-                                }
+                            let block = SignedBlock::decode_with_tx(&mut cur);
+                            if let Some(block) = block {
+                                RpcMsg::Event(RpcEvent::Block(block))
                             } else {
-                                RpcMsg::Event(RpcEvent::Tx(None))
+                                return Err(Error::new(ErrorKind::Other, "failed to decode signed block"))
                             }
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid event type"))

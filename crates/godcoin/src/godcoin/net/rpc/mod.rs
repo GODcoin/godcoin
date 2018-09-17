@@ -39,6 +39,6 @@ pub enum RpcEventType {
 
 #[derive(Clone, Debug)]
 pub enum RpcEvent {
-    Tx(Option<TxVariant>),
-    Block(Option<SignedBlock>)
+    Tx(TxVariant),
+    Block(SignedBlock)
 }
