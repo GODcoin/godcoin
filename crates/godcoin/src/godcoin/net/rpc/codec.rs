@@ -26,7 +26,7 @@ impl Encoder for RpcCodec {
     type Error = Error;
 
     fn encode(&mut self, pl: Self::Item, buf: &mut BytesMut) -> Result<(), Error> {
-        let mut payload = Vec::<u8>::with_capacity(1024);
+        let mut payload = Vec::<u8>::with_capacity(10240);
         payload.push_u32(pl.id);
         if let Some(msg) = pl.msg {
             match msg {
@@ -38,6 +38,27 @@ impl Encoder for RpcCodec {
                     payload.push(RpcMsgType::PROPERTIES as u8);
                     if let Some(props) = props {
                         payload.push_u64(props.height);
+                    }
+                },
+                RpcMsg::Event(evt) => {
+                    payload.push(RpcMsgType::EVENT as u8);
+                    match evt {
+                        RpcEvent::Tx(tx) => {
+                            payload.push(RpcEventType::TX as u8);
+                            if let Some(tx) = tx {
+                                let mut v = Vec::with_capacity(4096);
+                                tx.encode_with_sigs(&mut v);
+                                payload.extend_from_slice(&v);
+                            }
+                        },
+                        RpcEvent::Block(block) => {
+                            payload.push(RpcEventType::BLOCK as u8);
+                            if let Some(block) = block {
+                                let mut v = Vec::with_capacity(10240);
+                                block.encode_with_tx(&mut v);
+                                payload.extend_from_slice(&v);
+                            }
+                        }
                     }
                 }
             }
@@ -70,7 +91,8 @@ impl Decoder for RpcCodec {
         }
         if self.msg_len != 0 && buf.len() >= self.msg_len as usize {
             let msg_len = self.msg_len;
-            let mut cur = Cursor::new(buf.split_to(msg_len as usize));
+            let split = buf.split_to(msg_len as usize);
+            let mut cur = Cursor::new(split.as_ref());
             self.msg_len = 0;
 
             let id = cur.get_u32_be();
@@ -102,6 +124,36 @@ impl Decoder for RpcCodec {
                         RpcMsg::Properties(None)
                     }
                 },
+                t if t == RpcMsgType::EVENT as u8 => {
+                    let event_type = cur.get_u8();
+                    match event_type {
+                        t if t == RpcEventType::TX as u8 => {
+                            if u64::from(msg_len) - cur.position() > 0 {
+                                let tx = TxVariant::decode_with_sigs(&mut cur);
+                                if let Some(tx) = tx {
+                                    RpcMsg::Event(RpcEvent::Tx(Some(tx)))
+                                } else {
+                                    return Err(Error::new(ErrorKind::Other, "failed to decode tx"))
+                                }
+                            } else {
+                                RpcMsg::Event(RpcEvent::Tx(None))
+                            }
+                        },
+                        t if t == RpcEventType::BLOCK as u8 => {
+                            if u64::from(msg_len) - cur.position() > 0 {
+                                let block = SignedBlock::decode_with_tx(&mut cur);
+                                if let Some(block) = block {
+                                    RpcMsg::Event(RpcEvent::Block(Some(block)))
+                                } else {
+                                    return Err(Error::new(ErrorKind::Other, "failed to decode signed block"))
+                                }
+                            } else {
+                                RpcMsg::Event(RpcEvent::Tx(None))
+                            }
+                        },
+                        _ => return Err(Error::new(ErrorKind::Other, "invalid event type"))
+                    }
+                }
                 //t if t == RpcMsgType::BROADCAST as u8 => RpcMsg::Broadcast,
                 _ => return Err(Error::new(ErrorKind::Other, "invalid msg type"))
             };
