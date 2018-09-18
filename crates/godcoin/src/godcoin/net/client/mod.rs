@@ -24,9 +24,7 @@ pub fn connect(addr: SocketAddr, peer_type: PeerType) -> impl Future<Item = Peer
         let frame = Framed::new(stream, codec::RpcCodec::new());
         let msg = RpcPayload {
             id: 0,
-            msg: Some(RpcMsg::Handshake(RpcMsgHandshake {
-                peer_type
-            }))
+            msg: Some(RpcMsg::Handshake(peer_type))
         };
 
         debug!("[{}] Sending handshake: {:?}", addr, &msg);

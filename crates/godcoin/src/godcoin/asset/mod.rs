@@ -30,7 +30,7 @@ pub const EMPTY_SILVER: Asset = Asset {
     symbol: AssetSymbol::SILVER
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Asset {
     pub amount: i64,
     pub decimals: u8,
@@ -198,6 +198,7 @@ impl FromStr for Asset {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Balance {
     pub gold: Asset,
     pub silver: Asset

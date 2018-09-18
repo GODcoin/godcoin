@@ -30,7 +30,7 @@ pub fn start(addr: SocketAddr) {
             }
             if let Some(msg) = data.msg {
                 let peer_type = match msg {
-                    RpcMsg::Handshake(hs) => { hs.peer_type },
+                    RpcMsg::Handshake(peer_type) => peer_type,
                     _ => return Err(Error::new(ErrorKind::InvalidData, "expected handshake msg"))
                 };
 
