@@ -25,10 +25,10 @@ pub enum RpcMsg {
     Event(RpcEvent),
     Handshake(PeerType),
     Broadcast(TxVariant),
-    Properties(Option<Properties>),
-    Block(TxRx<u64, SignedBlock>),
-    Balance(TxRx<PublicKey, Balance>),
-    TotalFee(TxRx<PublicKey, Balance>)
+    Properties(IO<(), Properties>),
+    Block(IO<u64, SignedBlock>),
+    Balance(IO<PublicKey, Balance>),
+    TotalFee(IO<PublicKey, Balance>)
 }
 
 #[derive(Clone, Debug)]
@@ -50,13 +50,31 @@ pub enum RpcEvent {
 }
 
 #[derive(Clone, Debug)]
-pub enum TxRx<A, B> {
-    Tx(A),
-    Rx(B)
+pub enum IO<A, B> {
+    In(A),
+    Out(B)
+}
+
+impl<A, B> IO<A, B> {
+    #[inline]
+    pub fn input(&self) -> Option<&A> {
+        match self {
+            IO::In(a) => Some(&a),
+            IO::Out(_) => None
+        }
+    }
+
+    #[inline]
+    pub fn output(&self) -> Option<&B> {
+        match self {
+            IO::In(_) => None,
+            IO::Out(b) => Some(&b)
+        }
+    }
 }
 
 #[repr(u8)]
-pub enum TxRxType {
-    Tx = 0,
-    Rx = 1
+pub enum IoType {
+    In = 0,
+    Out = 1
 }

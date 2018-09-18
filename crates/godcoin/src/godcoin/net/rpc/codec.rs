@@ -1,7 +1,6 @@
 use std::io::{Cursor, Error, ErrorKind};
 use tokio_codec::{Encoder, Decoder};
 use bytes::{Buf, BufMut, BytesMut};
-use std::mem::size_of;
 use std::io::Read;
 use serializer::*;
 
@@ -57,48 +56,51 @@ impl Encoder for RpcCodec {
                     payload.push(RpcMsgType::Broadcast as u8);
                     tx.encode_with_sigs(&mut payload);
                 },
-                RpcMsg::Properties(props) => {
+                RpcMsg::Properties(io) => {
                     payload.push(RpcMsgType::Properties as u8);
-                    if let Some(props) = props {
+                    if let Some(props) = io.output() {
+                        payload.push(IoType::Out as u8);
                         payload.push_u64(props.height);
+                    } else {
+                        payload.push(IoType::In as u8);
                     }
                 },
-                RpcMsg::Block(txrx) => {
+                RpcMsg::Block(io) => {
                     payload.push(RpcMsgType::Block as u8);
-                    match txrx {
-                        TxRx::Tx(height) => {
-                            payload.push(TxRxType::Tx as u8);
+                    match io {
+                        IO::In(height) => {
+                            payload.push(IoType::In as u8);
                             payload.push_u64(height);
                         },
-                        TxRx::Rx(block) => {
-                            payload.push(TxRxType::Rx as u8);
+                        IO::Out(block) => {
+                            payload.push(IoType::Out as u8);
                             block.encode_with_tx(&mut payload);
                         }
                     }
                 },
-                RpcMsg::Balance(txrx) => {
+                RpcMsg::Balance(io) => {
                     payload.push(RpcMsgType::Balance as u8);
-                    match txrx {
-                        TxRx::Tx(addr) => {
-                            payload.push(TxRxType::Tx as u8);
+                    match io {
+                        IO::In(addr) => {
+                            payload.push(IoType::In as u8);
                             payload.push_pub_key(&addr);
                         },
-                        TxRx::Rx(bal) => {
-                            payload.push(TxRxType::Rx as u8);
+                        IO::Out(bal) => {
+                            payload.push(IoType::Out as u8);
                             payload.push_asset(&bal.gold);
                             payload.push_asset(&bal.silver);
                         }
                     }
                 },
-                RpcMsg::TotalFee(txrx) => {
-                    payload.push(RpcMsgType::TotalFee as u8);
-                    match txrx {
-                        TxRx::Tx(addr) => {
-                            payload.push(TxRxType::Tx as u8);
+                RpcMsg::TotalFee(io) => {
+                    payload.push(RpcMsgType::Balance as u8);
+                    match io {
+                        IO::In(addr) => {
+                            payload.push(IoType::In as u8);
                             payload.push_pub_key(&addr);
                         },
-                        TxRx::Rx(bal) => {
-                            payload.push(TxRxType::Rx as u8);
+                        IO::Out(bal) => {
+                            payload.push(IoType::Out as u8);
                             payload.push_asset(&bal.gold);
                             payload.push_asset(&bal.silver);
                         }
@@ -191,69 +193,74 @@ impl Decoder for RpcCodec {
                     RpcMsg::Broadcast(tx)
                 },
                 t if t == RpcMsgType::Properties as u8 => {
-                    if u64::from(msg_len) - cur.position() >= size_of::<u64>() as u64 {
-                        let height = cur.get_u64_be();
-                        RpcMsg::Properties(Some(Properties { height }))
-                    } else {
-                        RpcMsg::Properties(None)
+                    let io = cur.get_u8();
+                    match io {
+                        t if t == IoType::In as u8 => {
+                            RpcMsg::Properties(IO::In(()))
+                        },
+                        t if t == IoType::Out as u8 => {
+                            let height = cur.get_u64_be();
+                            RpcMsg::Properties(IO::Out(Properties { height }))
+                        },
+                        _ => return Err(Error::new(ErrorKind::Other, "invalid io type"))
                     }
                 },
                 t if t == RpcMsgType::Block as u8 => {
-                    let txrx = cur.get_u8();
-                    match txrx {
-                        t if t == TxRxType::Tx as u8 => {
+                    let io = cur.get_u8();
+                    match io {
+                        t if t == IoType::In as u8 => {
                             let height = cur.get_u64_be();
-                            RpcMsg::Block(TxRx::Tx(height))
+                            RpcMsg::Block(IO::In(height))
                         },
-                        t if t == TxRxType::Rx as u8 => {
+                        t if t == IoType::Out as u8 => {
                             let block = SignedBlock::decode_with_tx(&mut cur).ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode block")
                             })?;
-                            RpcMsg::Block(TxRx::Rx(block))
+                            RpcMsg::Block(IO::Out(block))
                         },
-                        _ => return Err(Error::new(ErrorKind::Other, "invlaid txrx type"))
+                        _ => return Err(Error::new(ErrorKind::Other, "invalid io type"))
                     }
                 },
                 t if t == RpcMsgType::Balance as u8 => {
-                    let txrx = cur.get_u8();
-                    match txrx {
-                        t if t == TxRxType::Tx as u8 => {
+                    let io = cur.get_u8();
+                    match io {
+                        t if t == IoType::In as u8 => {
                             let addr = cur.take_pub_key().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode public key")
                             })?;
-                            RpcMsg::Balance(TxRx::Tx(addr))
+                            RpcMsg::Balance(IO::In(addr))
                         },
-                        t if t == TxRxType::Rx as u8 => {
+                        t if t == IoType::Out as u8 => {
                             let gold = cur.take_asset().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode gold asset")
                             })?;
                             let silver = cur.take_asset().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode silver asset")
                             })?;
-                            RpcMsg::Balance(TxRx::Rx(Balance { gold, silver }))
+                            RpcMsg::Balance(IO::Out(Balance { gold, silver }))
                         },
-                        _ => return Err(Error::new(ErrorKind::Other, "invlaid txrx type"))
+                        _ => return Err(Error::new(ErrorKind::Other, "invalid io type"))
                     }
                 },
                 t if t == RpcMsgType::TotalFee as u8 => {
-                    let txrx = cur.get_u8();
-                    match txrx {
-                        t if t == TxRxType::Tx as u8 => {
+                    let io = cur.get_u8();
+                    match io {
+                        t if t == IoType::In as u8 => {
                             let addr = cur.take_pub_key().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode public key")
                             })?;
-                            RpcMsg::TotalFee(TxRx::Tx(addr))
+                            RpcMsg::TotalFee(IO::In(addr))
                         },
-                        t if t == TxRxType::Rx as u8 => {
+                        t if t == IoType::Out as u8 => {
                             let gold = cur.take_asset().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode gold asset")
                             })?;
                             let silver = cur.take_asset().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode silver asset")
                             })?;
-                            RpcMsg::TotalFee(TxRx::Rx(Balance { gold, silver }))
+                            RpcMsg::TotalFee(IO::Out(Balance { gold, silver }))
                         },
-                        _ => return Err(Error::new(ErrorKind::Other, "invlaid txrx type"))
+                        _ => return Err(Error::new(ErrorKind::Other, "invalid io type"))
                     }
                 },
                 _ => return Err(Error::new(ErrorKind::Other, "invalid msg type"))
