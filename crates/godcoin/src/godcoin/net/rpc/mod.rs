@@ -25,10 +25,10 @@ pub enum RpcMsg {
     Event(RpcEvent),
     Handshake(PeerType),
     Broadcast(TxVariant),
-    Properties(IO<(), Properties>),
-    Block(IO<u64, SignedBlock>),
-    Balance(IO<PublicKey, Balance>),
-    TotalFee(IO<PublicKey, Balance>)
+    Properties(RpcVariant<(), Properties>),
+    Block(RpcVariant<u64, SignedBlock>),
+    Balance(RpcVariant<PublicKey, Balance>),
+    TotalFee(RpcVariant<PublicKey, Balance>)
 }
 
 #[derive(Clone, Debug)]
@@ -50,31 +50,31 @@ pub enum RpcEvent {
 }
 
 #[derive(Clone, Debug)]
-pub enum IO<A, B> {
-    In(A),
-    Out(B)
+pub enum RpcVariant<A, B> {
+    Req(A),
+    Res(B)
 }
 
-impl<A, B> IO<A, B> {
+impl<A, B> RpcVariant<A, B> {
     #[inline]
-    pub fn input(&self) -> Option<&A> {
+    pub fn request(&self) -> Option<&A> {
         match self {
-            IO::In(a) => Some(&a),
-            IO::Out(_) => None
+            RpcVariant::Req(a) => Some(&a),
+            RpcVariant::Res(_) => None
         }
     }
 
     #[inline]
-    pub fn output(&self) -> Option<&B> {
+    pub fn response(&self) -> Option<&B> {
         match self {
-            IO::In(_) => None,
-            IO::Out(b) => Some(&b)
+            RpcVariant::Req(_) => None,
+            RpcVariant::Res(b) => Some(&b)
         }
     }
 }
 
 #[repr(u8)]
-pub enum IoType {
-    In = 0,
-    Out = 1
+pub enum RpcVariantType {
+    Req = 0,
+    Res = 1
 }

@@ -56,24 +56,24 @@ impl Encoder for RpcCodec {
                     payload.push(RpcMsgType::Broadcast as u8);
                     tx.encode_with_sigs(&mut payload);
                 },
-                RpcMsg::Properties(io) => {
+                RpcMsg::Properties(rpc) => {
                     payload.push(RpcMsgType::Properties as u8);
-                    if let Some(props) = io.output() {
-                        payload.push(IoType::Out as u8);
+                    if let Some(props) = rpc.response() {
+                        payload.push(RpcVariantType::Res as u8);
                         payload.push_u64(props.height);
                     } else {
-                        payload.push(IoType::In as u8);
+                        payload.push(RpcVariantType::Req as u8);
                     }
                 },
                 RpcMsg::Block(io) => {
                     payload.push(RpcMsgType::Block as u8);
                     match io {
-                        IO::In(height) => {
-                            payload.push(IoType::In as u8);
+                        RpcVariant::Req(height) => {
+                            payload.push(RpcVariantType::Req as u8);
                             payload.push_u64(height);
                         },
-                        IO::Out(block) => {
-                            payload.push(IoType::Out as u8);
+                        RpcVariant::Res(block) => {
+                            payload.push(RpcVariantType::Res as u8);
                             block.encode_with_tx(&mut payload);
                         }
                     }
@@ -81,12 +81,12 @@ impl Encoder for RpcCodec {
                 RpcMsg::Balance(io) => {
                     payload.push(RpcMsgType::Balance as u8);
                     match io {
-                        IO::In(addr) => {
-                            payload.push(IoType::In as u8);
+                        RpcVariant::Req(addr) => {
+                            payload.push(RpcVariantType::Req as u8);
                             payload.push_pub_key(&addr);
                         },
-                        IO::Out(bal) => {
-                            payload.push(IoType::Out as u8);
+                        RpcVariant::Res(bal) => {
+                            payload.push(RpcVariantType::Res as u8);
                             payload.push_asset(&bal.gold);
                             payload.push_asset(&bal.silver);
                         }
@@ -95,12 +95,12 @@ impl Encoder for RpcCodec {
                 RpcMsg::TotalFee(io) => {
                     payload.push(RpcMsgType::Balance as u8);
                     match io {
-                        IO::In(addr) => {
-                            payload.push(IoType::In as u8);
+                        RpcVariant::Req(addr) => {
+                            payload.push(RpcVariantType::Req as u8);
                             payload.push_pub_key(&addr);
                         },
-                        IO::Out(bal) => {
-                            payload.push(IoType::Out as u8);
+                        RpcVariant::Res(bal) => {
+                            payload.push(RpcVariantType::Res as u8);
                             payload.push_asset(&bal.gold);
                             payload.push_asset(&bal.silver);
                         }
@@ -195,12 +195,12 @@ impl Decoder for RpcCodec {
                 t if t == RpcMsgType::Properties as u8 => {
                     let io = cur.get_u8();
                     match io {
-                        t if t == IoType::In as u8 => {
-                            RpcMsg::Properties(IO::In(()))
+                        t if t == RpcVariantType::Req as u8 => {
+                            RpcMsg::Properties(RpcVariant::Req(()))
                         },
-                        t if t == IoType::Out as u8 => {
+                        t if t == RpcVariantType::Res as u8 => {
                             let height = cur.get_u64_be();
-                            RpcMsg::Properties(IO::Out(Properties { height }))
+                            RpcMsg::Properties(RpcVariant::Res(Properties { height }))
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid io type"))
                     }
@@ -208,15 +208,15 @@ impl Decoder for RpcCodec {
                 t if t == RpcMsgType::Block as u8 => {
                     let io = cur.get_u8();
                     match io {
-                        t if t == IoType::In as u8 => {
+                        t if t == RpcVariantType::Req as u8 => {
                             let height = cur.get_u64_be();
-                            RpcMsg::Block(IO::In(height))
+                            RpcMsg::Block(RpcVariant::Req(height))
                         },
-                        t if t == IoType::Out as u8 => {
+                        t if t == RpcVariantType::Res as u8 => {
                             let block = SignedBlock::decode_with_tx(&mut cur).ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode block")
                             })?;
-                            RpcMsg::Block(IO::Out(block))
+                            RpcMsg::Block(RpcVariant::Res(block))
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid io type"))
                     }
@@ -224,20 +224,20 @@ impl Decoder for RpcCodec {
                 t if t == RpcMsgType::Balance as u8 => {
                     let io = cur.get_u8();
                     match io {
-                        t if t == IoType::In as u8 => {
+                        t if t == RpcVariantType::Req as u8 => {
                             let addr = cur.take_pub_key().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode public key")
                             })?;
-                            RpcMsg::Balance(IO::In(addr))
+                            RpcMsg::Balance(RpcVariant::Req(addr))
                         },
-                        t if t == IoType::Out as u8 => {
+                        t if t == RpcVariantType::Res as u8 => {
                             let gold = cur.take_asset().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode gold asset")
                             })?;
                             let silver = cur.take_asset().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode silver asset")
                             })?;
-                            RpcMsg::Balance(IO::Out(Balance { gold, silver }))
+                            RpcMsg::Balance(RpcVariant::Res(Balance { gold, silver }))
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid io type"))
                     }
@@ -245,20 +245,20 @@ impl Decoder for RpcCodec {
                 t if t == RpcMsgType::TotalFee as u8 => {
                     let io = cur.get_u8();
                     match io {
-                        t if t == IoType::In as u8 => {
+                        t if t == RpcVariantType::Req as u8 => {
                             let addr = cur.take_pub_key().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode public key")
                             })?;
-                            RpcMsg::TotalFee(IO::In(addr))
+                            RpcMsg::TotalFee(RpcVariant::Req(addr))
                         },
-                        t if t == IoType::Out as u8 => {
+                        t if t == RpcVariantType::Res as u8 => {
                             let gold = cur.take_asset().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode gold asset")
                             })?;
                             let silver = cur.take_asset().ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode silver asset")
                             })?;
-                            RpcMsg::TotalFee(IO::Out(Balance { gold, silver }))
+                            RpcMsg::TotalFee(RpcVariant::Res(Balance { gold, silver }))
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid io type"))
                     }
