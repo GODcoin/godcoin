@@ -1,7 +1,7 @@
+use std::io::{Read, Cursor, Error, ErrorKind};
 use sodiumoxide::crypto::sign::Signature;
 use crypto::{SigPair, PublicKey};
 use asset::{Asset, AssetSymbol};
-use std::io::{Read, Cursor};
 
 pub trait BufWrite {
     fn push_u16(&mut self, num: u16);
@@ -75,40 +75,40 @@ impl BufWrite for Vec<u8> {
 }
 
 pub trait BufRead {
-    fn take_u8(&mut self) -> Option<u8>;
-    fn take_u16(&mut self) -> Option<u16>;
-    fn take_u32(&mut self) -> Option<u32>;
-    fn take_i64(&mut self) -> Option<i64>;
-    fn take_u64(&mut self) -> Option<u64>;
-    fn take_bytes(&mut self) -> Option<Vec<u8>>;
-    fn take_pub_key(&mut self) -> Option<PublicKey>;
-    fn take_sig_pair(&mut self) -> Option<SigPair>;
-    fn take_asset(&mut self) -> Option<Asset>;
+    fn take_u8(&mut self) -> Result<u8, Error>;
+    fn take_u16(&mut self) -> Result<u16, Error>;
+    fn take_u32(&mut self) -> Result<u32, Error>;
+    fn take_i64(&mut self) -> Result<i64, Error>;
+    fn take_u64(&mut self) -> Result<u64, Error>;
+    fn take_bytes(&mut self) -> Result<Vec<u8>, Error>;
+    fn take_pub_key(&mut self) -> Result<PublicKey, Error>;
+    fn take_sig_pair(&mut self) -> Result<SigPair, Error>;
+    fn take_asset(&mut self) -> Result<Asset, Error>;
 }
 
 impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
-    fn take_u8(&mut self) -> Option<u8> {
+    fn take_u8(&mut self) -> Result<u8, Error> {
         let mut buf = [0u8;1];
-        self.read_exact(&mut buf).ok()?;
-        Some(buf[0])
+        self.read_exact(&mut buf)?;
+        Ok(buf[0])
     }
 
-    fn take_u16(&mut self) -> Option<u16> {
+    fn take_u16(&mut self) -> Result<u16, Error> {
         let mut buf = [0u8;2];
-        self.read_exact(&mut buf).ok()?;
-        Some((u16::from(buf[0]) << 8) | u16::from(buf[1]))
+        self.read_exact(&mut buf)?;
+        Ok((u16::from(buf[0]) << 8) | u16::from(buf[1]))
     }
 
-    fn take_u32(&mut self) -> Option<u32> {
+    fn take_u32(&mut self) -> Result<u32, Error> {
         let mut buf = [0u8;4];
-        self.read_exact(&mut buf).ok()?;
-        Some(u32_from_buf!(buf))
+        self.read_exact(&mut buf)?;
+        Ok(u32_from_buf!(buf))
     }
 
-    fn take_i64(&mut self) -> Option<i64> {
+    fn take_i64(&mut self) -> Result<i64, Error> {
         let mut buf = [0u8;8];
-        self.read_exact(&mut buf).ok()?;
-        Some((i64::from(buf[0]) << 56)
+        self.read_exact(&mut buf)?;
+        Ok((i64::from(buf[0]) << 56)
                 | (i64::from(buf[1]) << 48)
                 | (i64::from(buf[2]) << 40)
                 | (i64::from(buf[3]) << 32)
@@ -118,43 +118,49 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
                 | i64::from(buf[7]))
     }
 
-    fn take_u64(&mut self) -> Option<u64> {
+    fn take_u64(&mut self) -> Result<u64, Error> {
         let mut buf = [0u8;8];
-        self.read_exact(&mut buf).ok()?;
-        Some(u64_from_buf!(buf))
+        self.read_exact(&mut buf)?;
+        Ok(u64_from_buf!(buf))
     }
 
-    fn take_bytes(&mut self) -> Option<Vec<u8>> {
+    fn take_bytes(&mut self) -> Result<Vec<u8>, Error> {
         let len = self.take_u32()? as usize;
         let mut buf = Vec::with_capacity(len);
         unsafe { buf.set_len(len); }
-        self.read_exact(&mut buf).ok()?;
-        Some(buf)
+        self.read_exact(&mut buf)?;
+        Ok(buf)
     }
 
-    fn take_pub_key(&mut self) -> Option<PublicKey> {
+    fn take_pub_key(&mut self) -> Result<PublicKey, Error> {
         let buf = self.take_bytes()?;
-        PublicKey::from_bytes(&buf)
+        PublicKey::from_bytes(&buf).ok_or_else(|| {
+            Error::new(ErrorKind::Other, "incorrect public key length")
+        })
     }
 
-    fn take_sig_pair(&mut self) -> Option<SigPair> {
+    fn take_sig_pair(&mut self) -> Result<SigPair, Error> {
         let pub_key = self.take_pub_key()?;
-        let signature = Signature::from_slice(&self.take_bytes()?)?;
-        Some(SigPair {
+        let signature = Signature::from_slice(&self.take_bytes()?).ok_or_else(|| {
+            Error::new(ErrorKind::Other, "incorrect signature length")
+        })?;
+        Ok(SigPair {
             pub_key,
             signature
         })
     }
 
-    fn take_asset(&mut self) -> Option<Asset> {
+    fn take_asset(&mut self) -> Result<Asset, Error> {
         let amount = self.take_i64()?;
         let decimals = self.take_u8()?;
         let symbol = match self.take_u8()? {
             0 => AssetSymbol::GOLD,
             1 => AssetSymbol::SILVER,
-            _ => return None
+            _ => return Err(Error::new(ErrorKind::Other, "invalid symbol"))
         };
-        Asset::new(amount, decimals, symbol)
+        Asset::new(amount, decimals, symbol).ok_or_else(|| {
+            Error::new(ErrorKind::Other, "invalid asset")
+        })
     }
 }
 
@@ -204,7 +210,7 @@ mod tests {
 
             let mut c = Cursor::<&[u8]>::new(&v);
             let b = c.take_asset();
-            assert!(b.is_none());
+            assert!(b.is_err());
         }
     }
 }

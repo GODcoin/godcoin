@@ -34,12 +34,12 @@ impl Block {
     }
 
     pub fn decode_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
-        let previous_hash = Digest::from_slice(&cur.take_bytes()?)?;
-        let height = cur.take_u64()?;
-        let timestamp = cur.take_u32()?;
-        let tx_merkle_root = Digest::from_slice(&cur.take_bytes()?)?;
+        let previous_hash = Digest::from_slice(&cur.take_bytes().ok()?)?;
+        let height = cur.take_u64().ok()?;
+        let timestamp = cur.take_u32().ok()?;
+        let tx_merkle_root = Digest::from_slice(&cur.take_bytes().ok()?)?;
 
-        let len = cur.take_u32()?;
+        let len = cur.take_u32().ok()?;
         let mut transactions = Vec::<TxVariant>::with_capacity(len as usize);
         for _ in 0..len {
             transactions.push(TxVariant::decode_with_sigs(cur)?);
@@ -114,7 +114,7 @@ impl SignedBlock {
 
     pub fn decode_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
         let block = Block::decode_with_tx(cur)?;
-        let sig_pair = cur.take_sig_pair()?;
+        let sig_pair = cur.take_sig_pair().ok()?;
         Some(Self {
             base: block,
             sig_pair

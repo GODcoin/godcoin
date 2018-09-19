@@ -1,7 +1,6 @@
-use std::io::{Cursor, Error, ErrorKind};
+use std::io::{Read, Cursor, Error, ErrorKind};
 use tokio_codec::{Encoder, Decoder};
-use bytes::{Buf, BufMut, BytesMut};
-use std::io::Read;
+use bytes::{BufMut, BytesMut};
 use serializer::*;
 
 use blockchain::Properties;
@@ -140,7 +139,7 @@ impl Decoder for RpcCodec {
             let mut cur = Cursor::new(split.as_ref());
             self.msg_len = 0;
 
-            let id = cur.get_u32_be();
+            let id = cur.take_u32()?;
             if msg_len == 4 {
                 return Ok(Some(RpcPayload {
                     id,
@@ -148,9 +147,9 @@ impl Decoder for RpcCodec {
                 }))
             }
 
-            let msg = match cur.get_u8() {
+            let msg = match cur.take_u8()? {
                 t if t == RpcMsgType::Error as u8 => {
-                    let len = cur.get_u32_be();
+                    let len = cur.take_u32()?;
                     if len > MAX_PAYLOAD_LEN {
                         return Err(Error::new(ErrorKind::Other, "error string too large"))
                     }
@@ -161,7 +160,7 @@ impl Decoder for RpcCodec {
                     RpcMsg::Error(String::from_utf8_lossy(&buf).into_owned())
                 },
                 t if t == RpcMsgType::Event as u8 => {
-                    let event_type = cur.get_u8();
+                    let event_type = cur.take_u8()?;
                     match event_type {
                         t if t == RpcEventType::TX as u8 => {
                             let tx = TxVariant::decode_with_sigs(&mut cur).ok_or_else(|| {
@@ -179,7 +178,7 @@ impl Decoder for RpcCodec {
                     }
                 },
                 t if t == RpcMsgType::Handshake as u8 => {
-                    let peer_type = match cur.get_u8() {
+                    let peer_type = match cur.take_u8()? {
                         t if t == PeerType::NODE as u8 => PeerType::NODE,
                         t if t == PeerType::WALLET as u8 => PeerType::WALLET,
                         _ => return Err(Error::new(ErrorKind::Other, "invalid peer type"))
@@ -193,23 +192,23 @@ impl Decoder for RpcCodec {
                     RpcMsg::Broadcast(tx)
                 },
                 t if t == RpcMsgType::Properties as u8 => {
-                    let rpc = cur.get_u8();
+                    let rpc = cur.take_u8()?;
                     match rpc {
                         t if t == RpcVariantType::Req as u8 => {
                             RpcMsg::Properties(RpcVariant::Req(()))
                         },
                         t if t == RpcVariantType::Res as u8 => {
-                            let height = cur.get_u64_be();
+                            let height = cur.take_u64()?;
                             RpcMsg::Properties(RpcVariant::Res(Properties { height }))
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid rpc type"))
                     }
                 },
                 t if t == RpcMsgType::Block as u8 => {
-                    let rpc = cur.get_u8();
+                    let rpc = cur.take_u8()?;
                     match rpc {
                         t if t == RpcVariantType::Req as u8 => {
-                            let height = cur.get_u64_be();
+                            let height = cur.take_u64()?;
                             RpcMsg::Block(RpcVariant::Req(height))
                         },
                         t if t == RpcVariantType::Res as u8 => {
@@ -222,42 +221,30 @@ impl Decoder for RpcCodec {
                     }
                 },
                 t if t == RpcMsgType::Balance as u8 => {
-                    let rpc = cur.get_u8();
+                    let rpc = cur.take_u8()?;
                     match rpc {
                         t if t == RpcVariantType::Req as u8 => {
-                            let addr = cur.take_pub_key().ok_or_else(|| {
-                                Error::new(ErrorKind::Other, "failed to decode public key")
-                            })?;
+                            let addr = cur.take_pub_key()?;
                             RpcMsg::Balance(RpcVariant::Req(addr))
                         },
                         t if t == RpcVariantType::Res as u8 => {
-                            let gold = cur.take_asset().ok_or_else(|| {
-                                Error::new(ErrorKind::Other, "failed to decode gold asset")
-                            })?;
-                            let silver = cur.take_asset().ok_or_else(|| {
-                                Error::new(ErrorKind::Other, "failed to decode silver asset")
-                            })?;
+                            let gold = cur.take_asset()?;
+                            let silver = cur.take_asset()?;
                             RpcMsg::Balance(RpcVariant::Res(Balance { gold, silver }))
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid rpc type"))
                     }
                 },
                 t if t == RpcMsgType::TotalFee as u8 => {
-                    let rpc = cur.get_u8();
+                    let rpc = cur.take_u8()?;
                     match rpc {
                         t if t == RpcVariantType::Req as u8 => {
-                            let addr = cur.take_pub_key().ok_or_else(|| {
-                                Error::new(ErrorKind::Other, "failed to decode public key")
-                            })?;
+                            let addr = cur.take_pub_key()?;
                             RpcMsg::TotalFee(RpcVariant::Req(addr))
                         },
                         t if t == RpcVariantType::Res as u8 => {
-                            let gold = cur.take_asset().ok_or_else(|| {
-                                Error::new(ErrorKind::Other, "failed to decode gold asset")
-                            })?;
-                            let silver = cur.take_asset().ok_or_else(|| {
-                                Error::new(ErrorKind::Other, "failed to decode silver asset")
-                            })?;
+                            let gold = cur.take_asset()?;
+                            let silver = cur.take_asset()?;
                             RpcMsg::TotalFee(RpcVariant::Res(Balance { gold, silver }))
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid rpc type"))

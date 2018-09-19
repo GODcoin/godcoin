@@ -58,9 +58,9 @@ impl TxVariant {
 
     pub fn decode_with_sigs(cur: &mut Cursor<&[u8]>) -> Option<TxVariant> {
         let sigs = {
-            let len = cur.take_u16()?;
+            let len = cur.take_u16().ok()?;
             let mut vec = Vec::with_capacity(len as usize);
-            for _ in 0..len { vec.push(cur.take_sig_pair()?) };
+            for _ in 0..len { vec.push(cur.take_sig_pair().ok()?) };
             vec
         };
         let mut base = Tx::decode_base(cur)?;
@@ -101,14 +101,14 @@ impl Tx {
     }
 
     fn decode_base(cur: &mut Cursor<&[u8]>) -> Option<Tx> {
-        let tx_type = match cur.take_u8()? {
+        let tx_type = match cur.take_u8().ok()? {
             t if t == TxType::REWARD as u8 => TxType::REWARD,
             t if t == TxType::BOND as u8 => TxType::BOND,
             t if t == TxType::TRANSFER as u8 => TxType::TRANSFER,
             _ => return None
         };
-        let timestamp = cur.take_u32()?;
-        let fee = cur.take_asset()?;
+        let timestamp = cur.take_u32().ok()?;
+        let fee = cur.take_asset().ok()?;
 
         Some(Tx {
             tx_type,
@@ -139,12 +139,12 @@ impl EncodeTx for RewardTx {
 impl DecodeTx<RewardTx> for RewardTx {
     fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<RewardTx> {
         assert_eq!(tx.tx_type, TxType::REWARD);
-        let key = cur.take_pub_key()?;
+        let key = cur.take_pub_key().ok()?;
 
-        let len = cur.take_u32()?;
+        let len = cur.take_u32().ok()?;
         let mut rewards = Vec::with_capacity(len as usize);
         for _ in 0..len {
-            rewards.push(cur.take_asset()?);
+            rewards.push(cur.take_asset().ok()?);
         }
 
         Some(RewardTx {
@@ -177,10 +177,10 @@ impl EncodeTx for BondTx {
 impl DecodeTx<BondTx> for BondTx {
     fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<BondTx> {
         assert_eq!(tx.tx_type, TxType::BOND);
-        let minter = cur.take_pub_key()?;
-        let staker = cur.take_pub_key()?;
-        let stake_amt = cur.take_asset()?;
-        let bond_fee = cur.take_asset()?;
+        let minter = cur.take_pub_key().ok()?;
+        let staker = cur.take_pub_key().ok()?;
+        let stake_amt = cur.take_asset().ok()?;
+        let bond_fee = cur.take_asset().ok()?;
         Some(BondTx {
             base: tx,
             minter,
@@ -213,10 +213,10 @@ impl EncodeTx for TransferTx {
 impl DecodeTx<TransferTx> for TransferTx {
     fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<TransferTx> {
         assert_eq!(tx.tx_type, TxType::TRANSFER);
-        let from = cur.take_pub_key()?;
-        let to = cur.take_pub_key()?;
-        let amount = cur.take_asset()?;
-        let memo = cur.take_bytes()?;
+        let from = cur.take_pub_key().ok()?;
+        let to = cur.take_pub_key().ok()?;
+        let amount = cur.take_asset().ok()?;
+        let memo = cur.take_bytes().ok()?;
         Some(TransferTx {
             base: tx,
             from,
