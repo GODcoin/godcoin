@@ -26,7 +26,7 @@ pub enum RpcMsg {
     Handshake(PeerType),
     Broadcast(TxVariant),
     Properties(RpcVariant<(), Properties>),
-    Block(RpcVariant<u64, SignedBlock>),
+    Block(RpcVariant<u64, Option<SignedBlock>>),
     Balance(RpcVariant<PublicKey, Balance>),
     TotalFee(RpcVariant<PublicKey, Balance>)
 }

@@ -73,7 +73,9 @@ impl Encoder for RpcCodec {
                         },
                         RpcVariant::Res(block) => {
                             payload.push(RpcVariantType::Res as u8);
-                            block.encode_with_tx(&mut payload);
+                            if let Some(block) = block {
+                                block.encode_with_tx(&mut payload);
+                            }
                         }
                     }
                 },
@@ -212,10 +214,14 @@ impl Decoder for RpcCodec {
                             RpcMsg::Block(RpcVariant::Req(height))
                         },
                         t if t == RpcVariantType::Res as u8 => {
-                            let block = SignedBlock::decode_with_tx(&mut cur).ok_or_else(|| {
-                                Error::new(ErrorKind::Other, "failed to decode block")
-                            })?;
-                            RpcMsg::Block(RpcVariant::Res(block))
+                            if u64::from(msg_len).saturating_sub(cur.position()) > 0 {
+                                let block = SignedBlock::decode_with_tx(&mut cur).ok_or_else(|| {
+                                    Error::new(ErrorKind::Other, "failed to decode block")
+                                })?;
+                                RpcMsg::Block(RpcVariant::Res(Some(block)))
+                            } else {
+                                RpcMsg::Block(RpcVariant::Res(None))
+                            }
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid rpc type"))
                     }
