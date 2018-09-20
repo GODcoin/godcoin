@@ -208,6 +208,7 @@ macro_rules! agnostic_op {
     ($op:ident) => {
         impl Balance {
             #[inline]
+            #[must_use = "operation can fail"]
             pub fn $op(&mut self, asset: &Asset) -> Option<&mut Balance> {
                 match asset.symbol {
                     AssetSymbol::GOLD => {
