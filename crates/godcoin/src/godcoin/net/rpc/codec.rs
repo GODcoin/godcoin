@@ -1,4 +1,4 @@
-use std::io::{Read, Cursor, Error, ErrorKind};
+use std::io::{Cursor, Error, ErrorKind};
 use tokio_codec::{Encoder, Decoder};
 use bytes::{BufMut, BytesMut};
 use serializer::*;
@@ -153,12 +153,8 @@ impl Decoder for RpcCodec {
 
             let msg = match cur.take_u8()? {
                 t if t == RpcMsgType::Error as u8 => {
-                    let len = msg_len as u64 - cur.position();
-                    let mut buf = Vec::with_capacity(len as usize);
-                    cur.read_exact(&mut buf).map_err(|_| {
-                        Error::new(ErrorKind::Other, "failed to read error string")
-                    })?;
-                    RpcMsg::Error(String::from_utf8_lossy(&buf).into_owned())
+                    let bytes = cur.take_bytes()?;
+                    RpcMsg::Error(String::from_utf8_lossy(&bytes).into_owned())
                 },
                 t if t == RpcMsgType::Event as u8 => {
                     let event_type = cur.take_u8()?;
