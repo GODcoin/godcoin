@@ -31,7 +31,7 @@ impl Encoder for RpcCodec {
         if let Some(msg) = pl.msg {
             match msg {
                 RpcMsg::Error(err) => {
-                    payload.push_u32(err.len() as u32);
+                    payload.push(RpcMsgType::Error as u8);
                     payload.push_bytes(err.as_bytes());
                 },
                 RpcMsg::Event(evt) => {
@@ -153,10 +153,7 @@ impl Decoder for RpcCodec {
 
             let msg = match cur.take_u8()? {
                 t if t == RpcMsgType::Error as u8 => {
-                    let len = cur.take_u32()?;
-                    if len > MAX_PAYLOAD_LEN {
-                        return Err(Error::new(ErrorKind::Other, "error string too large"))
-                    }
+                    let len = msg_len as u64 - cur.position();
                     let mut buf = Vec::with_capacity(len as usize);
                     cur.read_exact(&mut buf).map_err(|_| {
                         Error::new(ErrorKind::Other, "failed to read error string")
