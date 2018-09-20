@@ -24,7 +24,8 @@ pub struct Blockchain {
 
 #[derive(Clone, Debug)]
 pub struct Properties {
-    pub height: u64
+    pub height: u64,
+    pub token_supply: Balance
 }
 
 impl Blockchain {
@@ -44,7 +45,8 @@ impl Blockchain {
 
     pub fn get_properties(&self) -> Properties {
         Properties {
-            height: self.get_chain_height()
+            height: self.get_chain_height(),
+            token_supply: self.indexer.get_token_supply()
         }
     }
 
@@ -239,10 +241,13 @@ impl Blockchain {
         match tx {
             TxVariant::RewardTx(tx) => {
                 let mut bal = self.get_balance(&tx.to);
+                let mut supply = self.indexer.get_token_supply();
                 for r in &tx.rewards {
-                    bal.add(r);
+                    bal.add(r).unwrap();
+                    supply.add(r).unwrap();
                 }
                 self.indexer.set_balance(&tx.to, &bal);
+                self.indexer.set_token_supply(&supply);
             },
             TxVariant::BondTx(tx) => {
                 let mut bal = self.get_balance(&tx.staker);
@@ -251,6 +256,10 @@ impl Blockchain {
                     .sub(&tx.stake_amt).unwrap();
                 self.indexer.set_balance(&tx.staker, &bal);
                 self.indexer.set_bond(tx);
+
+                let mut supply = self.indexer.get_token_supply();
+                supply.sub(&tx.bond_fee).unwrap();
+                self.indexer.set_token_supply(&supply);
             },
             TxVariant::TransferTx(tx) => {
                 let mut from_bal = self.get_balance(&tx.from);
@@ -258,7 +267,7 @@ impl Blockchain {
 
                 from_bal.sub(&tx.fee).unwrap()
                         .sub(&tx.amount).unwrap();
-                to_bal.add(&tx.amount);
+                to_bal.add(&tx.amount).unwrap();
 
                 self.indexer.set_balance(&tx.from, &from_bal);
                 self.indexer.set_balance(&tx.to, &to_bal);

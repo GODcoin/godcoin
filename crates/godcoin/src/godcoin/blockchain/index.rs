@@ -13,6 +13,7 @@ const CF_ADDR_BAL: &str = "address_balance";
 const CF_BOND: &str = "bond";
 
 const KEY_CHAIN_HEIGHT: &[u8] = b"chain_height";
+const KEY_TOKEN_SUPPLY: &[u8] = b"token_supply";
 
 pub struct Indexer {
     db: DB
@@ -109,6 +110,30 @@ impl Indexer {
             vec
         };
         self.db.put_cf(cf, key, &val).unwrap();
+    }
+
+    pub fn get_token_supply(&self) -> Balance {
+        let bal_buf = self.db.get(KEY_TOKEN_SUPPLY).unwrap();
+        match bal_buf {
+            Some(bal_buf) => {
+                let cur = &mut Cursor::<&[u8]>::new(&bal_buf);
+                let gold = cur.take_asset().unwrap();
+                let silver = cur.take_asset().unwrap();
+                Balance { gold, silver }
+            },
+            None => Balance::default()
+        }
+
+    }
+
+    pub fn set_token_supply(&self, bal: &Balance) {
+        let val = {
+            let mut vec = Vec::with_capacity(mem::size_of::<Balance>());
+            vec.push_asset(&bal.gold);
+            vec.push_asset(&bal.silver);
+            vec
+        };
+        self.db.put(KEY_TOKEN_SUPPLY, &val).unwrap();
     }
 }
 
