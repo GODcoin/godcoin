@@ -96,7 +96,7 @@ impl Encoder for RpcCodec {
                     }
                 },
                 RpcMsg::TotalFee(rpc) => {
-                    payload.push(RpcMsgType::Balance as u8);
+                    payload.push(RpcMsgType::TotalFee as u8);
                     match rpc {
                         RpcVariant::Req(addr) => {
                             payload.push(RpcVariantType::Req as u8);
