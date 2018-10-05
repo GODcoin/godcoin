@@ -31,19 +31,15 @@ impl Producer {
     pub fn start_timer(self) {
         let dur = Duration::from_millis(constants::BLOCK_PROD_TIME);
         let at = Instant::now() + dur;
-        ::tokio::spawn(Interval::new(at, dur).take_while(|_| {
-            Ok(true)
-        }).for_each(move |_| {
-            Producer::produce(&self);
+        ::tokio::spawn(Interval::new(at, dur).for_each(move |_| {
+            self.produce();
             Ok(())
         }).map_err(|err| {
-            error!("Unknown error in producer: {:?}", err);
+            error!("Timer error in producer: {:?}", err);
         }));
     }
 
     fn produce(&self) {
-        let blockchain = &*self.chain;
-
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32;
         let transactions = vec![
             TxVariant::RewardTx(RewardTx {
@@ -61,13 +57,13 @@ impl Producer {
             })
         ];
 
-        let head = blockchain.get_chain_head();
+        let head = self.chain.get_chain_head();
         let block = head.new_child(transactions).sign(&self.minter);
 
         let height = block.height;
         let tx_len = block.transactions.len();
 
-        blockchain.insert_block(block).unwrap();
+        self.chain.insert_block(block).unwrap();
         info!("Produced block at height {} with {} txs", height, tx_len);
     }
 }
