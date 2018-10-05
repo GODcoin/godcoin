@@ -54,7 +54,10 @@ impl Producer {
                     signature_pairs: Vec::new()
                 },
                 to: self.staker.clone(),
-                rewards: vec![Asset::from_str("1 GOLD").unwrap()]
+                rewards: vec![
+                    Asset::from_str("1 GOLD").unwrap(),
+                    Asset::from_str("100 SILVER").unwrap()
+                ]
             })
         ];
 

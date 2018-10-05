@@ -304,7 +304,7 @@ impl Blockchain {
         };
 
         let transactions = {
-            let mut vec = Vec::new();
+            let mut vec = Vec::with_capacity(2);
             vec.push(TxVariant::RewardTx(RewardTx {
                 base: Tx {
                     tx_type: TxType::REWARD,
