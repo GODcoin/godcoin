@@ -64,6 +64,7 @@ impl Producer {
         let tx_len = block.transactions.len();
 
         self.chain.insert_block(block).unwrap();
-        info!("Produced block at height {} with {} txs", height, tx_len);
+        let txs = if tx_len == 1 { "tx" } else { "txs" };
+        info!("Produced block at height {} with {} {}", height, tx_len, txs);
     }
 }
