@@ -9,9 +9,9 @@ extern crate clap;
 extern crate log;
 
 use clap::{Arg, App, AppSettings, SubCommand};
+use godcoin::{*, producer::Producer};
 use std::sync::{Arc, mpsc};
 use tokio::prelude::*;
-use godcoin::*;
 
 struct StartNode<'a> {
     bind_address: Option<&'a str>,
@@ -67,7 +67,7 @@ fn start_node(node_opts: &StartNode) {
         let bond = blockchain.get_bond(&key.0).expect("No bond found for minter key");
         let minter = key.clone();
         let staker = bond.staker;
-        let producer = producer::Producer::new(Arc::new(blockchain), minter, staker);
+        let producer = Producer::new(Arc::new(blockchain), minter, staker);
         producer.start_timer();
     }
 
