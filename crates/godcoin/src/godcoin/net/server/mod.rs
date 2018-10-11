@@ -1,5 +1,6 @@
 use super::rpc::codec::RpcCodec;
 
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::io::{Error, ErrorKind};
 use std::net::SocketAddr;
 
@@ -7,13 +8,16 @@ use tokio::net::TcpListener;
 use tokio_codec::Framed;
 use tokio::prelude::*;
 
+use blockchain::Blockchain;
+use producer::Producer;
 use net::peer::*;
 use net::rpc::*;
+use fut_util::*;
 
-pub fn start(addr: SocketAddr) {
+pub fn start(addr: SocketAddr, blockchain: Arc<Blockchain>, producer: Arc<Option<Producer>>) {
     let listener = TcpListener::bind(&addr).unwrap();
     info!("Server binded to {:?}", &addr);
-    let server = listener.incoming().for_each(|socket| {
+    let server = listener.incoming().for_each(move |socket| {
         let addr = socket.peer_addr().unwrap();
         info!("[{}] Accepted connection", addr);
 
@@ -33,14 +37,14 @@ pub fn start(addr: SocketAddr) {
                     RpcMsg::Handshake(peer_type) => peer_type,
                     _ => return Err(Error::new(ErrorKind::InvalidData, "expected handshake msg"))
                 };
-
-
                 Ok((peer_type, frame))
             } else {
                 Err(Error::new(ErrorKind::InvalidData, "expected handshake msg"))
             }
         });
 
+        let blockchain = Arc::clone(&blockchain);
+        let producer = Arc::clone(&producer);
         let client = hs.and_then(move |(peer_type, frame)| {
             let peer = Peer::new(peer_type, addr, frame);
             debug!("Handshake from client completed: {:?}", peer);
@@ -48,16 +52,7 @@ pub fn start(addr: SocketAddr) {
                 id: 0,
                 msg: None
             });
-            ::tokio::spawn(peer.for_each(move |msg| {
-                info!("[{}] Received msg: {:?}", addr, msg);
-                Ok(())
-            }).and_then(move |_| {
-                warn!("[{}] Client disconnected", addr);
-                Ok(())
-            }).map_err(move |e| {
-                debug!("[{}] Error handling frame from client: {:?}", addr, e);
-            }));
-
+            handle_peer(peer, blockchain, producer);
             Ok(())
         });
 
@@ -69,4 +64,128 @@ pub fn start(addr: SocketAddr) {
         error!("Server accept error: {:?}", err);
     });
     ::tokio::spawn(server);
+}
+
+fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Producer>>) {
+    macro_rules! quick_send {
+        ($sender:expr, $rpc:expr, $msg:expr) => {
+            $sender.send(RpcPayload {
+                id: $rpc.id,
+                msg: Some($msg)
+            });
+        };
+        ($sender:expr, $rpc:expr) => {
+            $sender.send(RpcPayload {
+                id: $rpc.id,
+                msg: None
+            });
+        };
+    }
+
+    let (tx, rx) = {
+        let (tx, rx) = channel::unbounded();
+        (tx, rx.map_err(|_| {
+            Error::new(ErrorKind::Other, "rx error")
+        }))
+    };
+
+    let addr = peer.addr;
+    let force_close = Arc::new(AtomicBool::new(false));
+    let sender = peer.get_sender();
+    ::tokio::spawn(ZipEither::new(peer, rx).take_while({
+        let force_close = Arc::clone(&force_close);
+        move |_| {
+            Ok(!force_close.load(Ordering::Acquire))
+        }
+    }).for_each(move |(rpc, _)| {
+        if let Some(rpc) = rpc {
+            if let Some(msg) = rpc.msg {
+                match msg {
+                    RpcMsg::Event(evt) => {
+                        // TODO
+                        unimplemented!();
+                    },
+                    RpcMsg::Broadcast(tx) => {
+                        if let Some(producer) = &*producer {
+                            match producer.add_tx(tx) {
+                                Ok(_) => {
+                                    quick_send!(sender, rpc);
+                                },
+                                Err(s) => {
+                                    quick_send!(sender, rpc, RpcMsg::Error(s));
+                                }
+                            }
+                        }
+                    },
+                    RpcMsg::Properties(var) => {
+                        match var.request() {
+                            Some(_) => {
+                                let props = blockchain.get_properties();
+                                quick_send!(sender, rpc, RpcMsg::Properties(RpcVariant::Res(props)));
+                            },
+                            None => {
+                                warn!("[{}] Property responses not supported", addr);
+
+                            }
+                        }
+                    },
+                    RpcMsg::Block(var) => {
+                        match var.request() {
+                            Some(height) => {
+                                let block = match blockchain.get_block(*height) {
+                                    Some(block) => Some((&*block).clone()),
+                                    None => None
+                                };
+                                quick_send!(sender, rpc, RpcMsg::Block(RpcVariant::Res(block)));
+                            },
+                            None => {
+                                warn!("[{}] Block responses not supported", addr);
+                            }
+                        }
+                    },
+                    RpcMsg::Balance(var) => {
+                        match var.request() {
+                            Some(addr) => {
+                                let bal = blockchain.get_balance(addr);
+                                quick_send!(sender, rpc, RpcMsg::Balance(RpcVariant::Res(bal)));
+                            },
+                            None => {
+                                warn!("[{}] Balance responses not supported", addr);
+                            }
+                        }
+                    },
+                    RpcMsg::TotalFee(var) => {
+                        match var.request() {
+                            Some(addr) => {
+                                let fee = blockchain.get_total_fee(addr);
+                                match fee {
+                                    Some(fee) => {
+                                        quick_send!(sender, rpc, RpcMsg::TotalFee(RpcVariant::Res(fee)));
+                                    },
+                                    None => {
+                                        let err = "failed to retrieve total fee".to_string();
+                                        quick_send!(sender, rpc, RpcMsg::Error(err));
+                                    }
+                                }
+                            },
+                            None => {
+                                warn!("[{}] Total fee responses not supported", addr);
+                            }
+                        }
+                    },
+                    _ => {
+                        warn!("[{}] Invalid rpc message sent from peer", addr);
+                        force_close.store(true, Ordering::Release);
+                        tx.send(())
+                    }
+                }
+            }
+        }
+        Ok(())
+    }).and_then(move |_| {
+        warn!("[{}] Client disconnected", addr);
+        Ok(())
+    }).map_err(move |e| {
+        debug!("[{}] Error handling frame from client: {:?}", addr, e);
+    }));
 }

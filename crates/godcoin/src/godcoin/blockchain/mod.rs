@@ -1,7 +1,8 @@
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::sync::{Mutex, Arc};
+use parking_lot::Mutex;
 use std::cell::RefCell;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::path::*;
 
 pub mod block;
@@ -61,15 +62,15 @@ impl Blockchain {
     }
 
     pub fn get_chain_head(&self) -> Arc<SignedBlock> {
-        let lock = self.store.lock().unwrap();
-        let store = lock.borrow();
+        let guard = self.store.lock();
+        let store = guard.borrow();
         let height = store.get_chain_height();
         store.get(height).expect("Failed to get blockchain head")
     }
 
     pub fn get_block(&self, height: u64) -> Option<Arc<SignedBlock>> {
-        let lock = self.store.lock().unwrap();
-        let store = lock.borrow();
+        let guard = self.store.lock();
+        let store = guard.borrow();
         store.get(height)
     }
 
@@ -137,12 +138,44 @@ impl Blockchain {
         self.indexer.get_balance(addr).unwrap_or_default()
     }
 
+    pub fn get_balance_with_txs(&self, addr: &PublicKey, txs: &[TxVariant]) -> Option<Balance> {
+        let mut bal = self.indexer.get_balance(addr).unwrap_or_default();
+        for tx in txs {
+            match tx {
+                TxVariant::RewardTx(tx) => {
+                    if &tx.to == addr {
+                        for reward in &tx.rewards {
+                            bal.add(&reward)?;
+                        }
+                    }
+                },
+                TxVariant::BondTx(tx) => {
+                    if &tx.staker == addr {
+                        bal.sub(&tx.fee)?;
+                        bal.sub(&tx.bond_fee)?;
+                        bal.sub(&tx.stake_amt)?;
+                    }
+                },
+                TxVariant::TransferTx(tx) => {
+                    if &tx.from == addr {
+                        bal.sub(&tx.fee)?;
+                        bal.sub(&tx.amount)?;
+                    } else if &tx.to == addr {
+                        bal.add(&tx.amount)?;
+                    }
+                }
+            }
+        }
+
+        Some(bal)
+    }
+
     pub fn insert_block(&self, block: SignedBlock) -> Result<(), String> {
         self.verify_block(&block, &self.get_chain_head())?;
         for tx in &block.transactions { self.index_tx(tx); }
 
-        let lock = self.store.lock().unwrap();
-        let store = &mut lock.borrow_mut();
+        let guard = self.store.lock();
+        let store = &mut guard.borrow_mut();
         store.insert(block);
 
         Ok(())
@@ -163,8 +196,11 @@ impl Blockchain {
             return Err("invalid bond signature".to_owned())
         }
 
-        for tx in &block.transactions {
-            if let Err(s) = self.verify_tx(tx) {
+        let len = block.transactions.len();
+        for i in 0..len {
+            let tx = &block.transactions[i];
+            let txs = &block.transactions[0..i];
+            if let Err(s) = self.verify_tx(tx, txs) {
                 return Err(format!("tx verification failed: {}", s))
             }
         }
@@ -172,7 +208,7 @@ impl Blockchain {
         Ok(())
     }
 
-    fn verify_tx(&self, tx: &TxVariant) -> Result<(), String> {
+    pub fn verify_tx(&self, tx: &TxVariant, additional_txs: &[TxVariant]) -> Result<(), String> {
         macro_rules! check_amt {
             ($asset:expr, $name:expr) => {
                 if $asset.amount < 0 { return Err(format!("{} must be greater than 0", $name)) }
@@ -217,7 +253,9 @@ impl Blockchain {
                     return Err("bond_fee is too small".to_owned())
                 }
 
-                let mut bal = self.get_balance(&tx.staker);
+                let mut bal = self.get_balance_with_txs(&tx.staker, additional_txs).ok_or_else(|| {
+                    "failed to get balance"
+                })?;
                 bal.sub(&tx.fee).ok_or("failed to subtract fee")?
                     .sub(&tx.bond_fee).ok_or("failed to subtract bond_fee")?
                     .sub(&tx.stake_amt).ok_or("failed to subtract stake_amt")?;
@@ -227,7 +265,9 @@ impl Blockchain {
                 if tx.fee.symbol != tx.amount.symbol {
                     return Err("symbol mismatch between fee and amount".to_owned())
                 }
-                let mut bal = self.get_balance(&tx.from);
+                let mut bal = self.get_balance_with_txs(&tx.from, additional_txs).ok_or_else(|| {
+                    "failed to get balance"
+                })?;
                 bal.sub(&tx.fee).ok_or("failed to subtract fee")?
                     .sub(&tx.amount).ok_or("failed to subtract amount")?;
                 check_suf_bal!(&bal.gold);
@@ -327,8 +367,8 @@ impl Blockchain {
             transactions
         }).sign(&minter_key);
 
-        let lock = self.store.lock().unwrap();
-        let store = &mut lock.borrow_mut();
+        let guard = self.store.lock();
+        let store = &mut guard.borrow_mut();
         store.insert_genesis(block);
         self.indexer.set_bond(&bond_tx);
     }

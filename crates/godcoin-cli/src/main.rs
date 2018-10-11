@@ -63,18 +63,23 @@ fn start_node(node_opts: &StartNode) {
 
     info!("Using height in block log at {}", blockchain.get_chain_height());
 
-    if let Some(ref key) = node_opts.minter_key {
-        let bond = blockchain.get_bond(&key.0).expect("No bond found for minter key");
-        let minter = key.clone();
-        let staker = bond.staker;
-        let producer = Producer::new(Arc::new(blockchain), minter, staker);
-        producer.start_timer();
-    }
+    let blockchain = Arc::new(blockchain);
+    let producer = match node_opts.minter_key {
+        Some(ref key) => {
+            let bond = blockchain.get_bond(&key.0).expect("No bond found for minter key");
+            let minter = key.clone();
+            let staker = bond.staker;
+            let producer = Producer::new(Arc::clone(&blockchain), minter, staker);
+            producer.clone().start_timer();
+            Some(producer)
+        },
+        None => None
+    };
 
     if let Some(bind) = node_opts.bind_address {
         let addr = bind.parse()
                         .unwrap_or_else(|_| panic!("Failed to parse address: {:?}", bind));
-        net::server::start(addr);
+        net::server::start(addr, blockchain, Arc::new(producer));
     }
 
     if let Some(_) = &node_opts.peers {
