@@ -69,16 +69,10 @@ pub fn start(addr: SocketAddr, blockchain: Arc<Blockchain>, producer: Arc<Option
 fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Producer>>) {
     macro_rules! quick_send {
         ($sender:expr, $rpc:expr, $msg:expr) => {
-            $sender.send(RpcPayload {
-                id: $rpc.id,
-                msg: Some($msg)
-            });
+            $sender.send(RpcPayload { id: $rpc.id, msg: Some($msg) });
         };
         ($sender:expr, $rpc:expr) => {
-            $sender.send(RpcPayload {
-                id: $rpc.id,
-                msg: None
-            });
+            $sender.send(RpcPayload { id: $rpc.id, msg: None });
         };
     }
 
@@ -133,7 +127,6 @@ fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Pro
                             },
                             None => {
                                 warn!("[{}] Property responses not supported", addr);
-
                             }
                         }
                     },
