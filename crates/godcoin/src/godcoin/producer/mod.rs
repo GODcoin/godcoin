@@ -77,6 +77,11 @@ impl Producer {
         info!("Produced block at height {} with {} {}", height, tx_len, txs);
     }
 
+    pub fn add_block(&self, block: SignedBlock) -> Result<(), String> {
+        self.chain.insert_block(block)?;
+        Ok(())
+    }
+
     pub fn add_tx(&self, tx: TxVariant) -> Result<(), String> {
         // TODO: verify not a duplicate tx
         let guard = self.txs.lock();

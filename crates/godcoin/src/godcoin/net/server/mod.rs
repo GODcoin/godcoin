@@ -102,8 +102,16 @@ fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Pro
             if let Some(msg) = rpc.msg {
                 match msg {
                     RpcMsg::Event(evt) => {
-                        // TODO
-                        unimplemented!();
+                        if let Some(producer) = &*producer {
+                            match evt {
+                                RpcEvent::Block(block) => {
+                                    let _ = producer.add_block(block);
+                                },
+                                RpcEvent::Tx(tx) => {
+                                    let _ = producer.add_tx(tx);
+                                }
+                            }
+                        }
                     },
                     RpcMsg::Broadcast(tx) => {
                         if let Some(producer) = &*producer {
