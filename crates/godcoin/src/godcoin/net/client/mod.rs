@@ -14,7 +14,7 @@ use fut_util::*;
 mod state;
 
 pub mod event;
-use self::event::*;
+pub use self::event::*;
 
 ///
 /// Connects to the `SocketAddr` with the specified `PeerType`.
