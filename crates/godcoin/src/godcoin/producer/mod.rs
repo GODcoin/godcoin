@@ -78,12 +78,21 @@ impl Producer {
     }
 
     pub fn add_block(&self, block: SignedBlock) -> Result<(), String> {
+        // TODO check if the block is produced too quickly
+        // TODO clear the tx pool for dupe transactions
+        // TODO broadcast to peers
         self.chain.insert_block(block)?;
+        {
+            let guard = self.txs.lock();
+            let mut txs = guard.borrow_mut();
+            txs.clear();
+        }
         Ok(())
     }
 
     pub fn add_tx(&self, tx: TxVariant) -> Result<(), String> {
         // TODO: verify not a duplicate tx
+        // TODO: broadcast to peers
         let guard = self.txs.lock();
         let mut txs = guard.borrow_mut();
         match &tx {
