@@ -1,5 +1,6 @@
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::io::{Error, ErrorKind};
+use futures::sync::oneshot;
 use tokio::net::TcpStream;
 use std::net::SocketAddr;
 use tokio_codec::Framed;
@@ -57,11 +58,10 @@ pub fn connect(addr: SocketAddr, peer_type: PeerType) -> impl Future<Item = Peer
 ///
 pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, ClientReceiver) {
     let (out_tx, out_rx) = channel::unbounded();
-    let (in_tx, in_rx) = channel::unbounded();
     let state = state::ConnectState::new(addr, peer_type);
     start_connect_loop(state.clone(), out_tx, 0);
 
-    ::tokio::spawn(in_rx.for_each({
+    let tracker = channel::tracked::<ClientEvent, Option<oneshot::Receiver<RpcPayload>>, _>({
         let stay_connected = Arc::clone(&state.stay_connected);
         let inner = Arc::clone(&state.inner);
         move |msg| {
@@ -70,7 +70,7 @@ pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, Cli
                     let guard = inner.lock();
                     let inner = guard.borrow();
                     let inner = inner.as_ref().expect("must be connected to send msg");
-                    inner.sender.send(msg);
+                    return Some(inner.sender.send(msg));
                 },
                 ClientEvent::Connect => panic!("cannot connect from event channel"),
                 ClientEvent::Disconnect => {
@@ -81,14 +81,14 @@ pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, Cli
                     inner.notifier.send(());
                 }
             }
-            Ok(())
+            None
         }
-    }));
+    });
 
-    (in_tx, out_rx)
+    (tracker, out_rx)
 }
 
-fn start_connect_loop(state: state::ConnectState, out_tx: ClientSender, mut tries: u8) {
+fn start_connect_loop(state: state::ConnectState, out_tx: ChannelSender<ClientEvent>, mut tries: u8) {
     if !state.stay_connected.load(Ordering::Acquire) { return }
     let c = connect(state.addr, state.peer_type);
     ::tokio::spawn(c.and_then({
@@ -167,7 +167,7 @@ fn start_connect_loop(state: state::ConnectState, out_tx: ClientSender, mut trie
     }));
 }
 
-fn try_connect(state: state::ConnectState, out_tx: ClientSender, tries: u8) {
+fn try_connect(state: state::ConnectState, out_tx: ChannelSender<ClientEvent>, tries: u8) {
     use ::std::time::{Duration, Instant};
 
     let ms = backoff(tries);

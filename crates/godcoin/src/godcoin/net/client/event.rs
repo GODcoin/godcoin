@@ -1,7 +1,8 @@
+use futures::sync::oneshot::Receiver;
 use net::rpc::RpcPayload;
 use fut_util::channel::*;
 
-pub type ClientSender = ChannelSender<ClientEvent>;
+pub type ClientSender = ChannelTracker<ClientEvent, Option<Receiver<RpcPayload>>>;
 pub type ClientReceiver = ChannelStream<ClientEvent>;
 
 #[derive(Debug)]
