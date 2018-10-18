@@ -48,7 +48,7 @@ pub fn start(addr: SocketAddr, blockchain: Arc<Blockchain>, producer: Arc<Option
         let client = hs.and_then(move |(peer_type, frame)| {
             let peer = Peer::new(peer_type, addr, frame);
             debug!("Handshake from client completed: {:?}", peer);
-            peer.get_sender().send(RpcPayload {
+            peer.get_sender().send_untracked(RpcPayload {
                 id: 0,
                 msg: None
             });
@@ -69,10 +69,10 @@ pub fn start(addr: SocketAddr, blockchain: Arc<Blockchain>, producer: Arc<Option
 fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Producer>>) {
     macro_rules! quick_send {
         ($sender:expr, $rpc:expr, $msg:expr) => {
-            $sender.send(RpcPayload { id: $rpc.id, msg: Some($msg) });
+            $sender.send_untracked(RpcPayload { id: $rpc.id, msg: Some($msg) });
         };
         ($sender:expr, $rpc:expr) => {
-            $sender.send(RpcPayload { id: $rpc.id, msg: None });
+            $sender.send_untracked(RpcPayload { id: $rpc.id, msg: None });
         };
     }
 

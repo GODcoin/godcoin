@@ -1,14 +1,30 @@
-use futures::{task, Sink, Poll, Async, AsyncSink, sync::mpsc, stream::Stream};
+use std::{
+    fmt,
+    io,
+    collections::HashMap,
+    cell::RefCell,
+    net::SocketAddr,
+    sync::Arc
+};
+use futures::{
+    task,
+    Sink,
+    Poll,
+    Async,
+    AsyncSink,
+    sync::{mpsc, oneshot},
+    stream::Stream
+};
 use tokio::net::TcpStream;
-use std::net::SocketAddr;
 use tokio_codec::Framed;
-use std::{fmt, io};
+use parking_lot::Mutex;
 
 use super::rpc::*;
 
 type Tx = mpsc::UnboundedSender<RpcPayload>;
 type Rx = mpsc::UnboundedReceiver<RpcPayload>;
 type RpcFrame = Framed<TcpStream, codec::RpcCodec>;
+type ReqMap = HashMap<u32, oneshot::Sender<RpcPayload>>;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug)]
@@ -18,11 +34,25 @@ pub enum PeerType {
 }
 
 #[derive(Clone)]
-pub struct Sender(Tx);
+pub struct Sender(Tx, Arc<Mutex<RefCell<ReqMap>>>);
 
 impl Sender {
     #[inline]
-    pub fn send(&self, payload: RpcPayload) {
+    pub fn send(&self, payload: RpcPayload) -> oneshot::Receiver<RpcPayload> {
+        let id = payload.id;
+        self.0.unbounded_send(payload).unwrap();
+
+        let (tx, rx) = oneshot::channel();
+        unsafe {
+            let guard = self.1.lock();
+            (&mut *guard.as_ptr()).insert(id, tx);
+        }
+
+        rx
+    }
+
+    #[inline]
+    pub fn send_untracked(&self, payload: RpcPayload) {
         self.0.unbounded_send(payload).unwrap();
     }
 }
@@ -30,6 +60,7 @@ impl Sender {
 pub struct Peer {
     pub peer_type: PeerType,
     pub addr: SocketAddr,
+    reqs: Arc<Mutex<RefCell<ReqMap>>>,
     tx: Tx,
     rx: Rx,
     frame: RpcFrame
@@ -42,15 +73,16 @@ impl Peer {
         let (tx, rx) = mpsc::unbounded();
         Peer {
             peer_type,
-            frame,
             addr,
+            reqs: Arc::new(Mutex::new(RefCell::new(HashMap::with_capacity(32)))),
+            frame,
             tx,
             rx
         }
     }
 
     pub fn get_sender(&self) -> Sender {
-        Sender(self.tx.clone())
+        Sender(self.tx.clone(), Arc::clone(&self.reqs))
     }
 }
 
@@ -68,6 +100,15 @@ impl Stream for Peer {
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         if let Async::Ready(msg) = self.frame.poll()? {
+            if let Some(payload) = &msg {
+                let tx = unsafe {
+                    let guard = self.reqs.lock();
+                    (&mut *guard.as_ptr()).remove(&payload.id)
+                };
+                if let Some(tx) = tx {
+                    tx.send(payload.clone()).unwrap();
+                }
+            }
             return Ok(Async::Ready(msg))
         }
 
