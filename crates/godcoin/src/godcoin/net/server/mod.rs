@@ -120,57 +120,37 @@ fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Pro
                         }
                     },
                     RpcMsg::Properties(var) => {
-                        match var.request() {
-                            Some(_) => {
-                                let props = blockchain.get_properties();
-                                quick_send!(sender, rpc, RpcMsg::Properties(RpcVariant::Res(props)));
-                            },
-                            None => {
-                                warn!("[{}] Property responses not supported", addr);
-                            }
+                        if let Some(_) = var.request() {
+                            let props = blockchain.get_properties();
+                            quick_send!(sender, rpc, RpcMsg::Properties(RpcVariant::Res(props)));
                         }
                     },
                     RpcMsg::Block(var) => {
-                        match var.request() {
-                            Some(height) => {
-                                let block = match blockchain.get_block(*height) {
-                                    Some(block) => Some((&*block).clone()),
-                                    None => None
-                                };
-                                quick_send!(sender, rpc, RpcMsg::Block(RpcVariant::Res(block)));
-                            },
-                            None => {
-                                warn!("[{}] Block responses not supported", addr);
-                            }
+                        if let Some(height) = var.request() {
+                            let block = match blockchain.get_block(*height) {
+                                Some(block) => Some((&*block).clone()),
+                                None => None
+                            };
+                            quick_send!(sender, rpc, RpcMsg::Block(RpcVariant::Res(block)));
                         }
                     },
                     RpcMsg::Balance(var) => {
-                        match var.request() {
-                            Some(addr) => {
-                                let bal = blockchain.get_balance(addr);
-                                quick_send!(sender, rpc, RpcMsg::Balance(RpcVariant::Res(bal)));
-                            },
-                            None => {
-                                warn!("[{}] Balance responses not supported", addr);
-                            }
+                        if let Some(addr) = var.request() {
+                            let bal = blockchain.get_balance(addr);
+                            quick_send!(sender, rpc, RpcMsg::Balance(RpcVariant::Res(bal)));
                         }
                     },
                     RpcMsg::TotalFee(var) => {
-                        match var.request() {
-                            Some(addr) => {
-                                let fee = blockchain.get_total_fee(addr);
-                                match fee {
-                                    Some(fee) => {
-                                        quick_send!(sender, rpc, RpcMsg::TotalFee(RpcVariant::Res(fee)));
-                                    },
-                                    None => {
-                                        let err = "failed to retrieve total fee".to_string();
-                                        quick_send!(sender, rpc, RpcMsg::Error(err));
-                                    }
+                        if let Some(addr) = var.request() {
+                            let fee = blockchain.get_total_fee(addr);
+                            match fee {
+                                Some(fee) => {
+                                    quick_send!(sender, rpc, RpcMsg::TotalFee(RpcVariant::Res(fee)));
+                                },
+                                None => {
+                                    let err = "failed to retrieve total fee".to_string();
+                                    quick_send!(sender, rpc, RpcMsg::Error(err));
                                 }
-                            },
-                            None => {
-                                warn!("[{}] Total fee responses not supported", addr);
                             }
                         }
                     },
