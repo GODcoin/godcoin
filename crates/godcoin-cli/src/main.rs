@@ -64,13 +64,12 @@ fn start_node(node_opts: &StartNode) {
     info!("Using height in block log at {}", blockchain.get_chain_height());
 
     let blockchain = Arc::new(blockchain);
-    let producer = match node_opts.minter_key {
-        Some(ref key) => {
+    let producer = match &node_opts.minter_key {
+        Some(key) => {
             let bond = blockchain.get_bond(&key.0).expect("No bond found for minter key");
             let minter = key.clone();
             let staker = bond.staker;
             let producer = Producer::new(Arc::clone(&blockchain), minter, staker);
-            producer.clone().start_timer();
             Arc::new(Some(producer))
         },
         None => Arc::new(None)
@@ -80,8 +79,11 @@ fn start_node(node_opts: &StartNode) {
         let mut pool = PeerPool::new(peers);
         pool.start(Arc::clone(&blockchain), Arc::clone(&producer));
 
-        // TODO connect to peers
         // TODO synchronize blocks with peers
+    }
+
+    if let Some(producer) = producer.as_ref() {
+        producer.clone().start_timer();
     }
 
     if let Some(bind) = node_opts.bind_address {
