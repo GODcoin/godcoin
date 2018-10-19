@@ -109,7 +109,7 @@ fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Pro
             RpcMsg::Error(_) => {},
             RpcMsg::Event(evt) => {
                 if let Some(producer) = &*producer {
-                    match evt {
+                    match *evt {
                         RpcEvent::Block(block) => {
                             let _ = producer.add_block(block);
                         },
@@ -132,7 +132,7 @@ fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Pro
                 }
             },
             RpcMsg::Properties(var) => {
-                if let Some(_) = var.request() {
+                if var.request().is_some() {
                     let props = blockchain.get_properties();
                     quick_send!(sender, rpc, RpcMsg::Properties(RpcVariant::Res(props)));
                 }
@@ -143,7 +143,7 @@ fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Pro
                         Some(block) => Some((&*block).clone()),
                         None => None
                     };
-                    quick_send!(sender, rpc, RpcMsg::Block(RpcVariant::Res(block)));
+                    quick_send!(sender, rpc, RpcMsg::Block(Box::new(RpcVariant::Res(block))));
                 }
             },
             RpcMsg::Balance(var) => {

@@ -30,7 +30,7 @@ impl PeerPool {
         }
     }
 
-    pub fn start(&self, blockchain: Arc<Blockchain>, producer: Arc<Option<Producer>>) {
+    pub fn start(&self, blockchain: &Arc<Blockchain>, producer: &Arc<Option<Producer>>) {
         assert!(self.peers.lock().is_empty(), "peer pool already started");
         for addr in self.peer_addresses.clone() {
             let (tx, rx) = connect_loop(addr, PeerType::NODE);
@@ -39,8 +39,8 @@ impl PeerPool {
                 rx,
                 connected: Arc::new(AtomicBool::new(false))
             };
-            let blockchain = Arc::clone(&blockchain);
-            let producer = Arc::clone(&producer);
+            let blockchain = Arc::clone(blockchain);
+            let producer = Arc::clone(producer);
             self.handle_client_peer(addr, blockchain, producer, state);
         }
     }
@@ -51,17 +51,17 @@ impl PeerPool {
                             producer: Arc<Option<Producer>>,
                             state: PeerState) {
         macro_rules! quick_send {
-            ($state:expr, $rpc:expr, $msg:expr) => {
-                $state.tx.send(ClientEvent::Message(RpcPayload {
-                    id: $rpc.id,
+            ($state:expr, $id:expr, $msg:expr) => {
+                $state.tx.send(ClientEvent::Message(Box::new(RpcPayload {
+                    id: $id,
                     msg: Some($msg)
-                }))
+                })))
             };
-            ($state:expr, $rpc:expr) => {
-                $state.tx.send(ClientEvent::Message(RpcPayload {
-                    id: $rpc.id,
+            ($state:expr, $id:expr) => {
+                $state.tx.send(ClientEvent::Message(Box::new(RpcPayload {
+                    id: $id,
                     msg: None
-                }))
+                })))
             };
         }
 
@@ -75,6 +75,7 @@ impl PeerPool {
                     state.connected.store(false, Ordering::Release);
                 },
                 ClientEvent::Message(rpc) => {
+                    let id = rpc.id;
                     let msg = match rpc.msg {
                         Some(msg) => msg,
                         None => return Ok(())
@@ -86,7 +87,7 @@ impl PeerPool {
                         RpcMsg::Error(_) => {},
                         RpcMsg::Event(evt) => {
                             if let Some(producer) = &*producer {
-                                match evt {
+                                match *evt {
                                     RpcEvent::Block(block) => {
                                         let _ = producer.add_block(block);
                                     },
@@ -100,18 +101,19 @@ impl PeerPool {
                             if let Some(producer) = &*producer {
                                 match producer.add_tx(tx) {
                                     Ok(_) => {
-                                        quick_send!(state, rpc).wait().unwrap();
+                                        quick_send!(state, id).wait().unwrap();
                                     },
                                     Err(s) => {
-                                        quick_send!(state, rpc, RpcMsg::Error(s)).wait().unwrap();
+                                        quick_send!(state, id, RpcMsg::Error(s)).wait().unwrap();
                                     }
                                 }
                             }
                         },
                         RpcMsg::Properties(var) => {
-                            if let Some(_) = var.request() {
+                            if var.request().is_some() {
                                 let props = blockchain.get_properties();
-                                quick_send!(state, rpc, RpcMsg::Properties(RpcVariant::Res(props))).wait().unwrap();
+                                let var = RpcVariant::Res(props);
+                                quick_send!(state, id, RpcMsg::Properties(var)).wait().unwrap();
                             }
                         },
                         RpcMsg::Block(var) => {
@@ -120,13 +122,15 @@ impl PeerPool {
                                     Some(block) => Some((&*block).clone()),
                                     None => None
                                 };
-                                quick_send!(state, rpc, RpcMsg::Block(RpcVariant::Res(block))).wait().unwrap();
+                                let var = Box::new(RpcVariant::Res(block));
+                                quick_send!(state, id, RpcMsg::Block(var)).wait().unwrap();
                             }
                         },
                         RpcMsg::Balance(var) => {
                             if let Some(addr) = var.request() {
                                 let bal = blockchain.get_balance(addr);
-                                quick_send!(state, rpc, RpcMsg::Balance(RpcVariant::Res(bal))).wait().unwrap();
+                                let var = RpcVariant::Res(bal);
+                                quick_send!(state, id, RpcMsg::Balance(var)).wait().unwrap();
                             }
                         },
                         RpcMsg::TotalFee(var) => {
@@ -134,11 +138,12 @@ impl PeerPool {
                                 let fee = blockchain.get_total_fee(addr);
                                 match fee {
                                     Some(fee) => {
-                                        quick_send!(state, rpc, RpcMsg::TotalFee(RpcVariant::Res(fee))).wait().unwrap();
+                                        let var = RpcVariant::Res(fee);
+                                        quick_send!(state, id, RpcMsg::TotalFee(var)).wait().unwrap();
                                     },
                                     None => {
                                         let err = "failed to retrieve total fee".to_string();
-                                        quick_send!(state, rpc, RpcMsg::Error(err)).wait().unwrap();
+                                        quick_send!(state, id, RpcMsg::Error(err)).wait().unwrap();
                                     }
                                 }
                             }

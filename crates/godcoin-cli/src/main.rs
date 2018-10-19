@@ -76,8 +76,8 @@ fn start_node(node_opts: &StartNode) {
     };
 
     if let Some(peers) = &node_opts.peers {
-        let mut pool = PeerPool::new(peers);
-        pool.start(Arc::clone(&blockchain), Arc::clone(&producer));
+        let pool = PeerPool::new(peers);
+        pool.start(&blockchain, &producer);
 
         // TODO synchronize blocks with peers
     }

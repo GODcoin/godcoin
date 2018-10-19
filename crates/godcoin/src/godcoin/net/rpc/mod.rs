@@ -22,11 +22,11 @@ pub enum RpcMsgType {
 #[derive(Clone, Debug)]
 pub enum RpcMsg {
     Error(String),
-    Event(RpcEvent),
+    Event(Box<RpcEvent>),
     Handshake(PeerType),
     Broadcast(TxVariant),
     Properties(RpcVariant<(), Properties>),
-    Block(RpcVariant<u64, Option<SignedBlock>>),
+    Block(Box<RpcVariant<u64, Option<SignedBlock>>>),
     Balance(RpcVariant<PublicKey, Balance>),
     TotalFee(RpcVariant<PublicKey, Balance>)
 }

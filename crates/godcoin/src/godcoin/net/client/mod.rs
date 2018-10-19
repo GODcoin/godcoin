@@ -74,10 +74,10 @@ pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, Cli
                             match msg {
                                 RpcMsg::Properties(var) => {
                                     var.request().is_some()
-                                }
+                                },
                                 RpcMsg::Block(var) => {
                                     var.request().is_some()
-                                }
+                                },
                                 RpcMsg::Balance(var) => {
                                     var.request().is_some()
                                 },
@@ -91,9 +91,9 @@ pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, Cli
                         }
                     };
                     if send_tracked {
-                        return Some(inner.sender.send(payload))
+                        return Some(inner.sender.send(*payload))
                     } else {
-                        inner.sender.send_untracked(payload);
+                        inner.sender.send_untracked(*payload);
                     }
                 },
                 ClientEvent::Connect => panic!("cannot connect from event channel"),
@@ -149,7 +149,7 @@ fn start_connect_loop(state: state::ConnectState, out_tx: ChannelSender<ClientEv
                 let out_tx = out_tx.clone();
                 move |(rpc, _)| {
                     if let Some(rpc) = rpc {
-                        out_tx.send(ClientEvent::Message(rpc));
+                        out_tx.send(ClientEvent::Message(Box::new(rpc)));
                     }
                     Ok(())
                 }

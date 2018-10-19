@@ -7,7 +7,7 @@ pub type ClientReceiver = ChannelStream<ClientEvent>;
 
 #[derive(Debug)]
 pub enum ClientEvent {
-    Message(RpcPayload),
+    Message(Box<RpcPayload>),
     Connect,
     Disconnect
 }

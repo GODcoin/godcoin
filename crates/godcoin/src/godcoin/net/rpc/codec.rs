@@ -36,7 +36,7 @@ impl Encoder for RpcCodec {
                 },
                 RpcMsg::Event(evt) => {
                     payload.push(RpcMsgType::Event as u8);
-                    match evt {
+                    match *evt {
                         RpcEvent::Tx(tx) => {
                             payload.push(RpcEventType::TX as u8);
                             tx.encode_with_sigs(&mut payload);
@@ -68,7 +68,7 @@ impl Encoder for RpcCodec {
                 },
                 RpcMsg::Block(rpc) => {
                     payload.push(RpcMsgType::Block as u8);
-                    match rpc {
+                    match *rpc {
                         RpcVariant::Req(height) => {
                             payload.push(RpcVariantType::Req as u8);
                             payload.push_u64(height);
@@ -163,13 +163,13 @@ impl Decoder for RpcCodec {
                             let tx = TxVariant::decode_with_sigs(&mut cur).ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode tx")
                             })?;
-                            RpcMsg::Event(RpcEvent::Tx(tx))
+                            RpcMsg::Event(Box::new(RpcEvent::Tx(tx)))
                         },
                         t if t == RpcEventType::BLOCK as u8 => {
                             let block = SignedBlock::decode_with_tx(&mut cur).ok_or_else(|| {
                                 Error::new(ErrorKind::Other, "failed to decode signed block")
                             })?;
-                            RpcMsg::Event(RpcEvent::Block(block))
+                            RpcMsg::Event(Box::new(RpcEvent::Block(block)))
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid event type"))
                     }
@@ -211,16 +211,16 @@ impl Decoder for RpcCodec {
                     match rpc {
                         t if t == RpcVariantType::Req as u8 => {
                             let height = cur.take_u64()?;
-                            RpcMsg::Block(RpcVariant::Req(height))
+                            RpcMsg::Block(Box::new(RpcVariant::Req(height)))
                         },
                         t if t == RpcVariantType::Res as u8 => {
                             if u64::from(msg_len).saturating_sub(cur.position()) > 0 {
                                 let block = SignedBlock::decode_with_tx(&mut cur).ok_or_else(|| {
                                     Error::new(ErrorKind::Other, "failed to decode block")
                                 })?;
-                                RpcMsg::Block(RpcVariant::Res(Some(block)))
+                                RpcMsg::Block(Box::new(RpcVariant::Res(Some(block))))
                             } else {
-                                RpcMsg::Block(RpcVariant::Res(None))
+                                RpcMsg::Block(Box::new(RpcVariant::Res(None)))
                             }
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid rpc type"))
