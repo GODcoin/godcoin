@@ -127,8 +127,8 @@ impl Blockchain {
         if tx_count > u64::from(u16::max_value()) { return None }
 
         let prec = asset::MAX_PRECISION;
-        let gold = GOLD_FEE_MIN.mul(&GOLD_FEE_MULT.pow(tx_count as u16, prec)?, prec)?;
-        let silver = SILVER_FEE_MIN.mul(&SILVER_FEE_MULT.pow(tx_count as u16, prec)?, prec)?;
+        let gold = GOLD_FEE_MIN.mul(&GOLD_FEE_NET_MULT.pow(tx_count as u16, prec)?, prec)?;
+        let silver = SILVER_FEE_MIN.mul(&SILVER_FEE_NET_MULT.pow(tx_count as u16, prec)?, prec)?;
 
         Some(Balance { gold, silver })
     }
