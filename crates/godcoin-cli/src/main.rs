@@ -51,16 +51,7 @@ fn start_node(node_opts: &StartNode) {
         home
     };
 
-    let mut blockchain = Blockchain::new(&home);
-    {
-        let create_genesis = blockchain.get_block(0).is_none();
-        if create_genesis && node_opts.minter_key.is_some() {
-            if let Some(ref key) = node_opts.minter_key {
-                blockchain.create_genesis_block(key);
-            }
-        }
-    }
-
+    let blockchain = Blockchain::new(&home);
     info!("Using height in block log at {}", blockchain.get_chain_height());
 
     let blockchain = Arc::new(blockchain);
@@ -80,6 +71,15 @@ fn start_node(node_opts: &StartNode) {
         pool.start(&blockchain, &producer);
 
         // TODO synchronize blocks with peers
+    }
+
+    {
+        let create_genesis = blockchain.get_block(0).is_none();
+        if create_genesis && node_opts.minter_key.is_some() {
+            if let Some(ref key) = node_opts.minter_key {
+                blockchain.create_genesis_block(key);
+            }
+        }
     }
 
     if let Some(producer) = producer.as_ref() {

@@ -316,7 +316,7 @@ impl Blockchain {
     /// `minter_key` will be the genesis minter and will stake with a small
     /// amount of GOLD tokens.
     ///
-    pub fn create_genesis_block(&mut self, minter_key: &KeyPair) {
+    pub fn create_genesis_block(&self, minter_key: &KeyPair) {
         use sodiumoxide::crypto::hash::sha256::Digest;
 
         info!("=> Generating new block chain");
