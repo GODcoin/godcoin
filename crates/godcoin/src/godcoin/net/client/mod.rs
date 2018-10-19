@@ -66,10 +66,35 @@ pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, Cli
         let inner = Arc::clone(&state.inner);
         move |msg| {
             match msg {
-                ClientEvent::Message(msg) => {
+                ClientEvent::Message(payload) => {
                     let inner = inner.lock();
-                    let inner = inner.as_ref().expect("must be connected to send msg");
-                    return Some(inner.sender.send(msg));
+                    let inner = inner.as_ref().expect("must be connected to send payload");
+                    let send_tracked = {
+                        if let Some(msg) = &payload.msg {
+                            match msg {
+                                RpcMsg::Properties(var) => {
+                                    var.request().is_some()
+                                }
+                                RpcMsg::Block(var) => {
+                                    var.request().is_some()
+                                }
+                                RpcMsg::Balance(var) => {
+                                    var.request().is_some()
+                                },
+                                RpcMsg::TotalFee(var) => {
+                                    var.request().is_some()
+                                },
+                                _ => false
+                            }
+                        } else {
+                            false
+                        }
+                    };
+                    if send_tracked {
+                        return Some(inner.sender.send(payload))
+                    } else {
+                        inner.sender.send_untracked(payload);
+                    }
                 },
                 ClientEvent::Connect => panic!("cannot connect from event channel"),
                 ClientEvent::Disconnect => {

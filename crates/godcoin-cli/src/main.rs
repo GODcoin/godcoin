@@ -8,8 +8,8 @@ extern crate clap;
 #[macro_use]
 extern crate log;
 
+use godcoin::{*, net::PeerPool, producer::Producer};
 use clap::{Arg, App, AppSettings, SubCommand};
-use godcoin::{*, producer::Producer};
 use std::sync::{Arc, mpsc};
 use tokio::prelude::*;
 
@@ -71,19 +71,23 @@ fn start_node(node_opts: &StartNode) {
             let staker = bond.staker;
             let producer = Producer::new(Arc::clone(&blockchain), minter, staker);
             producer.clone().start_timer();
-            Some(producer)
+            Arc::new(Some(producer))
         },
-        None => None
+        None => Arc::new(None)
     };
+
+    if let Some(peers) = &node_opts.peers {
+        let mut pool = PeerPool::new(peers);
+        pool.start(Arc::clone(&blockchain), Arc::clone(&producer));
+
+        // TODO connect to peers
+        // TODO synchronize blocks with peers
+    }
 
     if let Some(bind) = node_opts.bind_address {
         let addr = bind.parse()
                         .unwrap_or_else(|_| panic!("Failed to parse address: {:?}", bind));
-        net::server::start(addr, blockchain, Arc::new(producer));
-    }
-
-    if let Some(_) = &node_opts.peers {
-        // TODO
+        net::server::start(addr, blockchain, producer);
     }
 }
 

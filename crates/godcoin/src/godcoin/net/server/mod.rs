@@ -92,76 +92,82 @@ fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Pro
             Ok(!force_close.load(Ordering::Acquire))
         }
     }).for_each(move |(rpc, _)| {
-        if let Some(rpc) = rpc {
-            if let Some(msg) = rpc.msg {
-                match msg {
-                    RpcMsg::Event(evt) => {
-                        if let Some(producer) = &*producer {
-                            match evt {
-                                RpcEvent::Block(block) => {
-                                    let _ = producer.add_block(block);
-                                },
-                                RpcEvent::Tx(tx) => {
-                                    let _ = producer.add_tx(tx);
-                                }
-                            }
+        let rpc = match rpc {
+            Some(rpc) => rpc,
+            None => return Ok(())
+        };
+        let msg = match rpc.msg {
+            Some(msg) => msg,
+            None => return Ok(())
+        };
+        match msg {
+            RpcMsg::Handshake(_) => {
+                warn!("[{}] Invalid handshake message sent from peer", addr);
+                force_close.store(true, Ordering::Release);
+                tx.send(())
+            }
+            RpcMsg::Error(_) => {},
+            RpcMsg::Event(evt) => {
+                if let Some(producer) = &*producer {
+                    match evt {
+                        RpcEvent::Block(block) => {
+                            let _ = producer.add_block(block);
+                        },
+                        RpcEvent::Tx(tx) => {
+                            let _ = producer.add_tx(tx);
                         }
-                    },
-                    RpcMsg::Broadcast(tx) => {
-                        if let Some(producer) = &*producer {
-                            match producer.add_tx(tx) {
-                                Ok(_) => {
-                                    quick_send!(sender, rpc);
-                                },
-                                Err(s) => {
-                                    quick_send!(sender, rpc, RpcMsg::Error(s));
-                                }
-                            }
+                    }
+                }
+            },
+            RpcMsg::Broadcast(tx) => {
+                if let Some(producer) = &*producer {
+                    match producer.add_tx(tx) {
+                        Ok(_) => {
+                            quick_send!(sender, rpc);
+                        },
+                        Err(s) => {
+                            quick_send!(sender, rpc, RpcMsg::Error(s));
                         }
-                    },
-                    RpcMsg::Properties(var) => {
-                        if let Some(_) = var.request() {
-                            let props = blockchain.get_properties();
-                            quick_send!(sender, rpc, RpcMsg::Properties(RpcVariant::Res(props)));
+                    }
+                }
+            },
+            RpcMsg::Properties(var) => {
+                if let Some(_) = var.request() {
+                    let props = blockchain.get_properties();
+                    quick_send!(sender, rpc, RpcMsg::Properties(RpcVariant::Res(props)));
+                }
+            },
+            RpcMsg::Block(var) => {
+                if let Some(height) = var.request() {
+                    let block = match blockchain.get_block(*height) {
+                        Some(block) => Some((&*block).clone()),
+                        None => None
+                    };
+                    quick_send!(sender, rpc, RpcMsg::Block(RpcVariant::Res(block)));
+                }
+            },
+            RpcMsg::Balance(var) => {
+                if let Some(addr) = var.request() {
+                    let bal = blockchain.get_balance(addr);
+                    quick_send!(sender, rpc, RpcMsg::Balance(RpcVariant::Res(bal)));
+                }
+            },
+            RpcMsg::TotalFee(var) => {
+                if let Some(addr) = var.request() {
+                    let fee = blockchain.get_total_fee(addr);
+                    match fee {
+                        Some(fee) => {
+                            quick_send!(sender, rpc, RpcMsg::TotalFee(RpcVariant::Res(fee)));
+                        },
+                        None => {
+                            let err = "failed to retrieve total fee".to_string();
+                            quick_send!(sender, rpc, RpcMsg::Error(err));
                         }
-                    },
-                    RpcMsg::Block(var) => {
-                        if let Some(height) = var.request() {
-                            let block = match blockchain.get_block(*height) {
-                                Some(block) => Some((&*block).clone()),
-                                None => None
-                            };
-                            quick_send!(sender, rpc, RpcMsg::Block(RpcVariant::Res(block)));
-                        }
-                    },
-                    RpcMsg::Balance(var) => {
-                        if let Some(addr) = var.request() {
-                            let bal = blockchain.get_balance(addr);
-                            quick_send!(sender, rpc, RpcMsg::Balance(RpcVariant::Res(bal)));
-                        }
-                    },
-                    RpcMsg::TotalFee(var) => {
-                        if let Some(addr) = var.request() {
-                            let fee = blockchain.get_total_fee(addr);
-                            match fee {
-                                Some(fee) => {
-                                    quick_send!(sender, rpc, RpcMsg::TotalFee(RpcVariant::Res(fee)));
-                                },
-                                None => {
-                                    let err = "failed to retrieve total fee".to_string();
-                                    quick_send!(sender, rpc, RpcMsg::Error(err));
-                                }
-                            }
-                        }
-                    },
-                    _ => {
-                        warn!("[{}] Invalid rpc message sent from peer", addr);
-                        force_close.store(true, Ordering::Release);
-                        tx.send(())
                     }
                 }
             }
         }
+
         Ok(())
     }).and_then(move |_| {
         warn!("[{}] Client disconnected", addr);
