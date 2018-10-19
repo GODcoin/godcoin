@@ -25,7 +25,8 @@ pub struct Blockchain {
 #[derive(Clone, Debug)]
 pub struct Properties {
     pub height: u64,
-    pub token_supply: Balance
+    pub token_supply: Balance,
+    pub network_fee: Balance
 }
 
 impl Blockchain {
@@ -46,7 +47,8 @@ impl Blockchain {
     pub fn get_properties(&self) -> Properties {
         Properties {
             height: self.get_chain_height(),
-            token_supply: self.indexer.get_token_supply()
+            token_supply: self.indexer.get_token_supply(),
+            network_fee: self.get_network_fee().expect("unexpected error retrieving network fee")
         }
     }
 

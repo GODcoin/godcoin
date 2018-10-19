@@ -60,8 +60,12 @@ impl Encoder for RpcCodec {
                     if let Some(props) = rpc.response() {
                         payload.push(RpcVariantType::Res as u8);
                         payload.push_u64(props.height);
+
                         payload.push_asset(&props.token_supply.gold);
                         payload.push_asset(&props.token_supply.silver);
+
+                        payload.push_asset(&props.network_fee.gold);
+                        payload.push_asset(&props.network_fee.silver);
                     } else {
                         payload.push(RpcVariantType::Req as u8);
                     }
@@ -196,11 +200,20 @@ impl Decoder for RpcCodec {
                         },
                         t if t == RpcVariantType::Res as u8 => {
                             let height = cur.take_u64()?;
-                            let gold = cur.take_asset()?;
-                            let silver = cur.take_asset()?;
+                            let token_supply = {
+                                let gold = cur.take_asset()?;
+                                let silver = cur.take_asset()?;
+                                Balance { gold, silver }
+                            };
+                            let network_fee = {
+                                let gold = cur.take_asset()?;
+                                let silver = cur.take_asset()?;
+                                Balance { gold, silver }
+                            };
                             RpcMsg::Properties(RpcVariant::Res(Properties {
                                 height,
-                                token_supply: Balance { gold, silver }
+                                token_supply,
+                                network_fee
                             }))
                         },
                         _ => return Err(Error::new(ErrorKind::Other, "invalid rpc type"))
