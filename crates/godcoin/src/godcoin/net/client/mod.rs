@@ -67,16 +67,14 @@ pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, Cli
         move |msg| {
             match msg {
                 ClientEvent::Message(msg) => {
-                    let guard = inner.lock();
-                    let inner = guard.borrow();
+                    let inner = inner.lock();
                     let inner = inner.as_ref().expect("must be connected to send msg");
                     return Some(inner.sender.send(msg));
                 },
                 ClientEvent::Connect => panic!("cannot connect from event channel"),
                 ClientEvent::Disconnect => {
                     stay_connected.store(false, Ordering::Release);
-                    let guard = inner.lock();
-                    let inner = guard.borrow();
+                    let inner = inner.lock();
                     let inner = inner.as_ref().expect("must be connected to disconnect");
                     inner.notifier.send(());
                 }
@@ -104,8 +102,8 @@ fn start_connect_loop(state: state::ConnectState, out_tx: ChannelSender<ClientEv
 
             let rx = {
                 let (tx, rx) = channel::unbounded();
-                let guard = state.inner.lock();
-                *guard.borrow_mut() = Some(state::InternalState {
+                let guard = &mut *state.inner.lock();
+                *guard = Some(state::InternalState {
                     sender: peer.get_sender(),
                     notifier: tx
                 });
@@ -147,8 +145,8 @@ fn start_connect_loop(state: state::ConnectState, out_tx: ChannelSender<ClientEv
                 move |_| {
                     out_tx.send(ClientEvent::Disconnect);
                     {
-                        let guard = state.inner.lock();
-                        *guard.borrow_mut() = None;
+                        let guard = &mut *state.inner.lock();
+                        *guard = None;
                     }
                     if stay_connected.load(Ordering::Acquire) {
                         try_connect(state, out_tx, tries.saturating_add(1));

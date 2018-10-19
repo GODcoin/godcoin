@@ -1,6 +1,5 @@
 use std::time::{SystemTime, UNIX_EPOCH, Duration, Instant};
 use tokio::timer::Interval;
-use std::cell::RefCell;
 use parking_lot::Mutex;
 use tokio::prelude::*;
 use std::str::FromStr;
@@ -17,7 +16,7 @@ pub struct Producer {
     chain: Arc<Blockchain>,
     minter: KeyPair,
     staker: PublicKey,
-    txs: Arc<Mutex<RefCell<Vec<TxVariant>>>>
+    txs: Arc<Mutex<Vec<TxVariant>>>
 }
 
 impl Producer {
@@ -29,7 +28,7 @@ impl Producer {
             chain,
             minter,
             staker,
-            txs: Arc::new(Mutex::new(RefCell::new(Vec::with_capacity(512))))
+            txs: Arc::new(Mutex::new(Vec::with_capacity(512)))
         }
     }
 
@@ -61,8 +60,7 @@ impl Producer {
                 ]
             })
         ];
-        let guard = self.txs.lock();
-        let mut txs = guard.borrow_mut();
+        let mut txs = self.txs.lock();
         transactions.extend_from_slice(&txs);
         txs.clear();
 
@@ -82,19 +80,14 @@ impl Producer {
         // TODO clear the tx pool for dupe transactions
         // TODO broadcast to peers
         self.chain.insert_block(block)?;
-        {
-            let guard = self.txs.lock();
-            let mut txs = guard.borrow_mut();
-            txs.clear();
-        }
+        self.txs.lock().clear();
         Ok(())
     }
 
     pub fn add_tx(&self, tx: TxVariant) -> Result<(), String> {
         // TODO: verify not a duplicate tx
         // TODO: broadcast to peers
-        let guard = self.txs.lock();
-        let mut txs = guard.borrow_mut();
+        let mut txs = self.txs.lock();
         match &tx {
             TxVariant::RewardTx(_) => {
                 return Err("reward transaction not allowed".to_owned())

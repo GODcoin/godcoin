@@ -1,6 +1,5 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 use parking_lot::Mutex;
-use std::cell::RefCell;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::path::*;
@@ -20,7 +19,7 @@ use tx::*;
 
 pub struct Blockchain {
     indexer: Arc<Indexer>,
-    store: Mutex<RefCell<BlockStore>>
+    store: Mutex<BlockStore>
 }
 
 #[derive(Clone, Debug)]
@@ -40,7 +39,7 @@ impl Blockchain {
         let store = BlockStore::new(&Path::join(path, "blklog"), Arc::clone(&indexer));
         Blockchain {
             indexer,
-            store: Mutex::new(RefCell::new(store))
+            store: Mutex::new(store)
         }
     }
 
@@ -62,15 +61,13 @@ impl Blockchain {
     }
 
     pub fn get_chain_head(&self) -> Arc<SignedBlock> {
-        let guard = self.store.lock();
-        let store = guard.borrow();
+        let store = self.store.lock();
         let height = store.get_chain_height();
         store.get(height).expect("Failed to get blockchain head")
     }
 
     pub fn get_block(&self, height: u64) -> Option<Arc<SignedBlock>> {
-        let guard = self.store.lock();
-        let store = guard.borrow();
+        let store = self.store.lock();
         store.get(height)
     }
 
@@ -173,10 +170,7 @@ impl Blockchain {
     pub fn insert_block(&self, block: SignedBlock) -> Result<(), String> {
         self.verify_block(&block, &self.get_chain_head())?;
         for tx in &block.transactions { self.index_tx(tx); }
-
-        let guard = self.store.lock();
-        let store = &mut guard.borrow_mut();
-        store.insert(block);
+        self.store.lock().insert(block);
 
         Ok(())
     }
@@ -367,9 +361,7 @@ impl Blockchain {
             transactions
         }).sign(&minter_key);
 
-        let guard = self.store.lock();
-        let store = &mut guard.borrow_mut();
-        store.insert_genesis(block);
+        self.store.lock().insert_genesis(block);
         self.indexer.set_bond(&bond_tx);
     }
 }

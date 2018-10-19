@@ -1,7 +1,6 @@
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 use std::collections::HashMap;
 use futures::sync::oneshot;
-use std::cell::RefCell;
 use parking_lot::Mutex;
 use tokio::prelude::*;
 
@@ -15,17 +14,14 @@ pub fn tracked<In, Out, F>(req_handler: F) -> ChannelTracker<In, Out>
     let tracker = ChannelTracker {
         id: Arc::new(AtomicUsize::new(0)),
         tx,
-        messages: Arc::new(Mutex::new(RefCell::new(HashMap::with_capacity(16))))
+        messages: Arc::new(Mutex::new(HashMap::with_capacity(16)))
     };
 
     ::tokio::spawn(rx.for_each({
         let msgs = Arc::clone(&tracker.messages);
         move |msg| {
             let res = req_handler(msg.msg);
-            let handler = unsafe {
-                let guard = msgs.lock();
-                (&mut *guard.as_ptr()).remove(&msg.id).unwrap()
-            };
+            let handler = msgs.lock().remove(&msg.id).unwrap();
             handler.send(res).map_err(|_| {
                 "failed to send msg to handler"
             }).unwrap();
@@ -39,7 +35,7 @@ pub fn tracked<In, Out, F>(req_handler: F) -> ChannelTracker<In, Out>
 pub struct ChannelTracker<In, Out> {
     id: Arc<AtomicUsize>,
     tx: unbounded::ChannelSender<ChannelMessage<In>>,
-    messages: Arc<Mutex<RefCell<HashMap<usize, oneshot::Sender<Out>>>>>
+    messages: Arc<Mutex<HashMap<usize, oneshot::Sender<Out>>>>
 }
 
 impl<In, Out> Clone for ChannelTracker<In, Out> {
@@ -56,10 +52,7 @@ impl<In, Out> ChannelTracker<In, Out> {
     pub fn send(&self, msg: In) -> oneshot::Receiver<Out> {
         let (tx, rx) = oneshot::channel::<Out>();
         let id = self.id.fetch_add(1, Ordering::AcqRel);
-        unsafe {
-            let guard = self.messages.lock();
-            (&mut *guard.as_ptr()).insert(id, tx);
-        }
+        self.messages.lock().insert(id, tx);
         self.tx.send(ChannelMessage {
             id,
             msg

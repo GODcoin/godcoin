@@ -2,7 +2,6 @@ use std::{
     fmt,
     io,
     collections::HashMap,
-    cell::RefCell,
     net::SocketAddr,
     sync::Arc
 };
@@ -34,7 +33,7 @@ pub enum PeerType {
 }
 
 #[derive(Clone)]
-pub struct Sender(Tx, Arc<Mutex<RefCell<ReqMap>>>);
+pub struct Sender(Tx, Arc<Mutex<ReqMap>>);
 
 impl Sender {
     #[inline]
@@ -43,10 +42,7 @@ impl Sender {
         self.0.unbounded_send(payload).unwrap();
 
         let (tx, rx) = oneshot::channel();
-        unsafe {
-            let guard = self.1.lock();
-            (&mut *guard.as_ptr()).insert(id, tx);
-        }
+        self.1.lock().insert(id, tx);
 
         rx
     }
@@ -60,7 +56,7 @@ impl Sender {
 pub struct Peer {
     pub peer_type: PeerType,
     pub addr: SocketAddr,
-    reqs: Arc<Mutex<RefCell<ReqMap>>>,
+    reqs: Arc<Mutex<ReqMap>>,
     tx: Tx,
     rx: Rx,
     frame: RpcFrame
@@ -74,7 +70,7 @@ impl Peer {
         Peer {
             peer_type,
             addr,
-            reqs: Arc::new(Mutex::new(RefCell::new(HashMap::with_capacity(32)))),
+            reqs: Arc::new(Mutex::new(HashMap::with_capacity(32))),
             frame,
             tx,
             rx
@@ -101,10 +97,7 @@ impl Stream for Peer {
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         if let Async::Ready(msg) = self.frame.poll()? {
             if let Some(payload) = &msg {
-                let tx = unsafe {
-                    let guard = self.reqs.lock();
-                    (&mut *guard.as_ptr()).remove(&payload.id)
-                };
+                let tx = self.reqs.lock().remove(&payload.id);
                 if let Some(tx) = tx {
                     tx.send(payload.clone()).unwrap();
                 }
