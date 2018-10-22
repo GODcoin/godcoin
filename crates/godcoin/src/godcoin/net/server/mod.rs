@@ -9,12 +9,12 @@ use tokio_codec::Framed;
 use tokio::prelude::*;
 
 use blockchain::Blockchain;
-use producer::Producer;
+use producer::Minter;
 use net::peer::*;
 use net::rpc::*;
 use fut_util::*;
 
-pub fn start(addr: SocketAddr, blockchain: Arc<Blockchain>, producer: Arc<Option<Producer>>) {
+pub fn start(addr: SocketAddr, blockchain: Arc<Blockchain>, minter: Arc<Option<Minter>>) {
     let listener = TcpListener::bind(&addr).unwrap();
     info!("Server binded to {:?}", &addr);
     let server = listener.incoming().for_each(move |socket| {
@@ -44,7 +44,7 @@ pub fn start(addr: SocketAddr, blockchain: Arc<Blockchain>, producer: Arc<Option
         });
 
         let blockchain = Arc::clone(&blockchain);
-        let producer = Arc::clone(&producer);
+        let minter = Arc::clone(&minter);
         let client = hs.and_then(move |(peer_type, frame)| {
             let peer = Peer::new(peer_type, addr, frame);
             debug!("Handshake from client completed: {:?}", peer);
@@ -52,7 +52,7 @@ pub fn start(addr: SocketAddr, blockchain: Arc<Blockchain>, producer: Arc<Option
                 id: 0,
                 msg: None
             });
-            handle_peer(peer, blockchain, producer);
+            handle_peer(peer, blockchain, minter);
             Ok(())
         });
 
@@ -66,7 +66,7 @@ pub fn start(addr: SocketAddr, blockchain: Arc<Blockchain>, producer: Arc<Option
     ::tokio::spawn(server);
 }
 
-fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Producer>>) {
+fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, minter: Arc<Option<Minter>>) {
     macro_rules! quick_send {
         ($sender:expr, $rpc:expr, $msg:expr) => {
             $sender.send_untracked(RpcPayload { id: $rpc.id, msg: Some($msg) });
@@ -108,20 +108,20 @@ fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, producer: Arc<Option<Pro
             }
             RpcMsg::Error(_) => {},
             RpcMsg::Event(evt) => {
-                if let Some(producer) = &*producer {
+                if let Some(minter) = &*minter {
                     match *evt {
                         RpcEvent::Block(block) => {
-                            let _ = producer.add_block(block);
+                            let _ = minter.add_block(block);
                         },
                         RpcEvent::Tx(tx) => {
-                            let _ = producer.add_tx(tx);
+                            let _ = minter.add_tx(tx);
                         }
                     }
                 }
             },
             RpcMsg::Broadcast(tx) => {
-                if let Some(producer) = &*producer {
-                    match producer.add_tx(tx) {
+                if let Some(minter) = &*minter {
+                    match minter.add_tx(tx) {
                         Ok(_) => {
                             quick_send!(sender, rpc);
                         },

@@ -8,7 +8,7 @@ extern crate clap;
 #[macro_use]
 extern crate log;
 
-use godcoin::{*, net::PeerPool, producer::Producer};
+use godcoin::{*, net::PeerPool, producer::Minter};
 use clap::{Arg, App, AppSettings, SubCommand};
 use std::sync::{Arc, mpsc};
 use tokio::prelude::*;
@@ -56,13 +56,13 @@ fn start_node(node_opts: &StartNode) {
     info!("Using height in block log at {}", blockchain.get_chain_height());
 
     let blockchain = Arc::new(blockchain);
-    let producer = match &node_opts.minter_key {
+    let minter = match &node_opts.minter_key {
         Some(key) => {
             let bond = blockchain.get_bond(&key.0).expect("No bond found for minter key");
             let minter = key.clone();
             let staker = bond.staker;
-            let producer = Producer::new(Arc::clone(&blockchain), minter, staker);
-            Arc::new(Some(producer))
+            let minter = Minter::new(Arc::clone(&blockchain), minter, staker);
+            Arc::new(Some(minter))
         },
         None => Arc::new(None)
     };
@@ -74,7 +74,7 @@ fn start_node(node_opts: &StartNode) {
             Cow::Owned(vec![])
         };
         let pool = PeerPool::new(&peers);
-        pool.start(&blockchain, &producer);
+        pool.start(&blockchain, &minter);
 
         // TODO synchronize blocks with peers
     }
@@ -88,14 +88,14 @@ fn start_node(node_opts: &StartNode) {
         }
     }
 
-    if let Some(producer) = producer.as_ref() {
-        producer.clone().start_timer();
+    if let Some(minter) = minter.as_ref() {
+        minter.clone().start_timer();
     }
 
     if let Some(bind) = node_opts.bind_address {
         let addr = bind.parse()
                         .unwrap_or_else(|_| panic!("Failed to parse address: {:?}", bind));
-        net::server::start(addr, blockchain, producer);
+        net::server::start(addr, blockchain, minter);
     }
 }
 

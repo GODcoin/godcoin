@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 use tokio::prelude::*;
 
 use blockchain::Blockchain;
-use producer::Producer;
+use producer::Minter;
 
 use super::peer::PeerType;
 use super::client::*;
@@ -30,7 +30,7 @@ impl PeerPool {
         }
     }
 
-    pub fn start(&self, blockchain: &Arc<Blockchain>, producer: &Arc<Option<Producer>>) {
+    pub fn start(&self, blockchain: &Arc<Blockchain>, minter: &Arc<Option<Minter>>) {
         assert!(self.peers.lock().is_empty(), "peer pool already started");
         for addr in self.peer_addresses.clone() {
             let (tx, rx) = connect_loop(addr, PeerType::NODE);
@@ -40,15 +40,15 @@ impl PeerPool {
                 connected: Arc::new(AtomicBool::new(false))
             };
             let blockchain = Arc::clone(blockchain);
-            let producer = Arc::clone(producer);
-            self.handle_client_peer(addr, blockchain, producer, state);
+            let minter = Arc::clone(minter);
+            self.handle_client_peer(addr, blockchain, minter, state);
         }
     }
 
     fn handle_client_peer(&self,
                             addr: SocketAddr,
                             blockchain: Arc<Blockchain>,
-                            producer: Arc<Option<Producer>>,
+                            minter: Arc<Option<Minter>>,
                             state: PeerState) {
         macro_rules! quick_send {
             ($state:expr, $id:expr, $msg:expr) => {
@@ -86,20 +86,20 @@ impl PeerPool {
                         }
                         RpcMsg::Error(_) => {},
                         RpcMsg::Event(evt) => {
-                            if let Some(producer) = &*producer {
+                            if let Some(minter) = &*minter {
                                 match *evt {
                                     RpcEvent::Block(block) => {
-                                        let _ = producer.add_block(block);
+                                        let _ = minter.add_block(block);
                                     },
                                     RpcEvent::Tx(tx) => {
-                                        let _ = producer.add_tx(tx);
+                                        let _ = minter.add_tx(tx);
                                     }
                                 }
                             }
                         },
                         RpcMsg::Broadcast(tx) => {
-                            if let Some(producer) = &*producer {
-                                match producer.add_tx(tx) {
+                            if let Some(minter) = &*minter {
+                                match minter.add_tx(tx) {
                                     Ok(_) => {
                                         quick_send!(state, id).wait().unwrap();
                                     },
