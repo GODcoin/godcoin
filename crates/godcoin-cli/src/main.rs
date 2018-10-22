@@ -12,6 +12,7 @@ use godcoin::{*, net::PeerPool, producer::Producer};
 use clap::{Arg, App, AppSettings, SubCommand};
 use std::sync::{Arc, mpsc};
 use tokio::prelude::*;
+use std::borrow::Cow;
 
 struct StartNode<'a> {
     bind_address: Option<&'a str>,
@@ -66,8 +67,13 @@ fn start_node(node_opts: &StartNode) {
         None => Arc::new(None)
     };
 
-    if let Some(peers) = &node_opts.peers {
-        let pool = PeerPool::new(peers);
+    {
+        let peers = if let Some(peers) = &node_opts.peers {
+            Cow::Borrowed(peers)
+        } else {
+            Cow::Owned(vec![])
+        };
+        let pool = PeerPool::new(&peers);
         pool.start(&blockchain, &producer);
 
         // TODO synchronize blocks with peers
