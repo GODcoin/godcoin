@@ -1,9 +1,9 @@
-use std::sync::{Arc, atomic::{Ordering, AtomicBool}};
+use std::sync::{Arc, atomic::{Ordering, AtomicUsize, AtomicBool}};
 use std::net::SocketAddr;
 use parking_lot::Mutex;
 use tokio::prelude::*;
 
-use blockchain::Blockchain;
+use blockchain::{Blockchain, SignedBlock};
 use producer::Minter;
 
 use super::peer::PeerType;
@@ -12,7 +12,8 @@ use super::rpc::*;
 
 pub struct PeerPool {
     peer_addresses: Vec<SocketAddr>,
-    peers: Mutex<Vec<PeerState>>
+    peers: Mutex<Vec<PeerState>>,
+    peer_iter_count: AtomicUsize
 }
 
 impl PeerPool {
@@ -23,10 +24,12 @@ impl PeerPool {
             }).unwrap()
         }).collect::<Vec<SocketAddr>>();
         let peers = Mutex::new(Vec::with_capacity(peer_addresses.len()));
+        let peer_iter_count = AtomicUsize::new(0);
 
         PeerPool {
             peer_addresses,
-            peers
+            peers,
+            peer_iter_count
         }
     }
 
@@ -37,12 +40,46 @@ impl PeerPool {
             let state = PeerState {
                 tx,
                 rx,
-                connected: Arc::new(AtomicBool::new(false))
+                connected: Arc::new(AtomicBool::new(false)),
+                id: Arc::new(AtomicUsize::new(1))
             };
             let blockchain = Arc::clone(blockchain);
             let minter = Arc::clone(minter);
             self.handle_client_peer(addr, blockchain, minter, state);
         }
+    }
+
+    pub fn get_block(&self, height: u64) -> Option<impl Future<Item = Option<SignedBlock>, Error = ()>> {
+        let peer = self.get_next_peer();
+        if let Some(peer) = peer {
+            let payload = Box::new(RpcPayload {
+                id: peer.id.fetch_add(1, Ordering::AcqRel) as u32,
+                msg: Some(RpcMsg::Block(Box::new(RpcVariant::Req(height))))
+            });
+
+            let fut = peer.tx.send(ClientEvent::Message(payload)).and_then(|rx| {
+                Ok(rx.unwrap())
+            }).and_then(|rx| {
+                rx
+            }).map(|payload| {
+                match payload.msg {
+                    Some(msg) => {
+                        match msg {
+                            RpcMsg::Block(var) => match var.res() {
+                                Some(block) => block,
+                                None => None
+                            },
+                            _ => None
+                        }
+                    },
+                    None => None
+                }
+            }).map_err(|_| {
+                ()
+            });
+            return Some(fut)
+        }
+        None
     }
 
     fn handle_client_peer(&self,
@@ -154,11 +191,28 @@ impl PeerPool {
             Ok(())
         }));
     }
+
+    fn get_next_peer(&self) -> Option<PeerState> {
+        let peers = self.peers.lock();
+        let len = peers.len();
+        if len < 1 { return None }
+
+        let first_count = self.peer_iter_count.fetch_add(1, Ordering::AcqRel);
+        loop {
+            let count = self.peer_iter_count.fetch_add(1, Ordering::AcqRel);
+            let peer = &peers[count % len];
+            if peer.connected.load(Ordering::Acquire) { return Some(peer.clone()) }
+            if count == first_count { break; }
+        }
+
+        None
+    }
 }
 
 #[derive(Clone)]
 struct PeerState {
     tx: ClientSender,
     rx: ClientReceiver,
-    connected: Arc<AtomicBool>
+    connected: Arc<AtomicBool>,
+    id: Arc<AtomicUsize>
 }
