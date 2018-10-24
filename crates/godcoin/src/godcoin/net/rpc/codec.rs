@@ -57,7 +57,7 @@ impl Encoder for RpcCodec {
                 },
                 RpcMsg::Properties(rpc) => {
                     payload.push(RpcMsgType::Properties as u8);
-                    if let Some(props) = rpc.response() {
+                    if let Some(props) = rpc.res() {
                         payload.push(RpcVariantType::Res as u8);
                         payload.push_u64(props.height);
 

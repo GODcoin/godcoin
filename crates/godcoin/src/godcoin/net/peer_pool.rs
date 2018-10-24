@@ -110,15 +110,15 @@ impl PeerPool {
                             }
                         },
                         RpcMsg::Properties(var) => {
-                            if var.request().is_some() {
+                            if var.req().is_some() {
                                 let props = blockchain.get_properties();
                                 let var = RpcVariant::Res(props);
                                 quick_send!(state, id, RpcMsg::Properties(var)).wait().unwrap();
                             }
                         },
                         RpcMsg::Block(var) => {
-                            if let Some(height) = var.request() {
-                                let block = match blockchain.get_block(*height) {
+                            if let Some(height) = var.req() {
+                                let block = match blockchain.get_block(height) {
                                     Some(block) => Some((&*block).clone()),
                                     None => None
                                 };
@@ -127,15 +127,15 @@ impl PeerPool {
                             }
                         },
                         RpcMsg::Balance(var) => {
-                            if let Some(addr) = var.request() {
-                                let bal = blockchain.get_balance(addr);
+                            if let Some(addr) = var.req() {
+                                let bal = blockchain.get_balance(&addr);
                                 let var = RpcVariant::Res(bal);
                                 quick_send!(state, id, RpcMsg::Balance(var)).wait().unwrap();
                             }
                         },
                         RpcMsg::TotalFee(var) => {
-                            if let Some(addr) = var.request() {
-                                let fee = blockchain.get_total_fee(addr);
+                            if let Some(addr) = var.req() {
+                                let fee = blockchain.get_total_fee(&addr);
                                 match fee {
                                     Some(fee) => {
                                         let var = RpcVariant::Res(fee);

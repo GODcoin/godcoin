@@ -132,14 +132,14 @@ fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, minter: Arc<Option<Minte
                 }
             },
             RpcMsg::Properties(var) => {
-                if var.request().is_some() {
+                if var.req().is_some() {
                     let props = blockchain.get_properties();
                     quick_send!(sender, rpc, RpcMsg::Properties(RpcVariant::Res(props)));
                 }
             },
             RpcMsg::Block(var) => {
-                if let Some(height) = var.request() {
-                    let block = match blockchain.get_block(*height) {
+                if let Some(height) = var.req() {
+                    let block = match blockchain.get_block(height) {
                         Some(block) => Some((&*block).clone()),
                         None => None
                     };
@@ -147,14 +147,14 @@ fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, minter: Arc<Option<Minte
                 }
             },
             RpcMsg::Balance(var) => {
-                if let Some(addr) = var.request() {
-                    let bal = blockchain.get_balance(addr);
+                if let Some(addr) = var.req() {
+                    let bal = blockchain.get_balance(&addr);
                     quick_send!(sender, rpc, RpcMsg::Balance(RpcVariant::Res(bal)));
                 }
             },
             RpcMsg::TotalFee(var) => {
-                if let Some(addr) = var.request() {
-                    let fee = blockchain.get_total_fee(addr);
+                if let Some(addr) = var.req() {
+                    let fee = blockchain.get_total_fee(&addr);
                     match fee {
                         Some(fee) => {
                             quick_send!(sender, rpc, RpcMsg::TotalFee(RpcVariant::Res(fee)));

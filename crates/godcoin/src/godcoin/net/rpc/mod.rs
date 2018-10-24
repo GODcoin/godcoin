@@ -57,7 +57,7 @@ pub enum RpcVariant<A, B> {
 
 impl<A, B> RpcVariant<A, B> {
     #[inline]
-    pub fn request(&self) -> Option<&A> {
+    pub fn req_ref(&self) -> Option<&A> {
         match self {
             RpcVariant::Req(a) => Some(&a),
             RpcVariant::Res(_) => None
@@ -65,10 +65,26 @@ impl<A, B> RpcVariant<A, B> {
     }
 
     #[inline]
-    pub fn response(&self) -> Option<&B> {
+    pub fn req(self) -> Option<A> {
+        match self {
+            RpcVariant::Req(a) => Some(a),
+            RpcVariant::Res(_) => None
+        }
+    }
+
+    #[inline]
+    pub fn res_ref(&self) -> Option<&B> {
         match self {
             RpcVariant::Req(_) => None,
             RpcVariant::Res(b) => Some(&b)
+        }
+    }
+
+    #[inline]
+    pub fn res(self) -> Option<B> {
+        match self {
+            RpcVariant::Req(_) => None,
+            RpcVariant::Res(b) => Some(b)
         }
     }
 }

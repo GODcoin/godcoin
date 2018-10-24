@@ -73,16 +73,16 @@ pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, Cli
                         if let Some(msg) = &payload.msg {
                             match msg {
                                 RpcMsg::Properties(var) => {
-                                    var.request().is_some()
+                                    var.req_ref().is_some()
                                 },
                                 RpcMsg::Block(var) => {
-                                    var.request().is_some()
+                                    var.req_ref().is_some()
                                 },
                                 RpcMsg::Balance(var) => {
-                                    var.request().is_some()
+                                    var.req_ref().is_some()
                                 },
                                 RpcMsg::TotalFee(var) => {
-                                    var.request().is_some()
+                                    var.req_ref().is_some()
                                 },
                                 _ => false
                             }
