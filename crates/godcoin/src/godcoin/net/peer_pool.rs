@@ -2,6 +2,7 @@ use std::sync::{Arc, atomic::{Ordering, AtomicUsize, AtomicBool}};
 use std::net::SocketAddr;
 use parking_lot::Mutex;
 use tokio::prelude::*;
+use log::warn;
 
 use blockchain::{Blockchain, SignedBlock};
 use producer::Minter;

@@ -4,13 +4,12 @@ extern crate tokio;
 extern crate ctrlc;
 extern crate dirs;
 extern crate clap;
-
-#[macro_use]
 extern crate log;
 
 use godcoin::{*, net::PeerPool, producer::Minter};
 use clap::{Arg, App, AppSettings, SubCommand};
 use std::sync::{Arc, mpsc};
+use log::{info, error};
 use tokio::prelude::*;
 use std::borrow::Cow;
 

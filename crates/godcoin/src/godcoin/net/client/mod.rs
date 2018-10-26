@@ -1,4 +1,5 @@
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use log::{info, warn, error, debug};
 use std::io::{Error, ErrorKind};
 use futures::sync::oneshot;
 use tokio::net::TcpStream;

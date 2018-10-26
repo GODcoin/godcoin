@@ -3,6 +3,7 @@ use parking_lot::Mutex;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::path::*;
+use log::info;
 
 pub mod block;
 pub mod index;

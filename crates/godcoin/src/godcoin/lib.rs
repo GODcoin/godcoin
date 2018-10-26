@@ -9,15 +9,12 @@ extern crate crc32c;
 extern crate bytes;
 extern crate bs58;
 extern crate rand;
+extern crate log;
 
 extern crate tokio;
 extern crate tokio_codec;
 
-#[macro_use]
-extern crate log;
-
-#[macro_use]
-mod buf_util;
+#[macro_use] mod buf_util;
 
 pub mod asset;
 pub use self::asset::{Asset, AssetSymbol, Balance, EMPTY_GOLD, EMPTY_SILVER};

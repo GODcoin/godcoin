@@ -17,6 +17,7 @@ use futures::{
 use tokio::net::TcpStream;
 use tokio_codec::Framed;
 use parking_lot::Mutex;
+use log::debug;
 
 use super::rpc::*;
 
