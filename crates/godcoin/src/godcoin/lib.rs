@@ -1,19 +1,3 @@
-extern crate crossbeam_channel;
-extern crate sodiumoxide;
-extern crate parking_lot;
-extern crate num_bigint;
-extern crate num_traits;
-extern crate rocksdb;
-extern crate futures;
-extern crate crc32c;
-extern crate bytes;
-extern crate bs58;
-extern crate rand;
-extern crate log;
-
-extern crate tokio;
-extern crate tokio_codec;
-
 #[macro_use] mod buf_util;
 
 pub mod asset;

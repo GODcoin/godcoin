@@ -13,10 +13,10 @@ pub use self::store::BlockStore;
 pub use self::index::Indexer;
 pub use self::block::*;
 
-use asset::{self, Asset, AssetSymbol, Balance, EMPTY_GOLD};
-use constants;
-use crypto::*;
-use tx::*;
+use crate::asset::{self, Asset, AssetSymbol, Balance, EMPTY_GOLD};
+use crate::constants;
+use crate::crypto::*;
+use crate::tx::*;
 
 pub struct Blockchain {
     indexer: Arc<Indexer>,
@@ -84,7 +84,7 @@ impl Blockchain {
     }
 
     pub fn get_address_fee(&self, addr: &PublicKey) -> Option<Balance> {
-        use constants::*;
+        use crate::constants::*;
         let mut delta = 0;
         let mut tx_count = 1;
 
@@ -112,7 +112,7 @@ impl Blockchain {
     pub fn get_network_fee(&self) -> Option<Balance> {
         // The network fee adjusts every 5 blocks so that users have a bigger time
         // frame to confirm the fee they want to spend without suddenly changing.
-        use constants::*;
+        use crate::constants::*;
         let max_height = self.get_chain_height();
         let max_height = max_height - (max_height % 5);
         let min_height = if max_height > NETWORK_FEE_AVG_WINDOW {

@@ -1,7 +1,7 @@
-use blockchain::{SignedBlock, Properties};
-use crypto::PublicKey;
-use asset::Balance;
-use tx::TxVariant;
+use crate::blockchain::{SignedBlock, Properties};
+use crate::crypto::PublicKey;
+use crate::asset::Balance;
+use crate::tx::TxVariant;
 use super::peer::*;
 
 pub mod codec;

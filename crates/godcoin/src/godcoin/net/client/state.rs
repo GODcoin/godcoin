@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use parking_lot::Mutex;
 
 use super::{Sender, PeerType};
-use fut_util::channel;
+use crate::fut_util::channel;
 
 #[derive(Clone)]
 pub struct ConnectState {

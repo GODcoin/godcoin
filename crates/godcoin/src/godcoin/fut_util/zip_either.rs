@@ -53,8 +53,9 @@ impl<S1, S2> Stream for ZipEither<S1, S2>
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
-    use fut_util::*;
     use std::mem;
+
+    use crate::fut_util::*;
     use super::*;
 
     #[test]

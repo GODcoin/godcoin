@@ -21,7 +21,7 @@ basis so documentation will be minimal until the software stabilizes.
 
 ### Prerequisites
 
-- Rust compiler
+- Rust compiler (1.31 beta)
 - libsodium
 
 ### Getting started

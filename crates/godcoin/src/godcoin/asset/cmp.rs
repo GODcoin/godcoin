@@ -1,5 +1,5 @@
 use std::cmp;
-use asset::*;
+use crate::asset::*;
 
 impl Asset {
     pub fn gt(&self, other: &Asset) -> Option<bool> {

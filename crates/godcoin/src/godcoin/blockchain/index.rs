@@ -3,10 +3,10 @@ use std::path::Path;
 use std::io::Cursor;
 use std::mem;
 
-use tx::{TxVariant, BondTx};
-use crypto::PublicKey;
-use asset::Balance;
-use serializer::*;
+use crate::tx::{TxVariant, BondTx};
+use crate::crypto::PublicKey;
+use crate::asset::Balance;
+use crate::serializer::*;
 
 const CF_BLOCK_BYTE_POS: &str = "block_byte_pos";
 const CF_ADDR_BAL: &str = "address_balance";

@@ -3,10 +3,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::ops::Deref;
 use std::io::Cursor;
 
-use crypto::{KeyPair, double_sha256};
-use serializer::*;
-use crypto;
-use tx::*;
+use crate::crypto::{KeyPair, double_sha256};
+use crate::serializer::*;
+use crate::crypto;
+use crate::tx::*;
 
 #[derive(Debug, Clone)]
 pub struct Block {
@@ -134,8 +134,8 @@ impl Deref for SignedBlock {
 mod tests {
     use std::str::FromStr;
 
-    use crypto::KeyPair;
-    use asset::Asset;
+    use crate::crypto::KeyPair;
+    use crate::asset::Asset;
     use super::*;
 
     #[test]

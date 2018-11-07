@@ -1,8 +1,8 @@
 use ::std::io::Cursor;
 
-use crypto::{PublicKey, KeyPair, SigPair};
-use serializer::*;
-use asset::Asset;
+use crate::crypto::{PublicKey, KeyPair, SigPair};
+use crate::serializer::*;
+use crate::asset::Asset;
 
 #[macro_use] mod util;
 
@@ -237,8 +237,9 @@ tx_sign!(TransferTx);
 #[cfg(test)]
 mod tests {
     use ::std::str::FromStr;
+
+    use crate::crypto;
     use super::*;
-    use crypto;
 
     macro_rules! cmp_base_tx {
         ($id:ident, $ty:expr, $ts:expr, $fee:expr) => {

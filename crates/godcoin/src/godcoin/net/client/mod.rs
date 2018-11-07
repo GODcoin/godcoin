@@ -9,9 +9,10 @@ use tokio::timer::Delay;
 use tokio::prelude::*;
 use rand;
 
+use crate::fut_util::*;
+
 use super::peer::*;
 use super::rpc::*;
-use fut_util::*;
 
 mod state;
 

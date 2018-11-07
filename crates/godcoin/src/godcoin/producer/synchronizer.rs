@@ -1,7 +1,7 @@
-use tokio::prelude::*;
-use net::peer_pool::*;
 use std::sync::Arc;
-use blockchain::*;
+
+use crate::net::peer_pool::*;
+use crate::blockchain::*;
 
 pub struct Synchronizer {
     chain: Arc<Blockchain>,

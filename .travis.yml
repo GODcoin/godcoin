@@ -1,6 +1,6 @@
 language: rust
 rust:
-  - stable
+  - beta
 env:
   global:
     - LIBSODIUM_VERSION="1.0.16"

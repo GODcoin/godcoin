@@ -1,7 +1,8 @@
 use std::io::{Read, Cursor, Error, ErrorKind};
 use sodiumoxide::crypto::sign::Signature;
-use crypto::{SigPair, PublicKey};
-use asset::{Asset, AssetSymbol};
+
+use crate::crypto::{SigPair, PublicKey};
+use crate::asset::{Asset, AssetSymbol};
 
 pub trait BufWrite {
     fn push_u16(&mut self, num: u16);
@@ -202,8 +203,8 @@ mod tests {
         {
             let a = Asset {
                 amount: 1,
-                decimals: ::asset::MAX_PRECISION + 1,
-                symbol: ::asset::AssetSymbol::GOLD
+                decimals: crate::asset::MAX_PRECISION + 1,
+                symbol: crate::asset::AssetSymbol::GOLD
             };
             let mut v = vec![];
             v.push_asset(&a);

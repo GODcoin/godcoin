@@ -1,11 +1,3 @@
-extern crate env_logger;
-extern crate godcoin;
-extern crate tokio;
-extern crate ctrlc;
-extern crate dirs;
-extern crate clap;
-extern crate log;
-
 use godcoin::{*, net::PeerPool, producer::Minter};
 use clap::{Arg, App, AppSettings, SubCommand};
 use std::sync::{Arc, mpsc};

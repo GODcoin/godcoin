@@ -1,4 +1,4 @@
-use asset::*;
+use crate::asset::*;
 
 pub const GOLD_FEE_MIN: Asset = Asset {
     amount: 100,

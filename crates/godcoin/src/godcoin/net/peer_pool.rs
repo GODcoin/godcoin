@@ -4,8 +4,8 @@ use parking_lot::Mutex;
 use tokio::prelude::*;
 use log::warn;
 
-use blockchain::{Blockchain, SignedBlock};
-use producer::Minter;
+use crate::blockchain::{Blockchain, SignedBlock};
+use crate::producer::Minter;
 
 use super::peer::PeerType;
 use super::client::*;

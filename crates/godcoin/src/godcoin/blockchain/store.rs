@@ -6,7 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 use crc32c::*;
 
-use blockchain::{block::*, index::*};
+use crate::blockchain::{block::*, index::*};
 
 const MAX_CACHE_SIZE: u64 = 100;
 
