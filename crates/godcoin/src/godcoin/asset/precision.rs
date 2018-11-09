@@ -1,5 +1,4 @@
-#![allow(unknown_lints)]
-#![allow(unreadable_literal)]
+#![allow(clippy::unreadable_literal)]
 
 use num_bigint::BigInt;
 
