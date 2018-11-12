@@ -16,6 +16,7 @@ pub mod net;
 pub mod blockchain;
 pub mod producer;
 pub mod constants;
+pub mod script;
 
 pub mod fut_util;
 
