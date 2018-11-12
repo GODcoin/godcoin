@@ -214,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn branched_if() {
+    fn branch_if() {
         let mut engine = ScriptEngine::from(Builder::new()
                                 .push(OpFrame::True)
                                 .push(OpFrame::OpIf)
@@ -231,6 +231,41 @@ mod tests {
                                 .push(OpFrame::False)
                                 .push(OpFrame::OpElse)
                                 .push(OpFrame::True)
+                                .push(OpFrame::OpEndIf));
+        assert!(engine.eval().unwrap());
+        assert!(engine.stack.is_empty());
+    }
+
+    #[test]
+    fn nested_branch_if() {
+        let mut engine = ScriptEngine::from(Builder::new()
+                                .push(OpFrame::True)
+                                .push(OpFrame::OpIf)
+                                    .push(OpFrame::True)
+                                    .push(OpFrame::OpIf)
+                                        .push(OpFrame::True)
+                                    .push(OpFrame::OpEndIf)
+                                .push(OpFrame::OpElse)
+                                    .push(OpFrame::False)
+                                    .push(OpFrame::OpIf)
+                                        .push(OpFrame::False)
+                                    .push(OpFrame::OpEndIf)
+                                .push(OpFrame::OpEndIf));
+        assert!(engine.eval().unwrap());
+        assert!(engine.stack.is_empty());
+
+        let mut engine = ScriptEngine::from(Builder::new()
+                                .push(OpFrame::False)
+                                .push(OpFrame::OpIf)
+                                    .push(OpFrame::True)
+                                    .push(OpFrame::OpIf)
+                                        .push(OpFrame::False)
+                                    .push(OpFrame::OpEndIf)
+                                .push(OpFrame::OpElse)
+                                    .push(OpFrame::True)
+                                    .push(OpFrame::OpIf)
+                                        .push(OpFrame::True)
+                                    .push(OpFrame::OpEndIf)
                                 .push(OpFrame::OpEndIf));
         assert!(engine.eval().unwrap());
         assert!(engine.stack.is_empty());
