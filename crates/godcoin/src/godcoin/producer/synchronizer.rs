@@ -1,3 +1,6 @@
+// TODO remove dead_code allowance
+#![allow(dead_code)]
+
 use std::sync::Arc;
 
 use crate::net::peer_pool::*;
