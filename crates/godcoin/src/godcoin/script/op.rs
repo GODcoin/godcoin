@@ -12,7 +12,8 @@ pub enum Operand {
     // Control
     OpIf,
     OpElse,
-    OpEndIf
+    OpEndIf,
+    OpReturn
 }
 
 #[derive(PartialEq)]
@@ -25,7 +26,8 @@ pub enum OpFrame {
     // Control
     OpIf,
     OpElse,
-    OpEndIf
+    OpEndIf,
+    OpReturn
 }
 
 impl From<Operand> for u8 {

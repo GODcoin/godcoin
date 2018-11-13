@@ -89,6 +89,10 @@ impl ScriptEngine {
                 },
                 OpFrame::OpEndIf => {
                     if_marker -= 1;
+                },
+                OpFrame::OpReturn => {
+                    if_marker = 0;
+                    break;
                 }
             }
         }
@@ -139,6 +143,7 @@ impl ScriptEngine {
             o if o == Operand::OpIf as u8 => Ok(Some(OpFrame::OpIf)),
             o if o == Operand::OpElse as u8 => Ok(Some(OpFrame::OpElse)),
             o if o == Operand::OpEndIf as u8 => Ok(Some(OpFrame::OpEndIf)),
+            o if o == Operand::OpReturn as u8 => Ok(Some(OpFrame::OpReturn)),
             _ => Err(self.new_err(EvalErrType::UnknownOp))
         }
     }
@@ -209,6 +214,31 @@ mod tests {
                                 .push(OpFrame::OpIf)
                                 .push(OpFrame::True)
                                 .push(OpFrame::OpEndIf));
+        assert!(engine.eval().unwrap());
+        assert!(engine.stack.is_empty());
+    }
+
+    #[test]
+    fn if_script_with_ret() {
+        let mut engine = ScriptEngine::from(Builder::new()
+                                .push(OpFrame::True)
+                                .push(OpFrame::OpIf)
+                                .push(OpFrame::False)
+                                .push(OpFrame::OpReturn)
+                                .push(OpFrame::OpEndIf)
+                                .push(OpFrame::True));
+        assert!(!engine.eval().unwrap());
+        assert!(engine.stack.is_empty());
+
+        let mut engine = ScriptEngine::from(Builder::new()
+                                .push(OpFrame::False)
+                                .push(OpFrame::OpIf)
+                                .push(OpFrame::False)
+                                .push(OpFrame::OpElse)
+                                .push(OpFrame::True)
+                                .push(OpFrame::OpReturn)
+                                .push(OpFrame::OpEndIf)
+                                .push(OpFrame::False));
         assert!(engine.eval().unwrap());
         assert!(engine.stack.is_empty());
     }
