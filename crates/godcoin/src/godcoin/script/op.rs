@@ -1,19 +1,18 @@
 use crate::crypto::PublicKey;
 
-// TODO assign constants to ops
 #[derive(PartialEq)]
 #[repr(u8)]
 pub enum Operand {
     // Push value
     PushFalse = 0x0,
     PushTrue = 0x1,
-    PushPubKey,
+    PushPubKey = 0x2,
 
     // Control
-    OpIf,
-    OpElse,
-    OpEndIf,
-    OpReturn
+    OpIf = 0x10,
+    OpElse = 0x11,
+    OpEndIf = 0x12,
+    OpReturn = 0x13
 }
 
 #[derive(PartialEq)]
