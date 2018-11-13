@@ -12,7 +12,10 @@ pub enum Operand {
     OpIf = 0x10,
     OpElse = 0x11,
     OpEndIf = 0x12,
-    OpReturn = 0x13
+    OpReturn = 0x13,
+
+    // Crypto
+    //OpCheckSig = 0x20
 }
 
 #[derive(PartialEq)]
