@@ -135,7 +135,7 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
 
     fn take_pub_key(&mut self) -> Result<PublicKey, Error> {
         let buf = self.take_bytes()?;
-        PublicKey::from_bytes(&buf).ok_or_else(|| {
+        PublicKey::from_slice(&buf).ok_or_else(|| {
             Error::new(ErrorKind::Other, "incorrect public key length")
         })
     }

@@ -134,7 +134,7 @@ impl ScriptEngine {
                 let key = match self.byte_code.get(slice) {
                     Some(slice) => {
                         self.pos += sign::PUBLICKEYBYTES;
-                        PublicKey::from_bytes(slice).unwrap()
+                        PublicKey::from_slice(slice).unwrap()
                     },
                     None => return Err(self.new_err(EvalErrType::UnexpectedEOF))
                 };

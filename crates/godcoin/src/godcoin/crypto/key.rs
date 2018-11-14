@@ -31,7 +31,7 @@ impl PublicKey {
     }
 
     #[inline]
-    pub fn from_bytes(bytes: &[u8]) -> Option<PublicKey> {
+    pub fn from_slice(bytes: &[u8]) -> Option<PublicKey> {
         let key = sign::PublicKey::from_slice(bytes)?;
         Some(PublicKey { key })
     }
@@ -99,7 +99,7 @@ impl PrivateKey {
     }
 
     #[inline]
-    pub fn from_bytes(seed: &[u8], key: &[u8]) -> Option<PrivateKey> {
+    pub fn from_slice(seed: &[u8], key: &[u8]) -> Option<PrivateKey> {
         Some(PrivateKey {
             seed: sign::Seed::from_slice(seed)?,
             key: sign::SecretKey::from_slice(key)?
