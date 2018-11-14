@@ -70,7 +70,7 @@ impl Indexer {
 
     pub fn get_bond(&self, minter: &PublicKey) -> Option<BondTx> {
         let cf = self.db.cf_handle(CF_BOND).unwrap();
-        let tx_buf = self.db.get_cf(cf, minter.as_bytes()).unwrap()?;
+        let tx_buf = self.db.get_cf(cf, minter.as_ref()).unwrap()?;
         let cur = &mut Cursor::<&[u8]>::new(&tx_buf);
         let tx = TxVariant::decode_with_sigs(cur).unwrap();
         match tx {
@@ -81,7 +81,7 @@ impl Indexer {
 
     pub fn set_bond(&self, bond: &BondTx) {
         let cf = self.db.cf_handle(CF_BOND).unwrap();
-        let key = bond.minter.as_bytes();
+        let key = bond.minter.as_ref();
         let val = {
             let mut vec = Vec::with_capacity(2048);
             TxVariant::BondTx(bond.clone()).encode_with_sigs(&mut vec);
@@ -93,7 +93,7 @@ impl Indexer {
 
     pub fn get_balance(&self, addr: &PublicKey) -> Option<Balance> {
         let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
-        let bal_buf = self.db.get_cf(cf, addr.as_bytes()).unwrap()?;
+        let bal_buf = self.db.get_cf(cf, addr.as_ref()).unwrap()?;
         let cur = &mut Cursor::<&[u8]>::new(&bal_buf);
         let gold = cur.take_asset().unwrap();
         let silver = cur.take_asset().unwrap();
@@ -102,7 +102,7 @@ impl Indexer {
 
     pub fn set_balance(&self, addr: &PublicKey, bal: &Balance) {
         let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
-        let key = addr.as_bytes();
+        let key = addr.as_ref();
         let val = {
             let mut vec = Vec::with_capacity(mem::size_of::<Balance>());
             vec.push_asset(&bal.gold);

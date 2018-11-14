@@ -60,7 +60,7 @@ impl BufWrite for Vec<u8> {
     }
 
     fn push_pub_key(&mut self, key: &PublicKey) {
-        self.push_bytes(key.as_bytes());
+        self.push_bytes(key.as_ref());
     }
 
     fn push_sig_pair(&mut self, pair: &SigPair) {

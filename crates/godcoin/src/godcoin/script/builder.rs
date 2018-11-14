@@ -27,7 +27,7 @@ impl Builder {
             OpFrame::True => self.insert_bytes(&[Operand::PushTrue.into()]),
             OpFrame::PubKey(key) => {
                 self.insert_bytes(&[Operand::PushPubKey.into()])?
-                    .insert_bytes(key.as_bytes())
+                    .insert_bytes(key.as_ref())
             },
             OpFrame::OpIf => self.insert_bytes(&[Operand::OpIf.into()]),
             OpFrame::OpElse => self.insert_bytes(&[Operand::OpElse.into()]),

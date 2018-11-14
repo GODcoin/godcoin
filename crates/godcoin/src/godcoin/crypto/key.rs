@@ -21,11 +21,6 @@ pub struct PublicKey {
 
 impl PublicKey {
     #[inline]
-    pub fn as_bytes(&self) -> &[u8] {
-        self.key.as_ref()
-    }
-
-    #[inline]
     pub fn verify(&self, msg: &[u8], sig: &sign::Signature) -> bool {
         sign::verify_detached(sig, msg, &self.key)
     }
@@ -78,6 +73,12 @@ impl Wif<PublicKey> for PublicKey {
         let mut s = bs58::encode(buf).into_string();
         s.insert_str(0, PUB_ADDRESS_PREFIX);
         s.into_boxed_str()
+    }
+}
+
+impl AsRef<[u8]> for PublicKey {
+    fn as_ref(&self) -> &[u8] {
+        self.key.as_ref()
     }
 }
 
