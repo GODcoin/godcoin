@@ -4,25 +4,29 @@ use crate::crypto::PublicKey;
 
 pub mod constants;
 pub mod builder;
+pub mod script;
 pub mod error;
 pub mod op;
 
+pub use self::script::*;
 use self::constants::*;
+use self::builder::*;
 use self::error::*;
 use self::op::*;
 
 pub struct ScriptEngine {
-    byte_code: Vec<u8>,
+    script: Script,
     pos: usize,
     stack: Vec<OpFrame>
 }
 
 impl ScriptEngine {
 
-    pub fn new(byte_code: Vec<u8>) -> Option<Self> {
-        if byte_code.len() > MAX_BYTE_SIZE { return None }
+    pub fn new<T: Into<Script>>(script: T) -> Option<Self> {
+        let script = script.into();
+        if script.len() > MAX_BYTE_SIZE { return None }
         Some(Self {
-            byte_code,
+            script,
             pos: 0,
             stack: Vec::with_capacity(MAX_FRAME_STACK)
         })
@@ -122,8 +126,8 @@ impl ScriptEngine {
     }
 
     fn consume_op(&mut self) -> Result<Option<OpFrame>, EvalErr> {
-        if self.pos == self.byte_code.len() { return Ok(None) }
-        let byte = self.byte_code[self.pos];
+        if self.pos == self.script.len() { return Ok(None) }
+        let byte = self.script[self.pos];
         self.pos += 1;
 
         match byte {
@@ -131,7 +135,7 @@ impl ScriptEngine {
             o if o == Operand::PushTrue as u8 => Ok(Some(OpFrame::True)),
             o if o == Operand::PushPubKey as u8 => {
                 let slice = self.pos .. self.pos + sign::PUBLICKEYBYTES;
-                let key = match self.byte_code.get(slice) {
+                let key = match self.script.get(slice) {
                     Some(slice) => {
                         self.pos += sign::PUBLICKEYBYTES;
                         PublicKey::from_slice(slice).unwrap()
@@ -174,6 +178,12 @@ impl ScriptEngine {
 
     fn new_err(&mut self, err: EvalErrType) -> EvalErr {
         EvalErr::new(self.pos, err)
+    }
+}
+
+impl<'a> From<Builder> for ScriptEngine {
+    fn from(b: Builder) -> Self {
+        ScriptEngine::new(b.build()).unwrap()
     }
 }
 

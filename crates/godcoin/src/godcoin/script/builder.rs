@@ -1,5 +1,5 @@
-use super::ScriptEngine;
 use super::constants;
+use super::script::*;
 use super::op::*;
 
 pub struct Builder {
@@ -13,8 +13,8 @@ impl Builder {
         }
     }
 
-    pub fn build(self) -> Vec<u8> {
-        self.byte_code
+    pub fn build(self) -> Script {
+        Script::new(self.byte_code)
     }
 
     pub fn push(self, frame: OpFrame) -> Self {
@@ -43,17 +43,5 @@ impl Builder {
         } else {
             None
         }
-    }
-}
-
-impl From<Builder> for Vec<u8> {
-    fn from(b: Builder) -> Vec<u8> {
-        b.build()
-    }
-}
-
-impl<'a> From<Builder> for ScriptEngine {
-    fn from(b: Builder) -> Self {
-        ScriptEngine::new(b.build()).unwrap()
     }
 }
