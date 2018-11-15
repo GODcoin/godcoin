@@ -2,6 +2,7 @@ use sodiumoxide::crypto::sign;
 use sodiumoxide::randombytes;
 use bs58;
 
+use super::sigpair::*;
 use super::error::*;
 use super::util::*;
 
@@ -15,20 +16,18 @@ pub trait Wif<T> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PublicKey {
-    key: sign::PublicKey
-}
+pub struct PublicKey(pub(crate) sign::PublicKey);
 
 impl PublicKey {
     #[inline]
     pub fn verify(&self, msg: &[u8], sig: &sign::Signature) -> bool {
-        sign::verify_detached(sig, msg, &self.key)
+        sign::verify_detached(sig, msg, &self.0)
     }
 
     #[inline]
     pub fn from_slice(bytes: &[u8]) -> Option<PublicKey> {
         let key = sign::PublicKey::from_slice(bytes)?;
-        Some(PublicKey { key })
+        Some(PublicKey(key))
     }
 }
 
@@ -57,15 +56,13 @@ impl Wif<PublicKey> for PublicKey {
         }
 
         let key = &prefixed_key[1 .. prefixed_key.len()];
-        Ok(PublicKey {
-            key: sign::PublicKey::from_slice(key).unwrap()
-        })
+        Ok(PublicKey(sign::PublicKey::from_slice(key).unwrap()))
     }
 
     fn to_wif(&self) -> Box<str> {
         let mut buf: Vec<u8> = Vec::<u8>::with_capacity(37);
         buf.push(PUB_BUF_PREFIX);
-        buf.extend_from_slice(self.key.as_ref());
+        buf.extend_from_slice(self.0.as_ref());
 
         let checksum = &double_sha256(&buf)[0..4];
         buf.extend_from_slice(checksum);
@@ -78,7 +75,7 @@ impl Wif<PublicKey> for PublicKey {
 
 impl AsRef<[u8]> for PublicKey {
     fn as_ref(&self) -> &[u8] {
-        self.key.as_ref()
+        self.0.as_ref()
     }
 }
 
@@ -126,9 +123,7 @@ impl Wif<KeyPair> for PrivateKey {
 
         let seed = sign::Seed::from_slice(&key[1..]).unwrap();
         let (pk, sk) = sign::keypair_from_seed(&seed);
-        Ok(KeyPair(PublicKey {
-            key: pk
-        }, PrivateKey {
+        Ok(KeyPair(PublicKey(pk), PrivateKey {
             seed,
             key: sk
         }))
@@ -168,25 +163,10 @@ impl KeyPair {
         randombytes::randombytes_into(&mut raw_seed);
         let seed = sign::Seed::from_slice(&raw_seed).unwrap();
         let (pk, sk) = sign::keypair_from_seed(&seed);
-        KeyPair(PublicKey {
-            key: pk
-        }, PrivateKey {
+        KeyPair(PublicKey(pk), PrivateKey {
             seed,
             key: sk
         })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct SigPair {
-    pub pub_key: PublicKey,
-    pub signature: sign::Signature
-}
-
-impl SigPair {
-    #[inline]
-    pub fn verify(&self, msg: &[u8]) -> bool {
-        sign::verify_detached(&self.signature, msg, &self.pub_key.key)
     }
 }
 
