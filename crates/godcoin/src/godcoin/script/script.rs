@@ -1,4 +1,5 @@
 use super::builder::*;
+use std::borrow::Cow;
 use std::ops::Deref;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,6 +22,18 @@ impl From<&[u8]> for Script {
 impl From<Builder> for Script {
     fn from(b: Builder) -> Script {
         b.build()
+    }
+}
+
+impl<'a> Into<Cow<'a, Script>> for Script {
+    fn into(self) -> Cow<'a, Script> {
+        Cow::Owned(self)
+    }
+}
+
+impl<'a> Into<Cow<'a, Script>> for &'a Script {
+    fn into(self) -> Cow<'a, Script> {
+        Cow::Borrowed(self)
     }
 }
 

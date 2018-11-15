@@ -262,11 +262,11 @@ impl Blockchain {
             TxVariant::TransferTx(tx) => {
                 if tx.fee.symbol != tx.amount.symbol {
                     return Err("symbol mismatch between fee and amount".to_owned())
-                } else if tx.from != ScriptHash::from(tx.script.clone()) {
+                } else if tx.from != ScriptHash::from(&tx.script) {
                     return Err("from and script hash mismatch".to_owned())
                 }
 
-                let success = ScriptEngine::new(tx.script.clone()).ok_or_else(|| {
+                let success = ScriptEngine::new(&tx.script).ok_or_else(|| {
                     "failed to initialize script engine"
                 })?.eval().map_err(|e| {
                     format!("{}: {:?}", e.pos, e.err)

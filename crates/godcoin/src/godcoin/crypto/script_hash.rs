@@ -59,9 +59,9 @@ impl Wif<ScriptHash> for ScriptHash {
     }
 }
 
-impl From<Script> for ScriptHash {
-    fn from(script: Script) -> ScriptHash {
-        let hash = double_sha256(&script);
+impl From<&Script> for ScriptHash {
+    fn from(script: &Script) -> ScriptHash {
+        let hash = double_sha256(script);
         ScriptHash(hash)
     }
 }
@@ -71,7 +71,7 @@ impl From<PublicKey> for ScriptHash {
         let builder = Builder::new()
                 .push(OpFrame::PubKey(key.clone()))
                 .push(OpFrame::OpCheckSig);
-        builder.build().into()
+        (&builder.build()).into()
     }
 }
 

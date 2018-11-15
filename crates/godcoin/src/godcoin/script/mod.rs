@@ -1,4 +1,5 @@
 use sodiumoxide::crypto::sign;
+use std::borrow::Cow;
 
 use crate::crypto::PublicKey;
 
@@ -14,15 +15,15 @@ pub use self::script::*;
 pub use self::error::*;
 pub use self::op::*;
 
-pub struct ScriptEngine {
-    script: Script,
+pub struct ScriptEngine<'a> {
+    script: Cow<'a, Script>,
     pos: usize,
     stack: Vec<OpFrame>
 }
 
-impl ScriptEngine {
+impl<'a> ScriptEngine<'a> {
 
-    pub fn new<T: Into<Script>>(script: T) -> Option<Self> {
+    pub fn new<T: Into<Cow<'a, Script>>>(script: T) -> Option<Self> {
         let script = script.into();
         if script.len() > MAX_BYTE_SIZE { return None }
         Some(Self {
@@ -184,7 +185,7 @@ impl ScriptEngine {
     }
 }
 
-impl<'a> From<Builder> for ScriptEngine {
+impl<'a> From<Builder> for ScriptEngine<'a> {
     fn from(b: Builder) -> Self {
         ScriptEngine::new(b.build()).unwrap()
     }
