@@ -1,9 +1,9 @@
-use sodiumoxide::crypto::hash::sha256;
 use sodiumoxide::crypto::sign;
 use sodiumoxide::randombytes;
 use bs58;
 
 use super::error::*;
+use super::util::*;
 
 pub const PUB_ADDRESS_PREFIX: &str = "GOD";
 const PRIV_BUF_PREFIX: u8 = 0x01;
@@ -188,11 +188,6 @@ impl SigPair {
     pub fn verify(&self, msg: &[u8]) -> bool {
         sign::verify_detached(&self.signature, msg, &self.pub_key.key)
     }
-}
-
-#[inline]
-pub fn double_sha256(buf: &[u8]) -> sha256::Digest {
-    sha256::hash(sha256::hash(buf).as_ref())
 }
 
 #[cfg(test)]

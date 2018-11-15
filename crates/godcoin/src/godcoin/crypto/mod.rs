@@ -6,3 +6,6 @@ pub use self::key::*;
 
 pub mod script_hash;
 pub use self::script_hash::*;
+
+pub mod util;
+pub use self::util::*;
