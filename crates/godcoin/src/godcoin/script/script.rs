@@ -1,6 +1,7 @@
 use super::builder::*;
 use std::ops::Deref;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Script(Vec<u8>);
 
 impl Script {

@@ -1,6 +1,7 @@
 use std::io::Cursor;
 
 use crate::crypto::{PublicKey, ScriptHash, KeyPair, SigPair};
+use crate::script::Script;
 use crate::serializer::*;
 use crate::asset::Asset;
 
@@ -196,6 +197,7 @@ pub struct TransferTx {
     pub base: Tx,
     pub from: ScriptHash,
     pub to: ScriptHash,
+    pub script: Script,
     pub amount: Asset,
     pub memo: Vec<u8>
 }
@@ -205,6 +207,7 @@ impl EncodeTx for TransferTx {
         self.encode_base(v);
         v.push_script_hash(&self.from);
         v.push_script_hash(&self.to);
+        v.push_bytes(&self.script);
         v.push_asset(&self.amount);
         v.push_bytes(&self.memo);
     }
@@ -215,12 +218,14 @@ impl DecodeTx<TransferTx> for TransferTx {
         assert_eq!(tx.tx_type, TxType::TRANSFER);
         let from = cur.take_script_hash().ok()?;
         let to = cur.take_script_hash().ok()?;
+        let script = Script::new(cur.take_bytes().ok()?);
         let amount = cur.take_asset().ok()?;
         let memo = cur.take_bytes().ok()?;
         Some(TransferTx {
             base: tx,
             from,
             to,
+            script,
             amount,
             memo
         })
@@ -342,6 +347,7 @@ mod tests {
             },
             from: from.0.into(),
             to: to.0.into(),
+            script: Script::new(vec![1, 2, 3, 4]),
             amount: get_asset("1.0456 GOLD"),
             memo: Vec::from(String::from("Hello world!").as_bytes())
         };
@@ -356,6 +362,7 @@ mod tests {
         cmp_base_tx!(dec, TxType::TRANSFER, 1234567890, "1.23 GOLD");
         assert_eq!(transfer_tx.from, dec.from);
         assert_eq!(transfer_tx.to, dec.to);
+        assert_eq!(transfer_tx.script, Script::new(vec![1, 2, 3, 4]));
         assert_eq!(transfer_tx.amount.to_string(), dec.amount.to_string());
         assert_eq!(transfer_tx.memo, dec.memo);
     }
