@@ -14,6 +14,7 @@ pub use self::index::Indexer;
 pub use self::block::*;
 
 use crate::asset::{self, Asset, AssetSymbol, Balance, EMPTY_GOLD};
+use crate::script::*;
 use crate::constants;
 use crate::crypto::*;
 use crate::tx::*;
@@ -261,7 +262,19 @@ impl Blockchain {
             TxVariant::TransferTx(tx) => {
                 if tx.fee.symbol != tx.amount.symbol {
                     return Err("symbol mismatch between fee and amount".to_owned())
+                } else if tx.from != ScriptHash::from(tx.script.clone()) {
+                    return Err("from and script hash mismatch".to_owned())
                 }
+
+                let success = ScriptEngine::new(tx.script.clone()).ok_or_else(|| {
+                    "failed to initialize script engine"
+                })?.eval().map_err(|e| {
+                    format!("{}: {:?}", e.pos, e.err)
+                })?;
+                if !success {
+                    return Err("script returned false".to_owned())
+                }
+
                 let mut bal = self.get_balance_with_txs(&tx.from, additional_txs).ok_or_else(|| {
                     "failed to get balance"
                 })?;
