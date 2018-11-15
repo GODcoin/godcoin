@@ -8,11 +8,11 @@ pub mod script;
 pub mod error;
 pub mod op;
 
+pub use self::constants::*;
+pub use self::builder::*;
 pub use self::script::*;
-use self::constants::*;
-use self::builder::*;
-use self::error::*;
-use self::op::*;
+pub use self::error::*;
+pub use self::op::*;
 
 pub struct ScriptEngine {
     script: Script,
@@ -98,6 +98,8 @@ impl ScriptEngine {
                     if_marker = 0;
                     break;
                 }
+                // Crypto
+                OpFrame::OpCheckSig => { /* TODO */ }
             }
         }
 
@@ -148,6 +150,7 @@ impl ScriptEngine {
             o if o == Operand::OpElse as u8 => Ok(Some(OpFrame::OpElse)),
             o if o == Operand::OpEndIf as u8 => Ok(Some(OpFrame::OpEndIf)),
             o if o == Operand::OpReturn as u8 => Ok(Some(OpFrame::OpReturn)),
+            o if o == Operand::OpCheckSig as u8 => Ok(Some(OpFrame::OpCheckSig)),
             _ => Err(self.new_err(EvalErrType::UnknownOp))
         }
     }

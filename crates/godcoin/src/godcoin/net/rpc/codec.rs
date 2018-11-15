@@ -88,9 +88,9 @@ impl Encoder for RpcCodec {
                 RpcMsg::Balance(rpc) => {
                     payload.push(RpcMsgType::Balance as u8);
                     match rpc {
-                        RpcVariant::Req(addr) => {
+                        RpcVariant::Req(hash) => {
                             payload.push(RpcVariantType::Req as u8);
-                            payload.push_pub_key(&addr);
+                            payload.push_script_hash(&hash);
                         },
                         RpcVariant::Res(bal) => {
                             payload.push(RpcVariantType::Res as u8);
@@ -102,9 +102,9 @@ impl Encoder for RpcCodec {
                 RpcMsg::TotalFee(rpc) => {
                     payload.push(RpcMsgType::TotalFee as u8);
                     match rpc {
-                        RpcVariant::Req(addr) => {
+                        RpcVariant::Req(hash) => {
                             payload.push(RpcVariantType::Req as u8);
-                            payload.push_pub_key(&addr);
+                            payload.push_script_hash(&hash);
                         },
                         RpcVariant::Res(bal) => {
                             payload.push(RpcVariantType::Res as u8);
@@ -243,8 +243,8 @@ impl Decoder for RpcCodec {
                     let rpc = cur.take_u8()?;
                     match rpc {
                         t if t == RpcVariantType::Req as u8 => {
-                            let addr = cur.take_pub_key()?;
-                            RpcMsg::Balance(RpcVariant::Req(addr))
+                            let hash = cur.take_script_hash()?;
+                            RpcMsg::Balance(RpcVariant::Req(hash))
                         },
                         t if t == RpcVariantType::Res as u8 => {
                             let gold = cur.take_asset()?;
@@ -258,8 +258,8 @@ impl Decoder for RpcCodec {
                     let rpc = cur.take_u8()?;
                     match rpc {
                         t if t == RpcVariantType::Req as u8 => {
-                            let addr = cur.take_pub_key()?;
-                            RpcMsg::TotalFee(RpcVariant::Req(addr))
+                            let hash = cur.take_script_hash()?;
+                            RpcMsg::TotalFee(RpcVariant::Req(hash))
                         },
                         t if t == RpcVariantType::Res as u8 => {
                             let gold = cur.take_asset()?;

@@ -32,7 +32,8 @@ impl Builder {
             OpFrame::OpIf => self.insert_bytes(&[Operand::OpIf.into()]),
             OpFrame::OpElse => self.insert_bytes(&[Operand::OpElse.into()]),
             OpFrame::OpEndIf => self.insert_bytes(&[Operand::OpEndIf.into()]),
-            OpFrame::OpReturn => self.insert_bytes(&[Operand::OpReturn.into()])
+            OpFrame::OpReturn => self.insert_bytes(&[Operand::OpReturn.into()]),
+            OpFrame::OpCheckSig => self.insert_bytes(&[Operand::OpCheckSig.into()])
         }
     }
 

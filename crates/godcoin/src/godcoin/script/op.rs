@@ -15,7 +15,7 @@ pub enum Operand {
     OpReturn = 0x13,
 
     // Crypto
-    //OpCheckSig = 0x20
+    OpCheckSig = 0x20
 }
 
 #[derive(PartialEq)]
@@ -29,7 +29,10 @@ pub enum OpFrame {
     OpIf,
     OpElse,
     OpEndIf,
-    OpReturn
+    OpReturn,
+
+    // Crypto
+    OpCheckSig
 }
 
 impl From<Operand> for u8 {

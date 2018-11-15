@@ -1,5 +1,5 @@
 use crate::blockchain::{SignedBlock, Properties};
-use crate::crypto::PublicKey;
+use crate::crypto::ScriptHash;
 use crate::asset::Balance;
 use crate::tx::TxVariant;
 use super::peer::*;
@@ -27,8 +27,8 @@ pub enum RpcMsg {
     Broadcast(TxVariant),
     Properties(RpcVariant<(), Properties>),
     Block(Box<RpcVariant<u64, Option<SignedBlock>>>),
-    Balance(RpcVariant<PublicKey, Balance>),
-    TotalFee(RpcVariant<PublicKey, Balance>)
+    Balance(RpcVariant<ScriptHash, Balance>),
+    TotalFee(RpcVariant<ScriptHash, Balance>)
 }
 
 #[derive(Clone, Debug)]

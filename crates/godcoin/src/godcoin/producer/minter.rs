@@ -16,7 +16,7 @@ use crate::tx::*;
 pub struct Minter {
     chain: Arc<Blockchain>,
     minter: KeyPair,
-    staker: PublicKey,
+    staker: ScriptHash,
     txs: Arc<Mutex<Vec<TxVariant>>>
 }
 
@@ -24,7 +24,7 @@ impl Minter {
 
     pub fn new(chain: Arc<Blockchain>,
                 minter: KeyPair,
-                staker: PublicKey) -> Self {
+                staker: ScriptHash) -> Self {
         Self {
             chain,
             minter,

@@ -1,7 +1,7 @@
 use std::io::{Read, Cursor, Error, ErrorKind};
 use sodiumoxide::crypto::sign::Signature;
 
-use crate::crypto::{SigPair, PublicKey};
+use crate::crypto::{SigPair, PublicKey, ScriptHash};
 use crate::asset::{Asset, AssetSymbol};
 
 pub trait BufWrite {
@@ -11,6 +11,7 @@ pub trait BufWrite {
     fn push_u64(&mut self, num: u64);
     fn push_bytes(&mut self, slice: &[u8]);
     fn push_pub_key(&mut self, key: &PublicKey);
+    fn push_script_hash(&mut self, hash: &ScriptHash);
     fn push_sig_pair(&mut self, pair: &SigPair);
     fn push_asset(&mut self, asset: &Asset);
 }
@@ -63,6 +64,10 @@ impl BufWrite for Vec<u8> {
         self.push_bytes(key.as_ref());
     }
 
+    fn push_script_hash(&mut self, hash: &ScriptHash) {
+        self.push_bytes(hash.as_ref());
+    }
+
     fn push_sig_pair(&mut self, pair: &SigPair) {
         self.push_pub_key(&pair.pub_key);
         self.push_bytes(pair.signature.as_ref());
@@ -83,6 +88,7 @@ pub trait BufRead {
     fn take_u64(&mut self) -> Result<u64, Error>;
     fn take_bytes(&mut self) -> Result<Vec<u8>, Error>;
     fn take_pub_key(&mut self) -> Result<PublicKey, Error>;
+    fn take_script_hash(&mut self) -> Result<ScriptHash, Error>;
     fn take_sig_pair(&mut self) -> Result<SigPair, Error>;
     fn take_asset(&mut self) -> Result<Asset, Error>;
 }
@@ -137,6 +143,13 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
         let buf = self.take_bytes()?;
         PublicKey::from_slice(&buf).ok_or_else(|| {
             Error::new(ErrorKind::Other, "incorrect public key length")
+        })
+    }
+
+    fn take_script_hash(&mut self) -> Result<ScriptHash, Error> {
+        let buf = self.take_bytes()?;
+        ScriptHash::from_slice(&buf).ok_or_else(|| {
+            Error::new(ErrorKind::Other, "incorrect script hash length")
         })
     }
 

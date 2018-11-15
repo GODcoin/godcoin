@@ -1,6 +1,6 @@
-use ::std::io::Cursor;
+use std::io::Cursor;
 
-use crate::crypto::{PublicKey, KeyPair, SigPair};
+use crate::crypto::{PublicKey, ScriptHash, KeyPair, SigPair};
 use crate::serializer::*;
 use crate::asset::Asset;
 
@@ -122,7 +122,7 @@ impl Tx {
 #[derive(Debug, Clone)]
 pub struct RewardTx {
     pub base: Tx,
-    pub to: PublicKey,
+    pub to: ScriptHash,
     pub rewards: Vec<Asset>
 }
 
@@ -130,7 +130,7 @@ impl EncodeTx for RewardTx {
     fn encode(&self, v: &mut Vec<u8>) {
         debug_assert_eq!(self.base.signature_pairs.len(), 0);
         self.encode_base(v);
-        v.push_pub_key(&self.to);
+        v.push_script_hash(&self.to);
         v.push_u32(self.rewards.len() as u32);
         for r in &self.rewards { v.push_asset(r) };
     }
@@ -139,7 +139,7 @@ impl EncodeTx for RewardTx {
 impl DecodeTx<RewardTx> for RewardTx {
     fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<RewardTx> {
         assert_eq!(tx.tx_type, TxType::REWARD);
-        let key = cur.take_pub_key().ok()?;
+        let key = cur.take_script_hash().ok()?;
 
         let len = cur.take_u32().ok()?;
         let mut rewards = Vec::with_capacity(len as usize);
@@ -159,7 +159,7 @@ impl DecodeTx<RewardTx> for RewardTx {
 pub struct BondTx {
     pub base: Tx,
     pub minter: PublicKey, // Key that signs blocks
-    pub staker: PublicKey, // Hot wallet that receives rewards and stakes its balance
+    pub staker: ScriptHash, // Hot wallet that receives rewards and stakes its balance
     pub stake_amt: Asset,
     pub bond_fee: Asset
 }
@@ -168,7 +168,7 @@ impl EncodeTx for BondTx {
     fn encode(&self, v: &mut Vec<u8>) {
         self.encode_base(v);
         v.push_pub_key(&self.minter);
-        v.push_pub_key(&self.staker);
+        v.push_script_hash(&self.staker);
         v.push_asset(&self.stake_amt);
         v.push_asset(&self.bond_fee);
     }
@@ -178,7 +178,7 @@ impl DecodeTx<BondTx> for BondTx {
     fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<BondTx> {
         assert_eq!(tx.tx_type, TxType::BOND);
         let minter = cur.take_pub_key().ok()?;
-        let staker = cur.take_pub_key().ok()?;
+        let staker = cur.take_script_hash().ok()?;
         let stake_amt = cur.take_asset().ok()?;
         let bond_fee = cur.take_asset().ok()?;
         Some(BondTx {
@@ -194,8 +194,8 @@ impl DecodeTx<BondTx> for BondTx {
 #[derive(Debug, Clone)]
 pub struct TransferTx {
     pub base: Tx,
-    pub from: PublicKey,
-    pub to: PublicKey,
+    pub from: ScriptHash,
+    pub to: ScriptHash,
     pub amount: Asset,
     pub memo: Vec<u8>
 }
@@ -203,8 +203,8 @@ pub struct TransferTx {
 impl EncodeTx for TransferTx {
     fn encode(&self, v: &mut Vec<u8>) {
         self.encode_base(v);
-        v.push_pub_key(&self.from);
-        v.push_pub_key(&self.to);
+        v.push_script_hash(&self.from);
+        v.push_script_hash(&self.to);
         v.push_asset(&self.amount);
         v.push_bytes(&self.memo);
     }
@@ -213,8 +213,8 @@ impl EncodeTx for TransferTx {
 impl DecodeTx<TransferTx> for TransferTx {
     fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<TransferTx> {
         assert_eq!(tx.tx_type, TxType::TRANSFER);
-        let from = cur.take_pub_key().ok()?;
-        let to = cur.take_pub_key().ok()?;
+        let from = cur.take_script_hash().ok()?;
+        let to = cur.take_script_hash().ok()?;
         let amount = cur.take_asset().ok()?;
         let memo = cur.take_bytes().ok()?;
         Some(TransferTx {
@@ -259,7 +259,7 @@ mod tests {
                 fee: get_asset("123 GOLD"),
                 signature_pairs: vec![]
             },
-            to: to.0,
+            to: to.0.into(),
             rewards: vec![get_asset("1.50 GOLD"), get_asset("1.0 SILVER")]
         });
 
@@ -280,7 +280,7 @@ mod tests {
                 fee: get_asset("123 GOLD"),
                 signature_pairs: vec![]
             },
-            to: to.0,
+            to: to.0.into(),
             rewards: vec![get_asset("1.50 GOLD"), get_asset("1.0 SILVER")]
         };
 
@@ -310,7 +310,7 @@ mod tests {
                 signature_pairs: vec![]
             },
             minter: minter.0,
-            staker: staker.0,
+            staker: staker.0.into(),
             stake_amt: get_asset("1.0456 GOLD"),
             bond_fee: get_asset("1.00000000 GOLD")
         };
@@ -340,8 +340,8 @@ mod tests {
                 fee: get_asset("1.23 GOLD"),
                 signature_pairs: vec![]
             },
-            from: from.0,
-            to: to.0,
+            from: from.0.into(),
+            to: to.0.into(),
             amount: get_asset("1.0456 GOLD"),
             memo: Vec::from(String::from("Hello world!").as_bytes())
         };

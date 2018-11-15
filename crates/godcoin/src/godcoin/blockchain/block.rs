@@ -150,7 +150,7 @@ mod tests {
                     timestamp: 1234567890,
                     signature_pairs: Vec::new()
                 },
-                to: keys.0.clone(),
+                to: keys.0.clone().into(),
                 rewards: Vec::new()
             }));
             vec

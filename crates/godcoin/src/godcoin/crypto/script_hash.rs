@@ -1,10 +1,12 @@
 use sodiumoxide::crypto::hash::sha256::Digest;
-use crate::crypto::double_sha256;
-use crate::script::Script;
+
+use crate::script::{Builder, Script, OpFrame};
+use crate::crypto::{PublicKey, double_sha256};
 use super::*;
 
 pub const SCRIPT_HASH_BUF_PREFIX: u8 = 0x03;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScriptHash(Digest);
 
 impl ScriptHash {
@@ -61,6 +63,15 @@ impl From<Script> for ScriptHash {
     fn from(script: Script) -> ScriptHash {
         let hash = double_sha256(&script);
         ScriptHash(hash)
+    }
+}
+
+impl From<PublicKey> for ScriptHash {
+    fn from(key: PublicKey) -> ScriptHash {
+        let builder = Builder::new()
+                .push(OpFrame::PubKey(key.clone()))
+                .push(OpFrame::OpCheckSig);
+        builder.build().into()
     }
 }
 

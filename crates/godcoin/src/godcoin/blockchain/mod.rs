@@ -74,16 +74,16 @@ impl Blockchain {
         store.get(height)
     }
 
-    pub fn get_total_fee(&self, addr: &PublicKey) -> Option<Balance> {
+    pub fn get_total_fee(&self, hash: &ScriptHash) -> Option<Balance> {
         let net_fee = self.get_network_fee()?;
-        let addr_fee = self.get_address_fee(addr)?;
+        let addr_fee = self.get_address_fee(hash)?;
         Some(Balance {
             gold: net_fee.gold.add(&addr_fee.gold)?,
             silver: net_fee.silver.add(&addr_fee.silver)?
         })
     }
 
-    pub fn get_address_fee(&self, addr: &PublicKey) -> Option<Balance> {
+    pub fn get_address_fee(&self, hash: &ScriptHash) -> Option<Balance> {
         use crate::constants::*;
         let mut delta = 0;
         let mut tx_count = 1;
@@ -95,8 +95,8 @@ impl Blockchain {
             for tx in &block.transactions {
                 let has_match = match tx {
                     TxVariant::RewardTx(_) => { false },
-                    TxVariant::BondTx(tx) => { &tx.staker == addr },
-                    TxVariant::TransferTx(tx) => { &tx.from == addr }
+                    TxVariant::BondTx(tx) => { &tx.staker == hash },
+                    TxVariant::TransferTx(tx) => { &tx.from == hash }
                 };
                 if has_match { tx_count += 1; }
             }
@@ -134,33 +134,33 @@ impl Blockchain {
         Some(Balance { gold, silver })
     }
 
-    pub fn get_balance(&self, addr: &PublicKey) -> Balance {
-        self.indexer.get_balance(addr).unwrap_or_default()
+    pub fn get_balance(&self, hash: &ScriptHash) -> Balance {
+        self.indexer.get_balance(hash).unwrap_or_default()
     }
 
-    pub fn get_balance_with_txs(&self, addr: &PublicKey, txs: &[TxVariant]) -> Option<Balance> {
-        let mut bal = self.indexer.get_balance(addr).unwrap_or_default();
+    pub fn get_balance_with_txs(&self, hash: &ScriptHash, txs: &[TxVariant]) -> Option<Balance> {
+        let mut bal = self.indexer.get_balance(hash).unwrap_or_default();
         for tx in txs {
             match tx {
                 TxVariant::RewardTx(tx) => {
-                    if &tx.to == addr {
+                    if &tx.to == hash {
                         for reward in &tx.rewards {
                             bal.add(&reward)?;
                         }
                     }
                 },
                 TxVariant::BondTx(tx) => {
-                    if &tx.staker == addr {
+                    if &tx.staker == hash {
                         bal.sub(&tx.fee)?;
                         bal.sub(&tx.bond_fee)?;
                         bal.sub(&tx.stake_amt)?;
                     }
                 },
                 TxVariant::TransferTx(tx) => {
-                    if &tx.from == addr {
+                    if &tx.from == hash {
                         bal.sub(&tx.fee)?;
                         bal.sub(&tx.amount)?;
-                    } else if &tx.to == addr {
+                    } else if &tx.to == hash {
                         bal.add(&tx.amount)?;
                     }
                 }
@@ -335,7 +335,7 @@ impl Blockchain {
                 signature_pairs: Vec::new()
             },
             minter: minter_key.0.clone(),
-            staker: staker_key.0.clone(),
+            staker: staker_key.0.clone().into(),
             bond_fee: EMPTY_GOLD,
             stake_amt: Asset::from_str("1 GOLD").unwrap()
         };
@@ -349,7 +349,7 @@ impl Blockchain {
                     timestamp,
                     signature_pairs: Vec::new()
                 },
-                to: staker_key.0.clone(),
+                to: staker_key.0.into(),
                 rewards: vec![Asset::from_str("1 GOLD").unwrap()]
             }));
             vec.push(TxVariant::BondTx(bond_tx.clone()));

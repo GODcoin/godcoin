@@ -3,8 +3,8 @@ use std::path::Path;
 use std::io::Cursor;
 use std::mem;
 
+use crate::crypto::{PublicKey, ScriptHash};
 use crate::tx::{TxVariant, BondTx};
-use crate::crypto::PublicKey;
 use crate::asset::Balance;
 use crate::serializer::*;
 
@@ -91,18 +91,18 @@ impl Indexer {
         self.db.put_cf(cf, key, &val).unwrap();
     }
 
-    pub fn get_balance(&self, addr: &PublicKey) -> Option<Balance> {
+    pub fn get_balance(&self, hash: &ScriptHash) -> Option<Balance> {
         let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
-        let bal_buf = self.db.get_cf(cf, addr.as_ref()).unwrap()?;
+        let bal_buf = self.db.get_cf(cf, hash.as_ref()).unwrap()?;
         let cur = &mut Cursor::<&[u8]>::new(&bal_buf);
         let gold = cur.take_asset().unwrap();
         let silver = cur.take_asset().unwrap();
         Some(Balance { gold, silver })
     }
 
-    pub fn set_balance(&self, addr: &PublicKey, bal: &Balance) {
+    pub fn set_balance(&self, hash: &ScriptHash, bal: &Balance) {
         let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
-        let key = addr.as_ref();
+        let key = hash.as_ref();
         let val = {
             let mut vec = Vec::with_capacity(mem::size_of::<Balance>());
             vec.push_asset(&bal.gold);
