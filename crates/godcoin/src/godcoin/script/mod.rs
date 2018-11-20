@@ -2,6 +2,7 @@ use sodiumoxide::crypto::sign;
 use std::borrow::Cow;
 
 use crate::crypto::PublicKey;
+use crate::tx::TxVariant;
 
 pub mod constants;
 pub mod builder;
@@ -17,17 +18,22 @@ pub use self::op::*;
 
 pub struct ScriptEngine<'a> {
     script: Cow<'a, Script>,
+    tx: Cow<'a, TxVariant>,
     pos: usize,
     stack: Vec<OpFrame>
 }
 
 impl<'a> ScriptEngine<'a> {
 
-    pub fn new<T: Into<Cow<'a, Script>>>(script: T) -> Option<Self> {
+    pub fn new<T, S>(tx: T, script: S) -> Option<Self>
+            where T: Into<Cow<'a, TxVariant>>,
+                    S: Into<Cow<'a, Script>> {
         let script = script.into();
+        let tx = tx.into();
         if script.len() > MAX_BYTE_SIZE { return None }
         Some(Self {
             script,
+            tx,
             pos: 0,
             stack: Vec::with_capacity(MAX_FRAME_STACK)
         })
@@ -185,66 +191,69 @@ impl<'a> ScriptEngine<'a> {
     }
 }
 
-impl<'a> From<Builder> for ScriptEngine<'a> {
-    fn from(b: Builder) -> Self {
-        ScriptEngine::new(b.build()).unwrap()
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use crate::tx::{Tx, TxType, RewardTx};
     use crate::crypto::KeyPair;
+    use crate::asset::Asset;
     use super::builder::*;
     use super::*;
 
     #[test]
     fn true_only_script() {
-        let mut engine = ScriptEngine::from(Builder::new()
-                                        .push(OpFrame::True));
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
+                                        .push(OpFrame::True)
+                                        .build()).unwrap();
         assert!(engine.eval().unwrap());
         assert!(engine.stack.is_empty());
     }
 
     #[test]
     fn false_only_script() {
-        let mut engine = ScriptEngine::from(Builder::new()
-                                        .push(OpFrame::False));
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
+                                        .push(OpFrame::False)
+                                        .build()).unwrap();
         assert!(!engine.eval().unwrap());
         assert!(engine.stack.is_empty());
     }
 
     #[test]
     fn if_script() {
-        let mut engine = ScriptEngine::from(Builder::new()
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
                                 .push(OpFrame::True)
                                 .push(OpFrame::OpIf)
                                 .push(OpFrame::False)
-                                .push(OpFrame::OpEndIf));
+                                .push(OpFrame::OpEndIf)
+                                .build()).unwrap();
         assert!(!engine.eval().unwrap());
         assert!(engine.stack.is_empty());
 
-        let mut engine = ScriptEngine::from(Builder::new()
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
                                 .push(OpFrame::True)
                                 .push(OpFrame::OpIf)
                                 .push(OpFrame::True)
-                                .push(OpFrame::OpEndIf));
+                                .push(OpFrame::OpEndIf)
+                                .build()).unwrap();
         assert!(engine.eval().unwrap());
         assert!(engine.stack.is_empty());
     }
 
     #[test]
     fn if_script_with_ret() {
-        let mut engine = ScriptEngine::from(Builder::new()
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
                                 .push(OpFrame::True)
                                 .push(OpFrame::OpIf)
                                 .push(OpFrame::False)
                                 .push(OpFrame::OpReturn)
                                 .push(OpFrame::OpEndIf)
-                                .push(OpFrame::True));
+                                .push(OpFrame::True)
+                                .build()).unwrap();
         assert!(!engine.eval().unwrap());
         assert!(engine.stack.is_empty());
 
-        let mut engine = ScriptEngine::from(Builder::new()
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
                                 .push(OpFrame::False)
                                 .push(OpFrame::OpIf)
                                 .push(OpFrame::False)
@@ -252,37 +261,40 @@ mod tests {
                                 .push(OpFrame::True)
                                 .push(OpFrame::OpReturn)
                                 .push(OpFrame::OpEndIf)
-                                .push(OpFrame::False));
+                                .push(OpFrame::False)
+                                .build()).unwrap();
         assert!(engine.eval().unwrap());
         assert!(engine.stack.is_empty());
     }
 
     #[test]
     fn branch_if() {
-        let mut engine = ScriptEngine::from(Builder::new()
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
                                 .push(OpFrame::True)
                                 .push(OpFrame::OpIf)
                                 .push(OpFrame::True)
                                 .push(OpFrame::OpElse)
                                 .push(OpFrame::False)
-                                .push(OpFrame::OpEndIf));
+                                .push(OpFrame::OpEndIf)
+                                .build()).unwrap();
         assert!(engine.eval().unwrap());
         assert!(engine.stack.is_empty());
 
-        let mut engine = ScriptEngine::from(Builder::new()
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
                                 .push(OpFrame::False)
                                 .push(OpFrame::OpIf)
                                 .push(OpFrame::False)
                                 .push(OpFrame::OpElse)
                                 .push(OpFrame::True)
-                                .push(OpFrame::OpEndIf));
+                                .push(OpFrame::OpEndIf)
+                                .build()).unwrap();
         assert!(engine.eval().unwrap());
         assert!(engine.stack.is_empty());
     }
 
     #[test]
     fn nested_branch_if() {
-        let mut engine = ScriptEngine::from(Builder::new()
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
                                 .push(OpFrame::True)
                                 .push(OpFrame::OpIf)
                                     .push(OpFrame::True)
@@ -294,11 +306,12 @@ mod tests {
                                     .push(OpFrame::OpIf)
                                         .push(OpFrame::False)
                                     .push(OpFrame::OpEndIf)
-                                .push(OpFrame::OpEndIf));
+                                .push(OpFrame::OpEndIf)
+                                .build()).unwrap();
         assert!(engine.eval().unwrap());
         assert!(engine.stack.is_empty());
 
-        let mut engine = ScriptEngine::from(Builder::new()
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
                                 .push(OpFrame::False)
                                 .push(OpFrame::OpIf)
                                     .push(OpFrame::True)
@@ -310,7 +323,8 @@ mod tests {
                                     .push(OpFrame::OpIf)
                                         .push(OpFrame::True)
                                     .push(OpFrame::OpEndIf)
-                                .push(OpFrame::OpEndIf));
+                                .push(OpFrame::OpEndIf)
+                                .build()).unwrap();
         assert!(engine.eval().unwrap());
         assert!(engine.stack.is_empty());
     }
@@ -318,30 +332,49 @@ mod tests {
     #[test]
     fn fail_invalid_stack_on_return() {
         let key = KeyPair::gen_keypair().0;
-        let mut engine = ScriptEngine::from(Builder::new()
-                                        .push(OpFrame::PubKey(key)));
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
+                                        .push(OpFrame::PubKey(key))
+                                        .build()).unwrap();
         assert_eq!(engine.eval().unwrap_err().err, EvalErrType::InvalidCmp);
     }
 
     #[test]
     fn fail_invalid_if_cmp() {
         let key = KeyPair::gen_keypair().0;
-        let mut engine = ScriptEngine::from(Builder::new()
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
                                         .push(OpFrame::PubKey(key))
-                                        .push(OpFrame::OpIf));
+                                        .push(OpFrame::OpIf)
+                                        .build()).unwrap();
         assert_eq!(engine.eval().unwrap_err().err, EvalErrType::InvalidCmp);
     }
 
     #[test]
     fn fail_unended_if() {
-        let mut engine = ScriptEngine::from(Builder::new()
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
                                 .push(OpFrame::True)
-                                .push(OpFrame::OpIf));
+                                .push(OpFrame::OpIf)
+                                .build()).unwrap();
         assert_eq!(engine.eval().unwrap_err().err, EvalErrType::UnexpectedEOF);
 
-        let mut engine = ScriptEngine::from(Builder::new()
+        let mut engine = ScriptEngine::new(create_tx(), Builder::new()
                                 .push(OpFrame::False)
-                                .push(OpFrame::OpIf));
+                                .push(OpFrame::OpIf)
+                                .build()).unwrap();
         assert_eq!(engine.eval().unwrap_err().err, EvalErrType::UnexpectedEOF);
+    }
+
+    fn create_tx() -> TxVariant {
+        let key = KeyPair::gen_keypair();
+        let tx = RewardTx {
+            base: Tx {
+                tx_type: TxType::REWARD,
+                timestamp: 1500000000,
+                fee: Asset::from_str("0 GOLD").unwrap(),
+                signature_pairs: vec![]
+            },
+            to: key.0.into(),
+            rewards: vec![]
+        };
+        TxVariant::RewardTx(tx)
     }
 }

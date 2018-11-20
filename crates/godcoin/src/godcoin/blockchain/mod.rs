@@ -259,14 +259,14 @@ impl Blockchain {
                     .sub(&tx.stake_amt).ok_or("failed to subtract stake_amt")?;
                 check_suf_bal!(bal.gold);
             },
-            TxVariant::TransferTx(tx) => {
-                if tx.fee.symbol != tx.amount.symbol {
+            TxVariant::TransferTx(transfer) => {
+                if transfer.fee.symbol != transfer.amount.symbol {
                     return Err("symbol mismatch between fee and amount".to_owned())
-                } else if tx.from != ScriptHash::from(&tx.script) {
+                } else if transfer.from != ScriptHash::from(&transfer.script) {
                     return Err("from and script hash mismatch".to_owned())
                 }
 
-                let success = ScriptEngine::new(&tx.script).ok_or_else(|| {
+                let success = ScriptEngine::new(tx, &transfer.script).ok_or_else(|| {
                     "failed to initialize script engine"
                 })?.eval().map_err(|e| {
                     format!("{}: {:?}", e.pos, e.err)
@@ -275,11 +275,11 @@ impl Blockchain {
                     return Err("script returned false".to_owned())
                 }
 
-                let mut bal = self.get_balance_with_txs(&tx.from, additional_txs).ok_or_else(|| {
+                let mut bal = self.get_balance_with_txs(&transfer.from, additional_txs).ok_or_else(|| {
                     "failed to get balance"
                 })?;
-                bal.sub(&tx.fee).ok_or("failed to subtract fee")?
-                    .sub(&tx.amount).ok_or("failed to subtract amount")?;
+                bal.sub(&transfer.fee).ok_or("failed to subtract fee")?
+                    .sub(&transfer.amount).ok_or("failed to subtract amount")?;
                 check_suf_bal!(&bal.gold);
                 check_suf_bal!(&bal.silver);
             }
