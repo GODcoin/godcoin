@@ -106,7 +106,21 @@ impl<'a> ScriptEngine<'a> {
                     break;
                 }
                 // Crypto
-                OpFrame::OpCheckSig => { /* TODO */ }
+                OpFrame::OpCheckSig => {
+                    let key = self.pop_pubkey()?;
+                    if self.tx.signature_pairs.len() != 1 {
+                        self.insert(OpFrame::False)?;
+                        continue;
+                    }
+                    let mut buf = Vec::with_capacity(4096);
+                    self.tx.encode(&mut buf);
+                    let success = key.verify(&buf, &self.tx.signature_pairs[0].signature);
+                    if success {
+                        self.insert(OpFrame::True)?;
+                    } else {
+                        self.insert(OpFrame::False)?;
+                    }
+                }
             }
         }
 
@@ -176,7 +190,15 @@ impl<'a> ScriptEngine<'a> {
         match frame {
             OpFrame::False => Ok(false),
             OpFrame::True => Ok(true),
-            _ => Err(self.new_err(EvalErrType::InvalidCmp))
+            _ => Err(self.new_err(EvalErrType::InvalidItemOnStack))
+        }
+    }
+
+    fn pop_pubkey(&mut self) -> Result<PublicKey, EvalErr> {
+        let frame = self.pop()?;
+        match frame {
+            OpFrame::PubKey(key) => Ok(key),
+            _ => Err(self.new_err(EvalErrType::InvalidItemOnStack))
         }
     }
 
@@ -322,7 +344,7 @@ mod tests {
         let key = KeyPair::gen_keypair().0;
         let mut engine = new_engine(Builder::new()
                                         .push(OpFrame::PubKey(key)));
-        assert_eq!(engine.eval().unwrap_err().err, EvalErrType::InvalidCmp);
+        assert_eq!(engine.eval().unwrap_err().err, EvalErrType::InvalidItemOnStack);
     }
 
     #[test]
@@ -331,7 +353,7 @@ mod tests {
         let mut engine = new_engine(Builder::new()
                                         .push(OpFrame::PubKey(key))
                                         .push(OpFrame::OpIf));
-        assert_eq!(engine.eval().unwrap_err().err, EvalErrType::InvalidCmp);
+        assert_eq!(engine.eval().unwrap_err().err, EvalErrType::InvalidItemOnStack);
     }
 
     #[test]
@@ -347,10 +369,34 @@ mod tests {
         assert_eq!(engine.eval().unwrap_err().err, EvalErrType::UnexpectedEOF);
     }
 
+    #[test]
+    fn checksig() {
+        let key = KeyPair::gen_keypair();
+        let mut engine = new_engine_with_signer(key.clone(), Builder::new()
+                            .push(OpFrame::PubKey(key.0.clone()))
+                            .push(OpFrame::OpCheckSig));
+        assert!(engine.eval().unwrap());
+
+        let other = KeyPair::gen_keypair();
+        let mut engine = new_engine_with_signer(key.clone(), Builder::new()
+                            .push(OpFrame::PubKey(other.0.clone()))
+                            .push(OpFrame::OpCheckSig));
+        assert!(!engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signer(other, Builder::new()
+                            .push(OpFrame::PubKey(key.0))
+                            .push(OpFrame::OpCheckSig));
+        assert!(!engine.eval().unwrap());
+    }
+
     fn new_engine<'a>(builder: Builder) -> ScriptEngine<'a> {
         let from = KeyPair::gen_keypair();
+        new_engine_with_signer(from, builder)
+    }
+
+    fn new_engine_with_signer<'a>(key: KeyPair, b: Builder) -> ScriptEngine<'a> {
         let to = KeyPair::gen_keypair();
-        let script = builder.build();
+        let script = b.build();
 
         let mut tx = TransferTx {
             base: Tx {
@@ -359,13 +405,13 @@ mod tests {
                 fee: Asset::from_str("1 GOLD").unwrap(),
                 signature_pairs: vec![]
             },
-            from: from.clone().0.into(),
+            from: key.clone().0.into(),
             to: to.clone().0.into(),
             amount: Asset::from_str("10 GOLD").unwrap(),
             script: script.clone(),
             memo: vec![]
         };
-        tx.append_sign(&from);
+        tx.append_sign(&key);
 
         ScriptEngine::new(TxVariant::TransferTx(tx), script).unwrap()
     }

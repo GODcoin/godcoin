@@ -15,7 +15,7 @@ impl EvalErr {
 pub enum EvalErrType {
     UnexpectedEOF,
     UnknownOp,
-    InvalidCmp,
+    InvalidItemOnStack,
     StackOverflow,
     StackUnderflow,
 }
