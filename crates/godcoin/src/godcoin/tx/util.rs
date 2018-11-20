@@ -16,7 +16,7 @@ macro_rules! tx_sign {
         impl SignTx for $ty {
             #[inline]
             fn sign(&self, key_pair: &KeyPair) -> SigPair {
-                let mut buf = Vec::new();
+                let mut buf = Vec::with_capacity(4096);
                 self.encode(&mut buf);
                 key_pair.sign(&buf)
             }
