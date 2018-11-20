@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io::Cursor;
 
 use crate::crypto::{PublicKey, ScriptHash, KeyPair, SigPair};
@@ -83,6 +84,18 @@ impl ::std::ops::Deref for TxVariant {
             TxVariant::BondTx(tx) => &tx.base,
             TxVariant::TransferTx(tx) => &tx.base
         }
+    }
+}
+
+impl<'a> Into<Cow<'a, TxVariant>> for TxVariant {
+    fn into(self) -> Cow<'a, TxVariant> {
+        Cow::Owned(self)
+    }
+}
+
+impl<'a> Into<Cow<'a, TxVariant>> for &'a TxVariant {
+    fn into(self) -> Cow<'a, TxVariant> {
+        Cow::Borrowed(self)
     }
 }
 
