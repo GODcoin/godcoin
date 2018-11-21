@@ -18,6 +18,14 @@ pub use self::error::*;
 pub use self::op::*;
 use self::stack::*;
 
+macro_rules! map_err_type {
+    ($self:expr, $var:expr) => {
+        $var.map_err(|e| {
+            $self.new_err(e)
+        })
+    };
+}
+
 pub struct ScriptEngine<'a> {
     script: Cow<'a, Script>,
     tx: Cow<'a, TxVariant>,
@@ -53,26 +61,18 @@ impl<'a> ScriptEngine<'a> {
             match op {
                 // Push value
                 OpFrame::False => {
-                    self.stack.push(OpFrame::False).map_err(|e| {
-                        self.new_err(e)
-                    })?;
+                    map_err_type!(self, self.stack.push(OpFrame::False))?;
                 },
                 OpFrame::True => {
-                    self.stack.push(OpFrame::True).map_err(|e| {
-                        self.new_err(e)
-                    })?;
+                    map_err_type!(self, self.stack.push(OpFrame::True))?;
                 },
                 OpFrame::PubKey(key) => {
-                    self.stack.push(OpFrame::PubKey(key)).map_err(|e| {
-                        self.new_err(e)
-                    })?;
+                    map_err_type!(self, self.stack.push(OpFrame::PubKey(key)))?;
                 },
                 // Control
                 OpFrame::OpIf => {
                     if_marker += 1;
-                    ignore_else = self.stack.pop_bool().map_err(|e| {
-                        self.new_err(e)
-                    })?;
+                    ignore_else = map_err_type!(self, self.stack.pop_bool())?;
                     if ignore_else { continue; }
                     let req_if_marker = if_marker;
                     self.consume_op_until(|op| {
@@ -117,26 +117,18 @@ impl<'a> ScriptEngine<'a> {
                 }
                 // Crypto
                 OpFrame::OpCheckSig => {
-                    let key = self.stack.pop_pubkey().map_err(|e| {
-                        self.new_err(e)
-                    })?;
+                    let key = map_err_type!(self, self.stack.pop_pubkey())?;
                     if self.tx.signature_pairs.len() != 1 {
-                        self.stack.push(OpFrame::False).map_err(|e| {
-                            self.new_err(e)
-                        })?;
+                        map_err_type!(self, self.stack.push(OpFrame::False))?;
                         continue;
                     }
                     let mut buf = Vec::with_capacity(4096);
                     self.tx.encode(&mut buf);
                     let success = key.verify(&buf, &self.tx.signature_pairs[0].signature);
                     if success {
-                        self.stack.push(OpFrame::True).map_err(|e| {
-                            self.new_err(e)
-                        })?;
+                        map_err_type!(self, self.stack.push(OpFrame::True))?;
                     } else {
-                        self.stack.push(OpFrame::False).map_err(|e| {
-                            self.new_err(e)
-                        })?;
+                        map_err_type!(self, self.stack.push(OpFrame::False))?;
                     }
                 }
             }
@@ -147,9 +139,7 @@ impl<'a> ScriptEngine<'a> {
         }
 
         // Scripts must return true or false
-        Ok(self.stack.pop_bool().map_err(|e| {
-            self.new_err(e)
-        })?)
+        map_err_type!(self, self.stack.pop_bool())
     }
 
     fn consume_op_until<F>(&mut self, mut filter: F) -> Result<(), EvalErr>
