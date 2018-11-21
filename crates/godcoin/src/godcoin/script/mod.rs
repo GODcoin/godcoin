@@ -9,18 +9,20 @@ pub mod builder;
 pub mod script;
 pub mod error;
 pub mod op;
+mod stack;
 
 pub use self::constants::*;
 pub use self::builder::*;
 pub use self::script::*;
 pub use self::error::*;
 pub use self::op::*;
+use self::stack::*;
 
 pub struct ScriptEngine<'a> {
     script: Cow<'a, Script>,
     tx: Cow<'a, TxVariant>,
     pos: usize,
-    stack: Vec<OpFrame>
+    stack: Stack
 }
 
 impl<'a> ScriptEngine<'a> {
@@ -35,7 +37,7 @@ impl<'a> ScriptEngine<'a> {
             script,
             tx,
             pos: 0,
-            stack: Vec::with_capacity(MAX_FRAME_STACK)
+            stack: Stack::new()
         })
     }
 
@@ -51,18 +53,26 @@ impl<'a> ScriptEngine<'a> {
             match op {
                 // Push value
                 OpFrame::False => {
-                    self.insert(OpFrame::False)?;
+                    self.stack.push(OpFrame::False).map_err(|e| {
+                        self.new_err(e)
+                    })?;
                 },
                 OpFrame::True => {
-                    self.insert(OpFrame::True)?;
+                    self.stack.push(OpFrame::True).map_err(|e| {
+                        self.new_err(e)
+                    })?;
                 },
                 OpFrame::PubKey(key) => {
-                    self.insert(OpFrame::PubKey(key))?;
+                    self.stack.push(OpFrame::PubKey(key)).map_err(|e| {
+                        self.new_err(e)
+                    })?;
                 },
                 // Control
                 OpFrame::OpIf => {
                     if_marker += 1;
-                    ignore_else = self.pop_bool()?;
+                    ignore_else = self.stack.pop_bool().map_err(|e| {
+                        self.new_err(e)
+                    })?;
                     if ignore_else { continue; }
                     let req_if_marker = if_marker;
                     self.consume_op_until(|op| {
@@ -107,18 +117,26 @@ impl<'a> ScriptEngine<'a> {
                 }
                 // Crypto
                 OpFrame::OpCheckSig => {
-                    let key = self.pop_pubkey()?;
+                    let key = self.stack.pop_pubkey().map_err(|e| {
+                        self.new_err(e)
+                    })?;
                     if self.tx.signature_pairs.len() != 1 {
-                        self.insert(OpFrame::False)?;
+                        self.stack.push(OpFrame::False).map_err(|e| {
+                            self.new_err(e)
+                        })?;
                         continue;
                     }
                     let mut buf = Vec::with_capacity(4096);
                     self.tx.encode(&mut buf);
                     let success = key.verify(&buf, &self.tx.signature_pairs[0].signature);
                     if success {
-                        self.insert(OpFrame::True)?;
+                        self.stack.push(OpFrame::True).map_err(|e| {
+                            self.new_err(e)
+                        })?;
                     } else {
-                        self.insert(OpFrame::False)?;
+                        self.stack.push(OpFrame::False).map_err(|e| {
+                            self.new_err(e)
+                        })?;
                     }
                 }
             }
@@ -129,7 +147,9 @@ impl<'a> ScriptEngine<'a> {
         }
 
         // Scripts must return true or false
-        Ok(self.pop_bool()?)
+        Ok(self.stack.pop_bool().map_err(|e| {
+            self.new_err(e)
+        })?)
     }
 
     fn consume_op_until<F>(&mut self, mut filter: F) -> Result<(), EvalErr>
@@ -176,39 +196,7 @@ impl<'a> ScriptEngine<'a> {
         }
     }
 
-    fn insert(&mut self, op: OpFrame) -> Result<(), EvalErr> {
-        if self.stack.len() + 1 <= MAX_FRAME_STACK {
-            self.stack.push(op);
-            Ok(())
-        } else {
-            Err(self.new_err(EvalErrType::StackOverflow))
-        }
-    }
-
-    fn pop_bool(&mut self) -> Result<bool, EvalErr> {
-        let frame = self.pop()?;
-        match frame {
-            OpFrame::False => Ok(false),
-            OpFrame::True => Ok(true),
-            _ => Err(self.new_err(EvalErrType::InvalidItemOnStack))
-        }
-    }
-
-    fn pop_pubkey(&mut self) -> Result<PublicKey, EvalErr> {
-        let frame = self.pop()?;
-        match frame {
-            OpFrame::PubKey(key) => Ok(key),
-            _ => Err(self.new_err(EvalErrType::InvalidItemOnStack))
-        }
-    }
-
-    fn pop(&mut self) -> Result<OpFrame, EvalErr> {
-        self.stack.pop().ok_or_else(|| {
-            self.new_err(EvalErrType::StackUnderflow)
-        })
-    }
-
-    fn new_err(&mut self, err: EvalErrType) -> EvalErr {
+    fn new_err(&self, err: EvalErrType) -> EvalErr {
         EvalErr::new(self.pos, err)
     }
 }
