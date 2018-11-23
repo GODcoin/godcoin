@@ -172,7 +172,7 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
             1 => AssetSymbol::SILVER,
             _ => return Err(Error::new(ErrorKind::Other, "invalid symbol"))
         };
-        Asset::new(amount, decimals, symbol).ok_or_else(|| {
+        Asset::checked_new(amount, decimals, symbol).ok_or_else(|| {
             Error::new(ErrorKind::Other, "invalid asset")
         })
     }

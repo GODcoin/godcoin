@@ -75,9 +75,7 @@ impl PeerPool {
                     },
                     None => None
                 }
-            }).map_err(|_| {
-                ()
-            });
+            }).map_err(|_| {});
             return Some(fut)
         }
         None

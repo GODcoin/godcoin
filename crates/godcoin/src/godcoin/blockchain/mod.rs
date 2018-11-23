@@ -86,12 +86,10 @@ impl Blockchain {
 
     pub fn get_address_fee(&self, hash: &ScriptHash) -> Option<Balance> {
         use crate::constants::*;
-        let mut delta = 0;
-        let mut tx_count = 1;
 
+        let mut tx_count = 1;
         let head = self.get_chain_height();
-        for i in (0..=head).rev() {
-            delta += 1;
+        for (delta, i) in (0..=head).rev().enumerate() {
             let block = self.get_block(i).unwrap();
             for tx in &block.transactions {
                 let has_match = match tx {
@@ -101,7 +99,7 @@ impl Blockchain {
                 };
                 if has_match { tx_count += 1; }
             }
-            if delta == FEE_RESET_WINDOW { break; }
+            if delta + 1 == FEE_RESET_WINDOW { break; }
         }
 
         let prec = asset::MAX_PRECISION;
@@ -267,7 +265,7 @@ impl Blockchain {
                     return Err("from and script hash mismatch".to_owned())
                 }
 
-                let success = ScriptEngine::new(tx, &transfer.script).ok_or_else(|| {
+                let success = ScriptEngine::checked_new(tx, &transfer.script).ok_or_else(|| {
                     "failed to initialize script engine"
                 })?.eval().map_err(|e| {
                     format!("{}: {:?}", e.pos, e.err)

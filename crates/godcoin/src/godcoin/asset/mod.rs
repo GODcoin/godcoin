@@ -38,8 +38,8 @@ pub struct Asset {
 }
 
 impl Asset {
-    #[inline(always)]
-    pub fn new(amount: i64, decimals: u8, symbol: AssetSymbol) -> Option<Asset> {
+    #[inline]
+    pub fn checked_new(amount: i64, decimals: u8, symbol: AssetSymbol) -> Option<Asset> {
         if decimals > MAX_PRECISION { return None }
         Some(Asset {
             amount,

@@ -1,7 +1,6 @@
-use super::constants;
-use super::script::*;
-use super::op::*;
+use super::{op::*, constants, Script};
 
+#[derive(Default)]
 pub struct Builder {
     byte_code: Vec<u8>
 }

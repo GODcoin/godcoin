@@ -16,7 +16,7 @@ impl Stack {
     }
 
     pub fn push(&mut self, op: OpFrame) -> Result<(), EvalErrType> {
-        if self.inner.len() + 1 <= MAX_FRAME_STACK {
+        if self.inner.len() < MAX_FRAME_STACK {
             self.inner.push(op);
             Ok(())
         } else {
