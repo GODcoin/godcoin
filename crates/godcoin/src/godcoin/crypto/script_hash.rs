@@ -69,7 +69,7 @@ impl From<&Script> for ScriptHash {
 impl From<PublicKey> for ScriptHash {
     fn from(key: PublicKey) -> ScriptHash {
         let builder = Builder::new()
-                .push(OpFrame::PubKey(key.clone()))
+                .push(OpFrame::PubKey(key))
                 .push(OpFrame::OpCheckSig);
         (&builder.build()).into()
     }
