@@ -75,6 +75,15 @@ impl From<PublicKey> for ScriptHash {
     }
 }
 
+impl From<&PublicKey> for ScriptHash {
+    fn from(key: &PublicKey) -> ScriptHash {
+        let builder = Builder::new()
+                .push(OpFrame::PubKey(key.clone()))
+                .push(OpFrame::OpCheckSig);
+        (&builder.build()).into()
+    }
+}
+
 impl AsRef<[u8]> for ScriptHash {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()

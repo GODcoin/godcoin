@@ -220,18 +220,6 @@ impl Blockchain {
         }
 
         check_amt!(tx.fee, "fee");
-        if tx.tx_type != TxType::REWARD {
-            if tx.signature_pairs.len() != 1 {
-                return Err("must have 1 signature".to_owned())
-            }
-
-            let mut v = Vec::with_capacity(4096);
-            tx.encode(&mut v);
-            if !tx.signature_pairs[0].verify(&v) {
-                return Err("signature verification failed".to_owned())
-            }
-        }
-
         match tx {
             TxVariant::RewardTx(tx) => {
                 if !tx.signature_pairs.is_empty() {
@@ -258,6 +246,19 @@ impl Blockchain {
                     .sub(&tx.bond_fee).ok_or("failed to subtract bond_fee")?
                     .sub(&tx.stake_amt).ok_or("failed to subtract stake_amt")?;
                 check_suf_bal!(bal.gold);
+
+                let pairs = &tx.signature_pairs;
+                if pairs.len() != 2 {
+                    return Err("must be signed by minter and staker".to_owned())
+                }
+
+                let staker: ScriptHash = (&pairs[1].pub_key).into();
+                if !(pairs[0].pub_key == tx.minter && staker == tx.staker) {
+                    return Err("sigpair minter and staker mismatch".to_owned())
+                }
+                if !tx.verify_all() {
+                    return Err("signature verification failed".to_owned())
+                }
             },
             TxVariant::TransferTx(transfer) => {
                 if transfer.fee.symbol != transfer.amount.symbol {
