@@ -18,6 +18,12 @@ pub enum Operand {
     OpCheckSig = 0x20
 }
 
+impl From<Operand> for u8 {
+    fn from(op: Operand) -> u8 {
+        op as u8
+    }
+}
+
 #[derive(PartialEq)]
 pub enum OpFrame {
     // Push value
@@ -35,8 +41,8 @@ pub enum OpFrame {
     OpCheckSig
 }
 
-impl From<Operand> for u8 {
-    fn from(op: Operand) -> u8 {
-        op as u8
+impl From<bool> for OpFrame {
+    fn from(b: bool) -> OpFrame {
+        if b { OpFrame::True } else { OpFrame::False }
     }
 }

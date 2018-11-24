@@ -43,16 +43,6 @@ impl<'a> ScriptEngine<'a> {
         let mut ignore_else = false;
         while let Some(op) = self.consume_op()? {
             match op {
-                // Push value
-                OpFrame::False => {
-                    map_err_type!(self, self.stack.push(OpFrame::False))?;
-                },
-                OpFrame::True => {
-                    map_err_type!(self, self.stack.push(OpFrame::True))?;
-                },
-                OpFrame::PubKey(key) => {
-                    map_err_type!(self, self.stack.push(OpFrame::PubKey(key)))?;
-                },
                 // Control
                 OpFrame::OpIf => {
                     if_marker += 1;
@@ -98,22 +88,22 @@ impl<'a> ScriptEngine<'a> {
                 OpFrame::OpReturn => {
                     if_marker = 0;
                     break;
-                }
+                },
                 // Crypto
                 OpFrame::OpCheckSig => {
                     let key = map_err_type!(self, self.stack.pop_pubkey())?;
                     if self.tx.signature_pairs.len() != 1 {
-                        map_err_type!(self, self.stack.push(OpFrame::False))?;
+                        map_err_type!(self, self.stack.push(false))?;
                         continue;
                     }
                     let mut buf = Vec::with_capacity(4096);
                     self.tx.encode(&mut buf);
                     let success = key.verify(&buf, &self.tx.signature_pairs[0].signature);
-                    if success {
-                        map_err_type!(self, self.stack.push(OpFrame::True))?;
-                    } else {
-                        map_err_type!(self, self.stack.push(OpFrame::False))?;
-                    }
+                    map_err_type!(self, self.stack.push(success))?;
+                },
+                // Handle push ops
+                _ => {
+                    map_err_type!(self, self.stack.push(op))?;
                 }
             }
         }

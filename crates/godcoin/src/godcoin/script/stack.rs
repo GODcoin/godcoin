@@ -15,9 +15,10 @@ impl Stack {
         }
     }
 
-    pub fn push(&mut self, op: OpFrame) -> Result<(), EvalErrType> {
+    pub fn push<T>(&mut self, op: T) -> Result<(), EvalErrType>
+            where T: Into<OpFrame> {
         if self.inner.len() < MAX_FRAME_STACK {
-            self.inner.push(op);
+            self.inner.push(op.into());
             Ok(())
         } else {
             Err(EvalErrType::StackOverflow)
