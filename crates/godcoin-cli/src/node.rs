@@ -12,25 +12,8 @@ pub struct Node<'a> {
 impl<'a> Node<'a> {
     pub fn start(&self) {
         use godcoin::blockchain::*;
-        use std::{env, path::*};
 
-        let home: PathBuf = {
-            use dirs;
-            let home = env::var("GODCOIN_HOME").map(|s| {
-                PathBuf::from(s)
-            }).unwrap_or_else(|_| {
-                Path::join(&dirs::data_local_dir().unwrap(), "godcoin")
-            });
-            if !Path::is_dir(&home) {
-                let res = std::fs::create_dir(&home);
-                res.unwrap_or_else(|_| panic!("Failed to create dir at {:?}", &home));
-                info!("Created GODcoin home at {:?}", &home);
-            } else {
-                info!("Found GODcoin home at {:?}", &home);
-            }
-            home
-        };
-
+        let home = constants::get_home_and_create();
         let blockchain = Blockchain::new(&home);
         info!("Using height in block log at {}", blockchain.get_chain_height());
 

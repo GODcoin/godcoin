@@ -1,4 +1,28 @@
+use std::path::{PathBuf, Path};
 use crate::asset::*;
+use log::info;
+use std::env;
+use dirs;
+
+pub fn get_home() -> PathBuf {
+    env::var("GODCOIN_HOME").map(|s| {
+        PathBuf::from(s)
+    }).unwrap_or_else(|_| {
+        Path::join(&dirs::data_local_dir().unwrap(), "godcoin")
+    })
+}
+
+pub fn get_home_and_create() -> PathBuf {
+    let home = get_home();
+    if !Path::is_dir(&home) {
+        let res = std::fs::create_dir(&home);
+        res.unwrap_or_else(|_| panic!("Failed to create dir at {:?}", &home));
+        info!("Created GODcoin home at {:?}", &home);
+    } else {
+        info!("Found GODcoin home at {:?}", &home);
+    }
+    home
+}
 
 pub const GOLD_FEE_MIN: Asset = Asset {
     amount: 100,

@@ -1,14 +1,16 @@
+use std::sync::{Arc, mpsc, atomic::{AtomicBool, Ordering}};
 use clap::{Arg, App, AppSettings, SubCommand};
 use tokio::prelude::*;
-use std::sync::mpsc;
 use log::error;
 use godcoin::*;
 
 mod keypair;
+mod wallet;
 mod node;
 
-use self::node::*;
 use self::keypair::*;
+use self::wallet::*;
+use self::node::*;
 
 fn main() {
     let env = env_logger::Env::new().filter_or(env_logger::DEFAULT_FILTER_ENV, "godcoin=info");
@@ -22,6 +24,12 @@ fn main() {
                 .setting(AppSettings::SubcommandRequiredElseHelp)
                 .subcommand(SubCommand::with_name("keygen")
                             .about("Generates a keypair"))
+                .subcommand(SubCommand::with_name("wallet")
+                            .about("Starts the wallet")
+                            .arg(Arg::with_name("server")
+                                .help("Node to connect to")
+                                .long("server")
+                                .default_value("127.0.0.1:7777")))
                 .subcommand(SubCommand::with_name("node")
                             .about("Starts the blockchain node service")
                             .arg(Arg::with_name("bind_address")
@@ -45,14 +53,21 @@ fn main() {
 
     let (tx, rx) = mpsc::channel::<()>();
     let mut rt = tokio::runtime::Runtime::new().unwrap();
+    let force_quit = Arc::new(AtomicBool::new(false));
 
     {
         let tx = tx.clone();
+        let force_quit = Arc::clone(&force_quit);
         rt.block_on(future::lazy(move || {
-            use ::std::io::{Error, ErrorKind};
+            use std::io::{Error, ErrorKind};
 
             if matches.subcommand_matches("keygen").is_some() {
                 generate_keypair(&tx);
+            } else if matches.subcommand_matches("wallet").is_some() {
+                force_quit.store(true, Ordering::Release);
+                let home = godcoin::constants::get_home_and_create();
+                let wallet = Wallet::new(home);
+                wallet.start();
             } else if let Some(matches) = matches.subcommand_matches("node") {
                 let node = Node {
                     bind_address: matches.value_of("bind_address"),
@@ -73,10 +88,14 @@ fn main() {
         })).unwrap();
     }
 
-    ctrlc::set_handler(move || {
-        println!("Received ctrl-c signal, shutting down...");
+    if force_quit.load(Ordering::Acquire) {
         tx.send(()).unwrap();
-    }).unwrap();
+    } else {
+        ctrlc::set_handler(move || {
+            println!("Received ctrl-c signal, shutting down...");
+            tx.send(()).unwrap();
+        }).unwrap();
+    }
 
     rx.recv().unwrap();
     rt.shutdown_now().wait().ok().unwrap();
