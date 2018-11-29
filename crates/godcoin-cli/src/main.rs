@@ -1,6 +1,7 @@
 use std::sync::{Arc, mpsc, atomic::{AtomicBool, Ordering}};
 use clap::{Arg, App, AppSettings, SubCommand};
 use tokio::prelude::*;
+use std::path::Path;
 use log::error;
 use godcoin::*;
 
@@ -15,8 +16,9 @@ use self::node::*;
 fn main() {
     let env = env_logger::Env::new().filter_or(env_logger::DEFAULT_FILTER_ENV, "godcoin=info");
     env_logger::init_from_env(env);
-
+    sodiumoxide::init().unwrap();
     godcoin::init().unwrap();
+
     let app = App::new("godcoin")
                 .about("GODcoin core CLI")
                 .version(env!("CARGO_PKG_VERSION"))
@@ -66,7 +68,7 @@ fn main() {
             } else if matches.subcommand_matches("wallet").is_some() {
                 force_quit.store(true, Ordering::Release);
                 let home = godcoin::constants::get_home_and_create();
-                let wallet = Wallet::new(home);
+                let wallet = Wallet::new(Path::join(&home, "wallet"));
                 wallet.start();
             } else if let Some(matches) = matches.subcommand_matches("node") {
                 let node = Node {
