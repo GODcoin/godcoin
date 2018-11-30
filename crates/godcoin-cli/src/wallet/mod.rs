@@ -8,6 +8,14 @@ mod db;
 
 use self::db::{Db, DbState, Password};
 
+macro_rules! check_unlocked {
+    ($self:expr) => {
+        if $self.db.state() != DbState::Unlocked {
+            return Err("wallet not unlocked".to_owned())
+        }
+    };
+}
+
 pub struct Wallet {
     prompt: String,
     db: Db
@@ -68,10 +76,6 @@ impl Wallet {
         if args.len() == 0 { return Ok(false) }
         match &*args[0] {
             "new" => {
-                if args.len() != 2 {
-                    return Err("Missing password arg or too many args supplied".to_owned())
-                }
-
                 let state = self.db.state();
                 if state != DbState::New {
                     if state == DbState::Locked {
@@ -83,6 +87,8 @@ impl Wallet {
                     } else {
                         return Err(format!("Unknown state: {:?}", state))
                     }
+                } else if args.len() != 2 {
+                    return Err("Missing password arg or too many args supplied".to_owned())
                 }
 
                 let pass = &Password(args.remove(1).into_bytes());
@@ -91,10 +97,6 @@ impl Wallet {
                 return Ok(false)
             },
             "unlock" => {
-                if args.len() != 2 {
-                    return Err("Missing password arg or too many args supplied".to_owned())
-                }
-
                 let state = self.db.state();
                 if state != DbState::Locked {
                     if state == DbState::New {
@@ -105,6 +107,8 @@ impl Wallet {
                         return Ok(false)
                     }
                     return Err(format!("Unknown state: {:?}", state))
+                } else if args.len() != 2 {
+                    return Err("Missing password arg or too many args supplied".to_owned())
                 }
 
                 let pass = &Password(args.remove(1).into_bytes());
@@ -116,6 +120,7 @@ impl Wallet {
                 return Ok(false)
             },
             "create_account" => {
+                check_unlocked!(self);
                 if args.len() != 2 {
                     return Err("Missing account arg or too many args supplied".to_owned())
                 }
@@ -129,6 +134,7 @@ impl Wallet {
                 println!("Private key => {}", key.1.to_wif());
             },
             "get_account" => {
+                check_unlocked!(self);
                 if args.len() != 2 {
                     return Err("Missing account arg or too many args supplied".to_owned())
                 }
@@ -144,6 +150,7 @@ impl Wallet {
                 }
             },
             "delete_account" => {
+                check_unlocked!(self);
                 if args.len() != 2 {
                     return Err("Missing account arg or too many args supplied".to_owned())
                 }
@@ -154,6 +161,7 @@ impl Wallet {
                 }
             },
             "list_accounts" => {
+                check_unlocked!(self);
                 println!("Accounts:");
                 for (acc, key) in self.db.get_accounts() {
                     println!("  {} => {}", acc, key.0.to_wif());
