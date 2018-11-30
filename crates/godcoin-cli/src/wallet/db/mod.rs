@@ -60,7 +60,7 @@ impl Db {
             let enc = encrypt_with_key(hash.as_ref(), &key);
             {
                 // Sanity decryption test
-                let dec = decrypt_with_key(&enc, &key);
+                let dec = decrypt_with_key(&enc, &key).unwrap();
                 assert_eq!(dec, hash.as_ref());
             }
             self.db.put(PROP_INIT, &enc).unwrap();
@@ -89,12 +89,17 @@ impl Db {
         {
             let msg = self.db.get(PROP_INIT).unwrap().unwrap();
             let msg = decrypt_with_key(&msg, &key);
-            let hash = double_sha256(&key.0);
-            if hash.as_ref() != msg.as_slice() { return false }
+            match msg {
+                Some(msg) => {
+                    let hash = double_sha256(&key.0);
+                    if hash.as_ref() != msg.as_slice() { return false }
+                },
+                None => return false
+            }
         }
         {
             let msg = self.db.get(PROP_INIT_KEY).unwrap().unwrap();
-            let mut msg = decrypt_with_key(&msg, &key);
+            let mut msg = decrypt_with_key(&msg, &key).unwrap();
             self.key = Some(Key::from_slice(&msg).unwrap());
             self.state = DbState::Unlocked;
             sodiumoxide::utils::memzero(&mut msg);
@@ -114,8 +119,10 @@ impl Db {
         let cf = self.db.cf_handle(CF_ACCOUNTS).unwrap();
         let iter = self.db.iterator_cf(cf, IteratorMode::Start).unwrap();
         for (key, value) in iter {
-            let dec_key = String::from_utf8(decrypt_with_key(&key, secret)).unwrap();
-            let dec_val = String::from_utf8(decrypt_with_key(&value, secret)).unwrap();
+            let dec_key = decrypt_with_key(&key, secret).unwrap();
+            let dec_key = String::from_utf8(dec_key).unwrap();
+            let dec_val = decrypt_with_key(&value, secret).unwrap();
+            let dec_val = String::from_utf8(dec_val).unwrap();
             accounts.push((dec_key, PrivateKey::from_wif(&dec_val).unwrap()));
         }
         accounts
@@ -141,7 +148,8 @@ impl Db {
         let cf = self.db.cf_handle(CF_ACCOUNTS).unwrap();
         let iter = self.db.iterator_cf(cf, IteratorMode::Start).unwrap();
         for (key, _) in iter {
-            let dec_key = String::from_utf8(decrypt_with_key(&key, secret)).unwrap();
+            let dec_key = decrypt_with_key(&key, secret).unwrap();
+            let dec_key = String::from_utf8(dec_key).unwrap();
             if dec_key == account {
                 self.db.delete_cf(cf, &key).unwrap();
                 return true

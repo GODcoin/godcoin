@@ -18,9 +18,9 @@ pub fn encrypt_with_key(msg: &[u8], key: &secretbox::Key) -> Vec<u8> {
     enc
 }
 
-pub fn decrypt_with_key(msg: &[u8], key: &secretbox::Key) -> Vec<u8> {
+pub fn decrypt_with_key(msg: &[u8], key: &secretbox::Key) -> Option<Vec<u8>> {
     let nonce = &msg[0..secretbox::NONCEBYTES];
     let nonce = secretbox::Nonce::from_slice(nonce).unwrap();
     let msg = &msg[secretbox::NONCEBYTES..];
-    secretbox::open(msg, &nonce, &key).unwrap()
+    secretbox::open(msg, &nonce, &key).ok()
 }
