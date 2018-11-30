@@ -75,9 +75,11 @@ impl Wallet {
                 let state = self.db.state();
                 if state != DbState::New {
                     if state == DbState::Locked {
-                        return Err("Use unlock to use the existing wallet".to_owned())
+                        println!("Use unlock to use the existing wallet");
+                        return Ok(false)
                     } else if state == DbState::Unlocked {
-                        return Err("Existing wallet already unlocked".to_owned())
+                        println!("Existing wallet already unlocked");
+                        return Ok(false)
                     } else {
                         return Err(format!("Unknown state: {:?}", state))
                     }
@@ -96,21 +98,22 @@ impl Wallet {
                 let state = self.db.state();
                 if state != DbState::Locked {
                     if state == DbState::New {
-                        return Err("A wallet has not yet been created, use new to create one".to_owned())
+                        println!("A wallet has not yet been created, use new to create one");
+                        return Ok(false)
                     } else if state == DbState::Unlocked {
-                        return Err("Wallet already unlocked".to_owned())
-                    } else {
-                        return Err(format!("Unknown state: {:?}", state))
+                        println!("Wallet already unlocked");
+                        return Ok(false)
                     }
+                    return Err(format!("Unknown state: {:?}", state))
                 }
 
                 let pass = &Password(args.remove(1).into_bytes());
-                return if self.db.unlock(pass) {
+                if self.db.unlock(pass) {
                     self.prompt = "unlocked>> ".to_owned();
-                    Ok(false)
                 } else {
-                    Err("Failed to unlock wallet...incorrect password".to_owned())
+                    println!("Failed to unlock wallet...incorrect password");
                 }
+                return Ok(false)
             },
             "create_account" => {
                 if args.len() != 2 {
