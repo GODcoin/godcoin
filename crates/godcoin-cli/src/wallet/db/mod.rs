@@ -1,6 +1,6 @@
-use rocksdb::{DB, Options, ColumnFamilyDescriptor};
+use rocksdb::{DB, IteratorMode, Options, ColumnFamilyDescriptor};
+use godcoin::crypto::{Wif, KeyPair, PrivateKey, double_sha256};
 use sodiumoxide::crypto::secretbox::{Key, gen_key};
-use godcoin::crypto::double_sha256;
 use std::path::PathBuf;
 
 mod constants;
@@ -107,18 +107,46 @@ impl Db {
         self.key = None;
     }
 
-    fn set(&self, key: &[u8], value: &[u8]) {
+    pub fn get_accounts(&self) -> Vec<(String, KeyPair)> {
         let secret = self.key.as_ref().expect("wallet not unlocked");
-        let enc_key = encrypt_with_key(key, secret);
-        let enc_value = encrypt_with_key(value, secret);
-        self.db.put(&enc_key, &enc_value).unwrap();
+        let mut accounts = Vec::with_capacity(64);
+
+        let cf = self.db.cf_handle(CF_ACCOUNTS).unwrap();
+        let iter = self.db.iterator_cf(cf, IteratorMode::Start).unwrap();
+        for (key, value) in iter {
+            let dec_key = String::from_utf8(decrypt_with_key(&key, secret)).unwrap();
+            let dec_val = String::from_utf8(decrypt_with_key(&value, secret)).unwrap();
+            accounts.push((dec_key, PrivateKey::from_wif(&dec_val).unwrap()));
+        }
+        accounts
     }
 
-    fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
+    pub fn get_account(&self, account: &str) -> Option<KeyPair> {
+        for (acc, pair) in self.get_accounts() {
+            if acc == account { return Some(pair) }
+        }
+        None
+    }
+
+    pub fn set_account(&self, account: &str, key: &PrivateKey) {
         let secret = self.key.as_ref().expect("wallet not unlocked");
-        let key = encrypt_with_key(key, secret);
-        self.db.get(&key).unwrap().map(|bytes| {
-            decrypt_with_key(&bytes, secret)
-        })
+        let enc_key = encrypt_with_key(account.as_bytes(), secret);
+        let enc_value = encrypt_with_key(key.to_wif().as_bytes(), secret);
+        let cf = self.db.cf_handle(CF_ACCOUNTS).unwrap();
+        self.db.put_cf(cf, &enc_key, &enc_value).unwrap();
+    }
+
+    pub fn del_account(&self, account: &str) -> bool {
+        let secret = self.key.as_ref().expect("wallet not unlocked");
+        let cf = self.db.cf_handle(CF_ACCOUNTS).unwrap();
+        let iter = self.db.iterator_cf(cf, IteratorMode::Start).unwrap();
+        for (key, _) in iter {
+            let dec_key = String::from_utf8(decrypt_with_key(&key, secret)).unwrap();
+            if dec_key == account {
+                self.db.delete_cf(cf, &key).unwrap();
+                return true
+            }
+        }
+        false
     }
 }

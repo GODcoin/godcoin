@@ -1,4 +1,5 @@
 use rustyline::{Editor, error::ReadlineError};
+use godcoin::{KeyPair, Wif};
 use std::path::PathBuf;
 use log::error;
 
@@ -108,7 +109,51 @@ impl Wallet {
                     self.prompt = "unlocked>> ".to_owned();
                     Ok(false)
                 } else {
-                    return Err("Failed to unlock wallet...incorrect password".to_owned())
+                    Err("Failed to unlock wallet...incorrect password".to_owned())
+                }
+            },
+            "create_account" => {
+                if args.len() != 2 {
+                    return Err("Missing account arg or too many args supplied".to_owned())
+                }
+                let account = &args[1];
+                if self.db.get_account(account).is_some() {
+                    return Err("Account already exists".to_owned())
+                }
+                let key = KeyPair::gen_keypair();
+                self.db.set_account(account, &key.1);
+                println!("Public key => {}", key.0.to_wif());
+                println!("Private key => {}", key.1.to_wif());
+            },
+            "get_account" => {
+                if args.len() != 2 {
+                    return Err("Missing account arg or too many args supplied".to_owned())
+                }
+                let key = self.db.get_account(&args[1]);
+                match key {
+                    Some(key) => {
+                        println!("Public key => {}", key.0.to_wif());
+                        println!("Private key => {}", key.1.to_wif());
+                    },
+                    None => {
+                        println!("Account not found");
+                    }
+                }
+            },
+            "delete_account" => {
+                if args.len() != 2 {
+                    return Err("Missing account arg or too many args supplied".to_owned())
+                }
+                if self.db.del_account(&args[1]) {
+                    println!("Account permanently deleted");
+                } else {
+                    println!("Account not found");
+                }
+            },
+            "list_accounts" => {
+                println!("Accounts:");
+                for (acc, key) in self.db.get_accounts() {
+                    println!("  {} => {}", acc, key.0.to_wif());
                 }
             },
             "help" => {
@@ -123,9 +168,13 @@ impl Wallet {
 
     fn print_usage(header: &str) {
         let mut cmds = Vec::new();
-        cmds.push(["help", "Displays this help menu"]);
-        cmds.push(["new", "Creates a new wallet"]);
-        cmds.push(["unlock", "Unlocks an existing wallet"]);
+        cmds.push(["help", "Display this help menu"]);
+        cmds.push(["new <password>", "Create a new wallet"]);
+        cmds.push(["unlock <password>", "Unlock an existing wallet"]);
+        cmds.push(["create_account <account>", "Create an account"]);
+        cmds.push(["delete_account <account>", "Delete an existing account"]);
+        cmds.push(["get_account <account>", "Retrieve account information"]);
+        cmds.push(["list_accounts", "List all accounts"]);
 
         let mut max_len = 0;
         for cmd in &cmds {
