@@ -1,5 +1,6 @@
 use sodiumoxide::crypto::sign;
 use sodiumoxide::randombytes;
+use std::fmt;
 use bs58;
 
 use super::sigpair::*;
@@ -10,9 +11,32 @@ pub const PUB_ADDRESS_PREFIX: &str = "GOD";
 const PRIV_BUF_PREFIX: u8 = 0x01;
 const PUB_BUF_PREFIX: u8 = 0x02;
 
-pub trait Wif<T> {
+pub trait Wif<T, U> {
     fn from_wif(s: &str) -> Result<T, WifError>;
-    fn to_wif(&self) -> Box<str>;
+    fn to_wif(&self) -> U;
+}
+
+pub struct PrivateWif(Box<str>);
+
+impl fmt::Display for PrivateWif {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", &*self.0)
+    }
+}
+
+impl std::ops::Deref for PrivateWif {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::ops::Drop for PrivateWif {
+    fn drop(&mut self) {
+        let bytes = unsafe { self.0.as_bytes_mut() };
+        sodiumoxide::utils::memzero(bytes);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -31,7 +55,7 @@ impl PublicKey {
     }
 }
 
-impl Wif<PublicKey> for PublicKey {
+impl Wif<PublicKey, Box<str>> for PublicKey {
     fn from_wif(s: &str) -> Result<PublicKey, WifError> {
         if s.len() < 3 || &s[0..3] != PUB_ADDRESS_PREFIX {
             return Err(WifError::new(WifErrorKind::InvalidPrefix))
@@ -100,7 +124,7 @@ impl PrivateKey {
     }
 }
 
-impl Wif<KeyPair> for PrivateKey {
+impl Wif<KeyPair, PrivateWif> for PrivateKey {
     fn from_wif(s: &str) -> Result<KeyPair, WifError> {
         let raw = match bs58::decode(s).into_vec() {
             Ok(bytes) => bytes,
@@ -129,7 +153,7 @@ impl Wif<KeyPair> for PrivateKey {
         }))
     }
 
-    fn to_wif(&self) -> Box<str> {
+    fn to_wif(&self) -> PrivateWif {
         let mut buf = Vec::<u8>::with_capacity(37);
         buf.push(PRIV_BUF_PREFIX);
         buf.extend_from_slice(&self.seed.0);
@@ -137,7 +161,7 @@ impl Wif<KeyPair> for PrivateKey {
         let checksum = &double_sha256(&buf)[0..4];
         buf.extend_from_slice(checksum);
 
-        bs58::encode(buf).into_string().into_boxed_str()
+        PrivateWif(bs58::encode(buf).into_string().into_boxed_str())
     }
 }
 
