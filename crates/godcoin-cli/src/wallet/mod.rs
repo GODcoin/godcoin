@@ -1,5 +1,5 @@
 use rustyline::{Editor, error::ReadlineError};
-use godcoin::{KeyPair, Wif};
+use godcoin::{PrivateKey, KeyPair, Wif};
 use std::path::PathBuf;
 use log::error;
 
@@ -12,6 +12,14 @@ macro_rules! check_unlocked {
     ($self:expr) => {
         if $self.db.state() != DbState::Unlocked {
             return Err("wallet not unlocked".to_owned())
+        }
+    };
+}
+
+macro_rules! check_args {
+    ($args:expr, $count:expr) => {
+        if $args.len() != $count {
+            return Err("Missing arguments or too many provided".to_owned())
         }
     };
 }
@@ -87,10 +95,9 @@ impl Wallet {
                     } else {
                         return Err(format!("Unknown state: {:?}", state))
                     }
-                } else if args.len() != 2 {
-                    return Err("Missing password arg or too many args supplied".to_owned())
                 }
 
+                check_args!(args, 2);
                 let pass = &Password(args.remove(1).into_bytes());
                 self.db.set_password(pass);
                 self.prompt = "locked>> ".to_owned();
@@ -107,10 +114,9 @@ impl Wallet {
                         return Ok(false)
                     }
                     return Err(format!("Unknown state: {:?}", state))
-                } else if args.len() != 2 {
-                    return Err("Missing password arg or too many args supplied".to_owned())
                 }
 
+                check_args!(args, 2);
                 let pass = &Password(args.remove(1).into_bytes());
                 if self.db.unlock(pass) {
                     self.prompt = "unlocked>> ".to_owned();
@@ -121,23 +127,35 @@ impl Wallet {
             },
             "create_account" => {
                 check_unlocked!(self);
-                if args.len() != 2 {
-                    return Err("Missing account arg or too many args supplied".to_owned())
-                }
                 let account = &args[1];
                 if self.db.get_account(account).is_some() {
-                    return Err("Account already exists".to_owned())
+                    println!("Account already exists");
+                    return Ok(true)
                 }
                 let key = KeyPair::gen_keypair();
                 self.db.set_account(account, &key.1);
                 println!("Public key => {}", key.0.to_wif());
                 println!("Private key => {}", key.1.to_wif());
             },
+            "import_account" => {
+                check_unlocked!(self);
+                check_args!(args, 3);
+                let account = &args[1];
+                let wif = PrivateKey::from_wif(&args[2]).map_err(|_| "Invalid wif".to_owned())?;
+                for (acc, pair) in self.db.get_accounts() {
+                    if &acc == account {
+                        println!("Account already exists");
+                        return Ok(true)
+                    } else if pair.1 == wif.1 {
+                        println!("Wif already exists under account `{}`", &acc);
+                        return Ok(true)
+                    }
+                }
+                self.db.set_account(account, &wif.1);
+            },
             "get_account" => {
                 check_unlocked!(self);
-                if args.len() != 2 {
-                    return Err("Missing account arg or too many args supplied".to_owned())
-                }
+                check_args!(args, 2);
                 let key = self.db.get_account(&args[1]);
                 match key {
                     Some(key) => {
@@ -151,9 +169,7 @@ impl Wallet {
             },
             "delete_account" => {
                 check_unlocked!(self);
-                if args.len() != 2 {
-                    return Err("Missing account arg or too many args supplied".to_owned())
-                }
+                check_args!(args, 2);
                 if self.db.del_account(&args[1]) {
                     println!("Account permanently deleted");
                 } else {
@@ -183,6 +199,7 @@ impl Wallet {
         cmds.push(["new <password>", "Create a new wallet"]);
         cmds.push(["unlock <password>", "Unlock an existing wallet"]);
         cmds.push(["create_account <account>", "Create an account"]);
+        cmds.push(["import_account <account> <wif>", "Import an account"]);
         cmds.push(["delete_account <account>", "Delete an existing account"]);
         cmds.push(["get_account <account>", "Retrieve account information"]);
         cmds.push(["list_accounts", "List all accounts"]);
