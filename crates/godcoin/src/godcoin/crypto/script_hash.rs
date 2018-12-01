@@ -17,7 +17,7 @@ impl ScriptHash {
     }
 }
 
-impl Wif<ScriptHash> for ScriptHash {
+impl Wif<ScriptHash, Box<str>> for ScriptHash {
     fn from_wif(s: &str) -> Result<ScriptHash, WifError> {
         if s.len() < 3 || &s[0..3] != PUB_ADDRESS_PREFIX {
             return Err(WifError::new(WifErrorKind::InvalidPrefix))
