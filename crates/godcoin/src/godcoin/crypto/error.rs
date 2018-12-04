@@ -36,8 +36,8 @@ impl Error for WifError {
     }
 }
 
-impl ::std::fmt::Display for WifError {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Display for WifError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.description())
     }
 }

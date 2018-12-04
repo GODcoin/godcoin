@@ -102,7 +102,7 @@ impl PeerPool {
         }
 
         self.peers.lock().push(state.clone());
-        ::tokio::spawn(state.rx.clone().for_each(move |evt| {
+        tokio::spawn(state.rx.clone().for_each(move |evt| {
             match evt {
                 ClientEvent::Connect => {
                     state.connected.store(true, Ordering::Release);

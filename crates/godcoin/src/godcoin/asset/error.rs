@@ -28,8 +28,8 @@ impl Error for AssetError {
     }
 }
 
-impl ::std::fmt::Display for AssetError {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl std::fmt::Display for AssetError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.description())
     }
 }

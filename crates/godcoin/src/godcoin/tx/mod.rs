@@ -77,7 +77,7 @@ impl TxVariant {
     }
 }
 
-impl ::std::ops::Deref for TxVariant {
+impl std::ops::Deref for TxVariant {
     type Target = Tx;
 
     fn deref(&self) -> &Self::Target {
@@ -256,7 +256,7 @@ tx_sign!(TransferTx);
 
 #[cfg(test)]
 mod tests {
-    use ::std::str::FromStr;
+    use std::str::FromStr;
 
     use crate::crypto;
     use super::*;

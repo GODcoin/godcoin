@@ -17,7 +17,7 @@ pub fn tracked<In, Out, F>(req_handler: F) -> ChannelTracker<In, Out>
         messages: Arc::new(Mutex::new(HashMap::with_capacity(16)))
     };
 
-    ::tokio::spawn(rx.for_each({
+    tokio::spawn(rx.for_each({
         let msgs = Arc::clone(&tracker.messages);
         move |msg| {
             let res = req_handler(msg.msg);

@@ -1,6 +1,6 @@
 macro_rules! tx_deref {
     ($ty:ty) => {
-        impl ::std::ops::Deref for $ty {
+        impl std::ops::Deref for $ty {
             type Target = Tx;
 
             #[inline(always)]

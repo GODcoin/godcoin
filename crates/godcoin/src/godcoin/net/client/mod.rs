@@ -116,7 +116,7 @@ pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, Cli
 fn start_connect_loop(state: state::ConnectState, out_tx: ChannelSender<ClientEvent>, mut tries: u8) {
     if !state.stay_connected.load(Ordering::Acquire) { return }
     let c = connect(state.addr, state.peer_type);
-    ::tokio::spawn(c.and_then({
+    tokio::spawn(c.and_then({
         let out_tx = out_tx.clone();
         let state = state.clone();
         move |peer| {
@@ -139,7 +139,7 @@ fn start_connect_loop(state: state::ConnectState, out_tx: ChannelSender<ClientEv
                 })
             };
 
-            ::tokio::spawn(ZipEither::new(peer, rx).take_while({
+            tokio::spawn(ZipEither::new(peer, rx).take_while({
                 let stay_connected = Arc::clone(&state.stay_connected);
                 let connected = Arc::clone(&connected);
                 move |_| {
@@ -193,12 +193,12 @@ fn start_connect_loop(state: state::ConnectState, out_tx: ChannelSender<ClientEv
 }
 
 fn try_connect(state: state::ConnectState, out_tx: ChannelSender<ClientEvent>, tries: u8) {
-    use ::std::time::{Duration, Instant};
+    use std::time::{Duration, Instant};
 
     let ms = backoff(tries);
     info!("[{}] Attempting to reconnect to peer in {} ms (tries: {})", state.addr, ms, tries);
     let d = Instant::now() + Duration::from_millis(ms);
-    ::tokio::spawn(Delay::new(d).map(move |_| {
+    tokio::spawn(Delay::new(d).map(move |_| {
         start_connect_loop(state, out_tx, tries);
     }).map_err(|e| {
         error!("Connection timer error: {}", e);
