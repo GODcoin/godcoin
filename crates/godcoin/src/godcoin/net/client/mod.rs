@@ -58,7 +58,7 @@ pub fn connect(addr: SocketAddr, peer_type: PeerType) -> impl Future<Item = Peer
 ///
 /// When attempting to send a message that requires the connection to be open.
 ///
-pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, ClientReceiver) {
+pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> Client {
     let (out_tx, out_rx) = channel::unbounded();
     let state = state::ConnectState::new(addr, peer_type);
     start_connect_loop(state.clone(), out_tx, 0);
@@ -110,7 +110,7 @@ pub fn connect_loop(addr: SocketAddr, peer_type: PeerType) -> (ClientSender, Cli
         }
     });
 
-    (tracker, out_rx)
+    Client::new(tracker, out_rx)
 }
 
 fn start_connect_loop(state: state::ConnectState, out_tx: ChannelSender<ClientEvent>, mut tries: u8) {

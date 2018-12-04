@@ -12,3 +12,14 @@ pub enum ClientEvent {
     Connect,
     Disconnect
 }
+
+pub struct Client {
+    pub tx: ClientSender,
+    pub rx: ClientReceiver
+}
+
+impl Client {
+    pub fn new(tx: ClientSender, rx: ClientReceiver) -> Self {
+        Self { tx, rx }
+    }
+}

@@ -37,7 +37,7 @@ impl PeerPool {
     pub fn start(&self, blockchain: &Arc<Blockchain>, minter: &Arc<Option<Minter>>) {
         assert!(self.peers.lock().is_empty(), "peer pool already started");
         for addr in self.peer_addresses.clone() {
-            let (tx, rx) = connect_loop(addr, PeerType::NODE);
+            let Client { tx, rx } = connect_loop(addr, PeerType::NODE);
             let state = PeerState {
                 tx,
                 rx,
