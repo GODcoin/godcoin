@@ -57,14 +57,14 @@ pub fn start(addr: SocketAddr, blockchain: Arc<Blockchain>, minter: Arc<Option<M
             Ok(())
         });
 
-        ::tokio::spawn(client.map_err(move |e| {
+        tokio::spawn(client.map_err(move |e| {
             debug!("[{}] Handshake error: {:?}", addr, e);
         }));
         Ok(())
     }).map_err(|err| {
         error!("Server accept error: {:?}", err);
     });
-    ::tokio::spawn(server);
+    tokio::spawn(server);
 }
 
 fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, minter: Arc<Option<Minter>>) {
@@ -87,7 +87,7 @@ fn handle_peer(peer: Peer, blockchain: Arc<Blockchain>, minter: Arc<Option<Minte
     let addr = peer.addr;
     let force_close = Arc::new(AtomicBool::new(false));
     let sender = peer.get_sender();
-    ::tokio::spawn(ZipEither::new(peer, rx).take_while({
+    tokio::spawn(ZipEither::new(peer, rx).take_while({
         let force_close = Arc::clone(&force_close);
         move |_| {
             Ok(!force_close.load(Ordering::Acquire))

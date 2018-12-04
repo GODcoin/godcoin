@@ -36,7 +36,7 @@ impl Minter {
     pub fn start_timer(self) {
         let dur = Duration::from_millis(constants::BLOCK_PROD_TIME);
         let at = Instant::now() + dur;
-        ::tokio::spawn(Interval::new(at, dur).for_each(move |_| {
+        tokio::spawn(Interval::new(at, dur).for_each(move |_| {
             self.produce();
             Ok(())
         }).map_err(|err| {

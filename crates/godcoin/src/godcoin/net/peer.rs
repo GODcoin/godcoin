@@ -125,7 +125,7 @@ impl Stream for Peer {
     }
 }
 
-impl ::std::ops::Drop for Peer {
+impl std::ops::Drop for Peer {
     fn drop(&mut self) {
         debug!("Peer dropped: {:?}", self);
     }
