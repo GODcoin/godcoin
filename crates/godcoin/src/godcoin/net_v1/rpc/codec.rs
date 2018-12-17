@@ -5,7 +5,7 @@ use bytes::{BufMut, BytesMut};
 use crate::blockchain::Properties;
 use crate::serializer::*;
 use crate::tx::TxVariant;
-use crate::net::rpc::*;
+use super::*;
 
 // 5 MiB limit
 const MAX_PAYLOAD_LEN: u32 = 5_242_880;

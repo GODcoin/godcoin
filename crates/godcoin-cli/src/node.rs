@@ -1,4 +1,4 @@
-use godcoin::{*, net::PeerPool, producer::Minter};
+use godcoin::{*, net_v1::PeerPool, producer::Minter};
 use std::borrow::Cow;
 use std::sync::Arc;
 use log::info;
@@ -74,7 +74,7 @@ impl<'a> Node<'a> {
         if let Some(bind) = self.bind_address {
             let addr = bind.parse()
                             .unwrap_or_else(|_| panic!("Failed to parse address: {:?}", bind));
-            net::server::start(addr, blockchain, minter);
+            net_v1::server::start(addr, blockchain, minter);
         }
     }
 }

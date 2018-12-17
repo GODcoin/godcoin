@@ -1,4 +1,5 @@
 use super::rpc::codec::RpcCodec;
+use super::{peer::*, rpc::*};
 
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use log::{info, warn, error, debug};
@@ -11,8 +12,6 @@ use tokio::prelude::*;
 
 use crate::blockchain::Blockchain;
 use crate::producer::Minter;
-use crate::net::peer::*;
-use crate::net::rpc::*;
 use crate::fut_util::*;
 
 pub fn start(addr: SocketAddr, blockchain: Arc<Blockchain>, minter: Arc<Option<Minter>>) {

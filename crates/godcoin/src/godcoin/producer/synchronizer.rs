@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use crate::net::peer_pool::*;
+use crate::net_v1::peer_pool::*;
 use crate::blockchain::*;
 
 pub struct Synchronizer {

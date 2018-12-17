@@ -12,7 +12,7 @@ pub use self::serializer::*;
 pub mod tx;
 pub use self::tx::*;
 
-pub mod net;
+pub mod net_v1;
 pub mod blockchain;
 pub mod producer;
 pub mod constants;
