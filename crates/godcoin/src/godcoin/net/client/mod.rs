@@ -33,7 +33,8 @@ pub fn connect(addr: SocketAddr, peer_type: PeerType) -> impl Future<Item = Peer
         debug!("[{}] Sending handshake: {:?}", addr, &msg);
         frame.send(msg)
     }).and_then(move |frame| {
-        let (resp, frame) = frame.into_future().map_err(|(e, _)| e).wait()?;
+        frame.into_future().map_err(|(e, _)| e)
+    }).and_then(move |(resp, frame)| {
         let resp = resp.ok_or_else(|| Error::from(ErrorKind::UnexpectedEof))?;
         debug!("[{}] Received handshake message: {:?}", addr, &resp);
         if resp.id != 0 {
