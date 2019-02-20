@@ -210,6 +210,6 @@ fn backoff(tries: u8) -> u64 {
     use rand::Rng;
     let tries = f64::from(tries);
     let max = 15000f64;
-    let rand = rand::thread_rng().gen_range::<f64>(0.2f64, 1f64);
+    let rand = rand::thread_rng().gen_range(0.2f64, 1f64);
     max.min((1.25f64.powf(tries) * 1000f64 * rand).floor()) as u64
 }

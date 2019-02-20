@@ -4,11 +4,8 @@ use futures::{
     Async,
     Poll
 };
-use crossbeam_channel::{
-    internal::channel::{RecvNonblocking, recv_nonblocking},
-    self
-};
 use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use crossbeam_channel::TryRecvError;
 
 pub fn unbounded<T>() -> (ChannelSender<T>, ChannelStream<T>) {
     let (tx, rx) = crossbeam_channel::unbounded::<T>();
@@ -31,7 +28,7 @@ pub struct ChannelSender<T> {
 
 impl<T> ChannelSender<T> {
     pub fn send(&self, msg: T) {
-        self.tx.send(msg);
+        self.tx.send(msg).unwrap();
         self.task.notify();
     }
 }
@@ -80,16 +77,16 @@ impl<T> Stream for ChannelStream<T> {
 
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         self.task.register();
-        match recv_nonblocking(&self.rx) {
-            RecvNonblocking::Message(msg) => {
-                Ok(Async::Ready(Some(msg)))
-            },
-            RecvNonblocking::Empty => {
-                Ok(Async::NotReady)
-            },
-            RecvNonblocking::Closed => {
-                self.is_done.store(true, Ordering::Release);
-                Ok(Async::Ready(None))
+        match self.rx.try_recv() {
+            Ok(v) => Ok(Async::Ready(Some(v))),
+            Err(e) => {
+                match e {
+                    TryRecvError::Empty => Ok(Async::NotReady),
+                    TryRecvError::Disconnected => {
+                        self.is_done.store(true, Ordering::Release);
+                        Ok(Async::Ready(None))
+                    }
+                }
             }
         }
     }
