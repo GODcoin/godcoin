@@ -1,5 +1,7 @@
 [workspace]
 members = [
     "crates/godcoin",
-    "crates/godcoin-cli"
+    "crates/cli",
+    "crates/p2p",
+    "crates/simulation"
 ]

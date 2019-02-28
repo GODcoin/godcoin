@@ -1,0 +1,17 @@
+[package]
+name = "godcoin-p2p"
+version = "0.1.0"
+authors = ["samrg472 <samrg472@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+bytes = "0.4.11"
+futures = "0.1.25"
+crossbeam-channel = "0.3.8"
+log = "0.4.6"
+parking_lot = "0.7.1"
+tokio = "0.1.15"
+
+[dependencies.actix]
+version = "0.7.9"
+default-features = false
