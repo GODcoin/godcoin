@@ -32,10 +32,7 @@ impl Encoder for Codec {
     fn encode(&mut self, item: Self::Item, buf: &mut BytesMut) -> Result<(), Error> {
         assert!(item.id.len() < usize::from(MAX_ID_LEN));
         assert!((item.msg.len() as u32) < MAX_MSG_LEN);
-        {
-            let total_len = item.id.len() + item.msg.len() + 5;
-            buf.reserve(total_len + 5);
-        }
+        buf.reserve(item.id.len() + item.msg.len() + 5);
         buf.put_u8(item.id.len() as u8);
         buf.put_u32_be(item.msg.len() as u32);
         buf.put(item.id);
