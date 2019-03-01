@@ -8,7 +8,6 @@ use std::{
     io::Error,
     fmt
 };
-use bytes::BytesMut;
 use crate::*;
 
 #[derive(Message)]
@@ -80,9 +79,9 @@ impl Actor for Session {
     }
 }
 
-impl StreamHandler<BytesMut, Error> for Session {
-    fn handle(&mut self, msg: BytesMut, _: &mut Self::Context) {
-        debug!("[{}] Received frame bytes: {:?}", self.info.addr, msg);
+impl StreamHandler<Payload, Error> for Session {
+    fn handle(&mut self, msg: Payload, _: &mut Self::Context) {
+        debug!("[{}] Received frame: {:?}", self.info.addr, msg);
     }
 
     fn error(&mut self, err: Error, _: &mut Self::Context) -> Running {

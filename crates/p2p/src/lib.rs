@@ -2,7 +2,7 @@ mod session;
 mod server;
 mod codec;
 
-use codec::Codec;
+use codec::{Codec, Payload};
 use session::{Session, SessionMsg, SessionInfo, ConnectionType};
 
 pub mod network;
