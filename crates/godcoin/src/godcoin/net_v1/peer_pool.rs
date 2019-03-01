@@ -19,7 +19,7 @@ pub struct PeerPool {
 
 impl PeerPool {
     pub fn new(addrs: &[&str]) -> PeerPool {
-        let peer_addresses = addrs.into_iter().map(|s| {
+        let peer_addresses = addrs.iter().map(|s| {
             (*s).parse().map_err(|e| {
                 format!("failed to parse address: {} {}", *s, e)
             }).unwrap()
