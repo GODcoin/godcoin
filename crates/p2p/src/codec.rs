@@ -78,6 +78,7 @@ impl Decoder for Codec {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error;
     use super::*;
 
     macro_rules! assert_decode {
@@ -90,6 +91,28 @@ mod tests {
                 assert_eq!(res.msg, $msg, "msg mismatch");
             }
         };
+    }
+
+    #[test]
+    fn test_max_id_len() {
+        let mut codec = Codec::new();
+        let mut bytes = BytesMut::from(vec![
+            MAX_ID_LEN + 1,
+            0, 0, 0, 0
+        ]);
+        let err = codec.decode(&mut bytes).unwrap_err();
+        assert_eq!(err.description(), format!("id must be <={} bytes", MAX_ID_LEN));
+    }
+
+    #[test]
+    fn test_max_msg_len() {
+        let mut codec = Codec::new();
+        let mut bytes = BytesMut::from(vec![
+            1,
+            255, 255, 255, 255
+        ]);
+        let err = codec.decode(&mut bytes).unwrap_err();
+        assert_eq!(err.description(), format!("msg must be <={} bytes", MAX_MSG_LEN));
     }
 
     #[test]
