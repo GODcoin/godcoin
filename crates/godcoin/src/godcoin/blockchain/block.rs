@@ -1,11 +1,11 @@
 use sodiumoxide::crypto::hash::sha256::Digest;
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::ops::Deref;
 use std::io::Cursor;
+use std::ops::Deref;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::crypto::{KeyPair, double_sha256};
-use crate::serializer::*;
 use crate::crypto;
+use crate::crypto::{double_sha256, KeyPair};
+use crate::serializer::*;
 use crate::tx::*;
 
 #[derive(Debug, Clone)]
@@ -14,7 +14,7 @@ pub struct Block {
     pub height: u64,
     pub timestamp: u32,
     pub tx_merkle_root: Digest,
-    pub transactions: Vec<TxVariant>
+    pub transactions: Vec<TxVariant>,
 }
 
 impl Block {
@@ -22,7 +22,7 @@ impl Block {
         let buf = self.calc_hash();
         SignedBlock {
             base: self,
-            sig_pair: key_pair.sign(buf.as_ref())
+            sig_pair: key_pair.sign(buf.as_ref()),
         }
     }
 
@@ -30,7 +30,9 @@ impl Block {
         self.encode(vec);
 
         vec.push_u32(self.transactions.len() as u32);
-        for tx in &self.transactions { tx.encode_with_sigs(vec) };
+        for tx in &self.transactions {
+            tx.encode_with_sigs(vec)
+        }
     }
 
     pub fn decode_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
@@ -50,7 +52,7 @@ impl Block {
             height,
             timestamp,
             tx_merkle_root,
-            transactions
+            transactions,
         })
     }
 
@@ -63,7 +65,9 @@ impl Block {
 
     pub fn verify_tx_merkle_root(&self) -> bool {
         let mut buf = Vec::with_capacity(4096 * self.transactions.len());
-        for tx in &self.transactions { tx.encode_with_sigs(&mut buf) };
+        for tx in &self.transactions {
+            tx.encode_with_sigs(&mut buf)
+        }
         let digest = double_sha256(&buf);
         self.tx_merkle_root == digest
     }
@@ -82,7 +86,7 @@ impl Block {
 #[derive(Debug, Clone)]
 pub struct SignedBlock {
     pub base: Block,
-    pub sig_pair: crypto::SigPair
+    pub sig_pair: crypto::SigPair,
 }
 
 impl SignedBlock {
@@ -94,16 +98,21 @@ impl SignedBlock {
         };
         let tx_merkle_root = {
             let mut buf = Vec::with_capacity(4096 * txs.len());
-            for tx in &txs { tx.encode_with_sigs(&mut buf) };
+            for tx in &txs {
+                tx.encode_with_sigs(&mut buf)
+            }
             double_sha256(&buf)
         };
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         Block {
             previous_hash,
             height: self.height + 1,
             timestamp: timestamp as u32,
             tx_merkle_root,
-            transactions: txs
+            transactions: txs,
         }
     }
 
@@ -117,7 +126,7 @@ impl SignedBlock {
         let sig_pair = cur.take_sig_pair().ok()?;
         Some(Self {
             base: block,
-            sig_pair
+            sig_pair,
         })
     }
 }
@@ -134,9 +143,9 @@ impl Deref for SignedBlock {
 mod tests {
     use std::str::FromStr;
 
-    use crate::crypto::KeyPair;
-    use crate::asset::Asset;
     use super::*;
+    use crate::asset::Asset;
+    use crate::crypto::KeyPair;
 
     #[test]
     fn test_serialize_block() {
@@ -148,16 +157,18 @@ mod tests {
                     tx_type: TxType::REWARD,
                     fee: Asset::from_str("0 GOLD").unwrap(),
                     timestamp: 1234567890,
-                    signature_pairs: Vec::new()
+                    signature_pairs: Vec::new(),
                 },
                 to: keys.0.clone().into(),
-                rewards: Vec::new()
+                rewards: Vec::new(),
             }));
             vec
         };
         let tx_merkle_root = {
             let mut buf = Vec::new();
-            for tx in &transactions { tx.encode_with_sigs(&mut buf) };
+            for tx in &transactions {
+                tx.encode_with_sigs(&mut buf)
+            }
             double_sha256(&buf)
         };
         let block = (Block {
@@ -165,8 +176,9 @@ mod tests {
             height: 123,
             timestamp: 1532992800,
             tx_merkle_root,
-            transactions
-        }).sign(&keys);
+            transactions,
+        })
+        .sign(&keys);
 
         let mut buf = Vec::new();
         block.encode_with_tx(&mut buf);

@@ -1,20 +1,25 @@
-use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
-use std::collections::HashMap;
 use futures::sync::oneshot;
 use parking_lot::Mutex;
+use std::collections::HashMap;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 use tokio::prelude::*;
 
 use super::unbounded;
 
 pub fn tracked<In, Out, F>(req_handler: F) -> ChannelTracker<In, Out>
-        where In: Send + 'static,
-                Out: Send + 'static,
-                F: Fn(In) -> Out + Send + 'static {
+where
+    In: Send + 'static,
+    Out: Send + 'static,
+    F: Fn(In) -> Out + Send + 'static,
+{
     let (tx, rx) = unbounded::unbounded::<ChannelMessage<In>>();
     let tracker = ChannelTracker {
         id: Arc::new(AtomicUsize::new(0)),
         tx,
-        messages: Arc::new(Mutex::new(HashMap::with_capacity(16)))
+        messages: Arc::new(Mutex::new(HashMap::with_capacity(16))),
     };
 
     tokio::spawn(rx.for_each({
@@ -22,9 +27,10 @@ pub fn tracked<In, Out, F>(req_handler: F) -> ChannelTracker<In, Out>
         move |msg| {
             let res = req_handler(msg.msg);
             let handler = msgs.lock().remove(&msg.id).unwrap();
-            handler.send(res).map_err(|_| {
-                "failed to send msg to handler"
-            }).unwrap();
+            handler
+                .send(res)
+                .map_err(|_| "failed to send msg to handler")
+                .unwrap();
             Ok(())
         }
     }));
@@ -35,7 +41,7 @@ pub fn tracked<In, Out, F>(req_handler: F) -> ChannelTracker<In, Out>
 pub struct ChannelTracker<In, Out> {
     id: Arc<AtomicUsize>,
     tx: unbounded::ChannelSender<ChannelMessage<In>>,
-    messages: Arc<Mutex<HashMap<usize, oneshot::Sender<Out>>>>
+    messages: Arc<Mutex<HashMap<usize, oneshot::Sender<Out>>>>,
 }
 
 impl<In, Out> Clone for ChannelTracker<In, Out> {
@@ -43,7 +49,7 @@ impl<In, Out> Clone for ChannelTracker<In, Out> {
         ChannelTracker {
             id: Arc::clone(&self.id),
             tx: self.tx.clone(),
-            messages: Arc::clone(&self.messages)
+            messages: Arc::clone(&self.messages),
         }
     }
 }
@@ -53,15 +59,12 @@ impl<In, Out> ChannelTracker<In, Out> {
         let (tx, rx) = oneshot::channel::<Out>();
         let id = self.id.fetch_add(1, Ordering::AcqRel);
         self.messages.lock().insert(id, tx);
-        self.tx.send(ChannelMessage {
-            id,
-            msg
-        });
+        self.tx.send(ChannelMessage { id, msg });
         rx
     }
 }
 
 struct ChannelMessage<T> {
     id: usize,
-    msg: T
+    msg: T,
 }

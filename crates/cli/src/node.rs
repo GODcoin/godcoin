@@ -1,12 +1,12 @@
-use godcoin::{*, net_v1::PeerPool, producer::Minter};
+use godcoin::{net_v1::PeerPool, producer::Minter, *};
+use log::info;
 use std::borrow::Cow;
 use std::sync::Arc;
-use log::info;
 
 pub struct Node<'a> {
     pub bind_address: Option<&'a str>,
     pub minter_key: Option<KeyPair>,
-    pub peers: Option<Vec<&'a str>>
+    pub peers: Option<Vec<&'a str>>,
 }
 
 impl<'a> Node<'a> {
@@ -16,11 +16,9 @@ impl<'a> Node<'a> {
 
         let home: PathBuf = {
             use dirs;
-            let home = env::var("GODCOIN_HOME").map(|s| {
-                PathBuf::from(s)
-            }).unwrap_or_else(|_| {
-                Path::join(&dirs::data_local_dir().unwrap(), "godcoin")
-            });
+            let home = env::var("GODCOIN_HOME")
+                .map(|s| PathBuf::from(s))
+                .unwrap_or_else(|_| Path::join(&dirs::data_local_dir().unwrap(), "godcoin"));
             if !Path::is_dir(&home) {
                 let res = std::fs::create_dir(&home);
                 res.unwrap_or_else(|_| panic!("Failed to create dir at {:?}", &home));
@@ -32,18 +30,23 @@ impl<'a> Node<'a> {
         };
 
         let blockchain = Blockchain::new(&home);
-        info!("Using height in block log at {}", blockchain.get_chain_height());
+        info!(
+            "Using height in block log at {}",
+            blockchain.get_chain_height()
+        );
 
         let blockchain = Arc::new(blockchain);
         let minter = match &self.minter_key {
             Some(key) => {
-                let bond = blockchain.get_bond(&key.0).expect("No bond found for minter key");
+                let bond = blockchain
+                    .get_bond(&key.0)
+                    .expect("No bond found for minter key");
                 let minter = key.clone();
                 let staker = bond.staker;
                 let minter = Minter::new(Arc::clone(&blockchain), minter, staker);
                 Arc::new(Some(minter))
-            },
-            None => Arc::new(None)
+            }
+            None => Arc::new(None),
         };
 
         {
@@ -72,8 +75,9 @@ impl<'a> Node<'a> {
         }
 
         if let Some(bind) = self.bind_address {
-            let addr = bind.parse()
-                            .unwrap_or_else(|_| panic!("Failed to parse address: {:?}", bind));
+            let addr = bind
+                .parse()
+                .unwrap_or_else(|_| panic!("Failed to parse address: {:?}", bind));
             net_v1::server::start(addr, blockchain, minter);
         }
     }

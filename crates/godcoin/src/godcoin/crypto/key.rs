@@ -1,10 +1,10 @@
+use bs58;
 use sodiumoxide::crypto::sign;
 use sodiumoxide::randombytes;
 use std::fmt;
-use bs58;
 
-use super::sigpair::*;
 use super::error::*;
+use super::sigpair::*;
 use super::util::*;
 
 pub const PUB_ADDRESS_PREFIX: &str = "GOD";
@@ -58,28 +58,30 @@ impl PublicKey {
 impl Wif<PublicKey, Box<str>> for PublicKey {
     fn from_wif(s: &str) -> Result<PublicKey, WifError> {
         if s.len() < 3 || &s[0..3] != PUB_ADDRESS_PREFIX {
-            return Err(WifError::new(WifErrorKind::InvalidPrefix))
+            return Err(WifError::new(WifErrorKind::InvalidPrefix));
         }
         let raw = match bs58::decode(&s[3..]).into_vec() {
             Ok(bytes) => bytes,
-            Err(_) => return Err(WifError::new(WifErrorKind::InvalidBs58Encoding))
+            Err(_) => {
+                return Err(WifError::new(WifErrorKind::InvalidBs58Encoding));
+            }
         };
         if raw.len() != 37 {
-            return Err(WifError::new(WifErrorKind::InvalidLen))
+            return Err(WifError::new(WifErrorKind::InvalidLen));
         } else if raw[0] != PUB_BUF_PREFIX {
-            return Err(WifError::new(WifErrorKind::InvalidPrefix))
+            return Err(WifError::new(WifErrorKind::InvalidPrefix));
         }
 
         let prefixed_key = &raw[0..raw.len() - 4];
         {
-            let checksum_a = &raw[raw.len() - 4 .. raw.len()];
+            let checksum_a = &raw[raw.len() - 4..raw.len()];
             let checksum_b = &double_sha256(prefixed_key)[0..4];
             if checksum_a != checksum_b {
-                return Err(WifError::new(WifErrorKind::InvalidChecksum))
+                return Err(WifError::new(WifErrorKind::InvalidChecksum));
             }
         }
 
-        let key = &prefixed_key[1 .. prefixed_key.len()];
+        let key = &prefixed_key[1..prefixed_key.len()];
         Ok(PublicKey(sign::PublicKey::from_slice(key).unwrap()))
     }
 
@@ -106,7 +108,7 @@ impl AsRef<[u8]> for PublicKey {
 #[derive(Debug, Clone)]
 pub struct PrivateKey {
     seed: sign::Seed,
-    key: sign::SecretKey
+    key: sign::SecretKey,
 }
 
 impl PrivateKey {
@@ -119,7 +121,7 @@ impl PrivateKey {
     pub fn from_slice(seed: &[u8], key: &[u8]) -> Option<PrivateKey> {
         Some(PrivateKey {
             seed: sign::Seed::from_slice(seed)?,
-            key: sign::SecretKey::from_slice(key)?
+            key: sign::SecretKey::from_slice(key)?,
         })
     }
 }
@@ -128,29 +130,28 @@ impl Wif<KeyPair, PrivateWif> for PrivateKey {
     fn from_wif(s: &str) -> Result<KeyPair, WifError> {
         let raw = match bs58::decode(s).into_vec() {
             Ok(bytes) => bytes,
-            Err(_) => return Err(WifError::new(WifErrorKind::InvalidBs58Encoding))
+            Err(_) => {
+                return Err(WifError::new(WifErrorKind::InvalidBs58Encoding));
+            }
         };
         if raw.len() != 37 {
-            return Err(WifError::new(WifErrorKind::InvalidLen))
+            return Err(WifError::new(WifErrorKind::InvalidLen));
         } else if raw[0] != PRIV_BUF_PREFIX {
-            return Err(WifError::new(WifErrorKind::InvalidPrefix))
+            return Err(WifError::new(WifErrorKind::InvalidPrefix));
         }
 
         let key = &raw[0..raw.len() - 4];
         {
-            let checksum_a = &raw[raw.len() - 4 .. raw.len()];
+            let checksum_a = &raw[raw.len() - 4..raw.len()];
             let checksum_b = &double_sha256(key)[0..4];
             if checksum_a != checksum_b {
-                return Err(WifError::new(WifErrorKind::InvalidChecksum))
+                return Err(WifError::new(WifErrorKind::InvalidChecksum));
             }
         }
 
         let seed = sign::Seed::from_slice(&key[1..]).unwrap();
         let (pk, sk) = sign::keypair_from_seed(&seed);
-        Ok(KeyPair(PublicKey(pk), PrivateKey {
-            seed,
-            key: sk
-        }))
+        Ok(KeyPair(PublicKey(pk), PrivateKey { seed, key: sk }))
     }
 
     fn to_wif(&self) -> PrivateWif {
@@ -173,7 +174,7 @@ impl KeyPair {
     pub fn sign(&self, msg: &[u8]) -> SigPair {
         SigPair {
             pub_key: self.0.clone(),
-            signature: self.1.sign(msg)
+            signature: self.1.sign(msg),
         }
     }
 
@@ -187,10 +188,7 @@ impl KeyPair {
         randombytes::randombytes_into(&mut raw_seed);
         let seed = sign::Seed::from_slice(&raw_seed).unwrap();
         let (pk, sk) = sign::keypair_from_seed(&seed);
-        KeyPair(PublicKey(pk), PrivateKey {
-            seed,
-            key: sk
-        })
+        KeyPair(PublicKey(pk), PrivateKey { seed, key: sk })
     }
 }
 
@@ -211,43 +209,70 @@ mod tests {
 
     #[test]
     fn test_import_keys_from_wif() {
-        let kp = PrivateKey::from_wif("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").unwrap();
-        assert_eq!(&*kp.1.to_wif(), "3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM");
-        assert_eq!(&*kp.0.to_wif(), "GOD52QZDBUStV5CudxvKf6bPsQeN7oeKTkEm2nAU1vAUqNVexGTb8");
+        let kp =
+            PrivateKey::from_wif("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").unwrap();
+        assert_eq!(
+            &*kp.1.to_wif(),
+            "3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM"
+        );
+        assert_eq!(
+            &*kp.0.to_wif(),
+            "GOD52QZDBUStV5CudxvKf6bPsQeN7oeKTkEm2nAU1vAUqNVexGTb8"
+        );
     }
 
     #[test]
     fn test_invalid_prefix() {
-        let mut bytes = bs58::decode("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").into_vec().unwrap();
+        let mut bytes = bs58::decode("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM")
+            .into_vec()
+            .unwrap();
         bytes[0] = 255;
         let wif = bs58::encode(bytes).into_string();
-        assert_eq!(PrivateKey::from_wif(&wif).unwrap_err().kind, WifErrorKind::InvalidPrefix);
+        assert_eq!(
+            PrivateKey::from_wif(&wif).unwrap_err().kind,
+            WifErrorKind::InvalidPrefix
+        );
 
-        let mut bytes = bs58::decode("52QZDBUStV5CudxvKf6bPsQeN7oeKTkEm2nAU1vAUqNVexGTb8").into_vec().unwrap();
+        let mut bytes = bs58::decode("52QZDBUStV5CudxvKf6bPsQeN7oeKTkEm2nAU1vAUqNVexGTb8")
+            .into_vec()
+            .unwrap();
         bytes[0] = 255;
         let mut wif = bs58::encode(bytes).into_string();
         wif.insert_str(0, PUB_ADDRESS_PREFIX);
-        assert_eq!(PublicKey::from_wif(&wif).unwrap_err().kind, WifErrorKind::InvalidPrefix);
+        assert_eq!(
+            PublicKey::from_wif(&wif).unwrap_err().kind,
+            WifErrorKind::InvalidPrefix
+        );
     }
 
     #[test]
     fn test_invalid_checksum() {
-        let mut bytes = bs58::decode("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").into_vec().unwrap();
+        let mut bytes = bs58::decode("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM")
+            .into_vec()
+            .unwrap();
         let len = bytes.len();
         for i in 1..5 {
             bytes[len - i] = 0;
         }
         let wif = bs58::encode(bytes).into_string();
-        assert_eq!(PrivateKey::from_wif(&wif).unwrap_err().kind, WifErrorKind::InvalidChecksum);
+        assert_eq!(
+            PrivateKey::from_wif(&wif).unwrap_err().kind,
+            WifErrorKind::InvalidChecksum
+        );
 
-        let mut bytes = bs58::decode("52QZDBUStV5CudxvKf6bPsQeN7oeKTkEm2nAU1vAUqNVexGTb8").into_vec().unwrap();
+        let mut bytes = bs58::decode("52QZDBUStV5CudxvKf6bPsQeN7oeKTkEm2nAU1vAUqNVexGTb8")
+            .into_vec()
+            .unwrap();
         let len = bytes.len();
         for i in 1..5 {
             bytes[len - i] = 0;
         }
         let mut wif = bs58::encode(bytes).into_string();
         wif.insert_str(0, PUB_ADDRESS_PREFIX);
-        assert_eq!(PublicKey::from_wif(&wif).unwrap_err().kind, WifErrorKind::InvalidChecksum);
+        assert_eq!(
+            PublicKey::from_wif(&wif).unwrap_err().kind,
+            WifErrorKind::InvalidChecksum
+        );
     }
 
     #[test]
@@ -260,7 +285,7 @@ mod tests {
 
         let pair = SigPair {
             pub_key: kp.0,
-            signature: *sig
+            signature: *sig,
         };
         assert!(pair.verify(msg));
 

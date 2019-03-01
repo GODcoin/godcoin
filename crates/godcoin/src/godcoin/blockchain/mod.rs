@@ -1,38 +1,37 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use log::info;
 use parking_lot::Mutex;
+use std::path::*;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::path::*;
-use log::info;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod block;
 pub mod index;
 pub mod store;
 
-pub use self::store::BlockStore;
-pub use self::index::Indexer;
 pub use self::block::*;
+pub use self::index::Indexer;
+pub use self::store::BlockStore;
 
 use crate::asset::{self, Asset, AssetSymbol, Balance, EMPTY_GOLD};
-use crate::script::*;
 use crate::constants;
 use crate::crypto::*;
+use crate::script::*;
 use crate::tx::*;
 
 pub struct Blockchain {
     indexer: Arc<Indexer>,
-    store: Mutex<BlockStore>
+    store: Mutex<BlockStore>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Properties {
     pub height: u64,
     pub token_supply: Balance,
-    pub network_fee: Balance
+    pub network_fee: Balance,
 }
 
 impl Blockchain {
-
     ///
     /// Creates a new `Blockchain` with an associated indexer and backing
     /// storage is automatically created based on the given `path`.
@@ -42,7 +41,7 @@ impl Blockchain {
         let store = BlockStore::new(&Path::join(path, "blklog"), Arc::clone(&indexer));
         Blockchain {
             indexer,
-            store: Mutex::new(store)
+            store: Mutex::new(store),
         }
     }
 
@@ -50,7 +49,9 @@ impl Blockchain {
         Properties {
             height: self.get_chain_height(),
             token_supply: self.indexer.get_token_supply(),
-            network_fee: self.get_network_fee().expect("unexpected error retrieving network fee")
+            network_fee: self
+                .get_network_fee()
+                .expect("unexpected error retrieving network fee"),
         }
     }
 
@@ -80,7 +81,7 @@ impl Blockchain {
         let addr_fee = self.get_address_fee(hash)?;
         Some(Balance {
             gold: net_fee.gold.add(&addr_fee.gold)?,
-            silver: net_fee.silver.add(&addr_fee.silver)?
+            silver: net_fee.silver.add(&addr_fee.silver)?,
         })
     }
 
@@ -93,13 +94,17 @@ impl Blockchain {
             let block = self.get_block(i).unwrap();
             for tx in &block.transactions {
                 let has_match = match tx {
-                    TxVariant::RewardTx(_) => { false },
-                    TxVariant::BondTx(tx) => { &tx.staker == hash },
-                    TxVariant::TransferTx(tx) => { &tx.from == hash }
+                    TxVariant::RewardTx(_) => false,
+                    TxVariant::BondTx(tx) => &tx.staker == hash,
+                    TxVariant::TransferTx(tx) => &tx.from == hash,
                 };
-                if has_match { tx_count += 1; }
+                if has_match {
+                    tx_count += 1;
+                }
             }
-            if delta + 1 == FEE_RESET_WINDOW { break; }
+            if delta + 1 == FEE_RESET_WINDOW {
+                break;
+            }
         }
 
         let prec = asset::MAX_PRECISION;
@@ -124,7 +129,9 @@ impl Blockchain {
         for i in min_height..=max_height {
             tx_count += self.get_block(i).unwrap().transactions.len() as u64;
         }
-        if tx_count > u64::from(u16::max_value()) { return None }
+        if tx_count > u64::from(u16::max_value()) {
+            return None;
+        }
 
         let prec = asset::MAX_PRECISION;
         let gold = GOLD_FEE_MIN.mul(&GOLD_FEE_NET_MULT.pow(tx_count as u16, prec)?, prec)?;
@@ -147,14 +154,14 @@ impl Blockchain {
                             bal.add(&reward)?;
                         }
                     }
-                },
+                }
                 TxVariant::BondTx(tx) => {
                     if &tx.staker == hash {
                         bal.sub(&tx.fee)?;
                         bal.sub(&tx.bond_fee)?;
                         bal.sub(&tx.stake_amt)?;
                     }
-                },
+                }
                 TxVariant::TransferTx(tx) => {
                     if &tx.from == hash {
                         bal.sub(&tx.fee)?;
@@ -171,7 +178,9 @@ impl Blockchain {
 
     pub fn insert_block(&self, block: SignedBlock) -> Result<(), String> {
         self.verify_block(&block, &self.get_chain_head())?;
-        for tx in &block.transactions { self.index_tx(tx); }
+        for tx in &block.transactions {
+            self.index_tx(tx);
+        }
         self.store.lock().insert(block);
 
         Ok(())
@@ -179,17 +188,17 @@ impl Blockchain {
 
     fn verify_block(&self, block: &SignedBlock, prev_block: &SignedBlock) -> Result<(), String> {
         if prev_block.height + 1 != block.height {
-            return Err("invalid block height".to_owned())
+            return Err("invalid block height".to_owned());
         } else if !block.verify_tx_merkle_root() {
-            return Err("invalid merkle root".to_owned())
+            return Err("invalid merkle root".to_owned());
         } else if !block.verify_previous_hash(prev_block) {
-            return Err("invalid previous hash".to_owned())
+            return Err("invalid previous hash".to_owned());
         }
 
         if self.indexer.get_bond(&block.sig_pair.pub_key).is_none() {
-            return Err("bond not found".to_owned())
+            return Err("bond not found".to_owned());
         } else if !block.sig_pair.verify(block.calc_hash().as_ref()) {
-            return Err("invalid bond signature".to_owned())
+            return Err("invalid bond signature".to_owned());
         }
 
         let len = block.transactions.len();
@@ -197,7 +206,7 @@ impl Blockchain {
             let tx = &block.transactions[i];
             let txs = &block.transactions[0..i];
             if let Err(s) = self.verify_tx(tx, txs) {
-                return Err(format!("tx verification failed: {}", s))
+                return Err(format!("tx verification failed: {}", s));
             }
         }
 
@@ -207,78 +216,87 @@ impl Blockchain {
     pub fn verify_tx(&self, tx: &TxVariant, additional_txs: &[TxVariant]) -> Result<(), String> {
         macro_rules! check_amt {
             ($asset:expr, $name:expr) => {
-                if $asset.amount < 0 { return Err(format!("{} must be greater than 0", $name)) }
-            }
+                if $asset.amount < 0 {
+                    return Err(format!("{} must be greater than 0", $name));
+                }
+            };
         }
 
         macro_rules! check_suf_bal {
             ($asset:expr) => {
-                if $asset.amount < 0 { return Err("insufficient balance".to_owned()) }
-            }
+                if $asset.amount < 0 {
+                    return Err("insufficient balance".to_owned());
+                }
+            };
         }
 
         check_amt!(tx.fee, "fee");
         match tx {
             TxVariant::RewardTx(tx) => {
                 if !tx.signature_pairs.is_empty() {
-                    return Err("reward transaction must not be signed".to_owned())
+                    return Err("reward transaction must not be signed".to_owned());
                 }
-            },
+            }
             TxVariant::BondTx(tx) => {
                 if !(tx.bond_fee.symbol == AssetSymbol::GOLD
-                        && tx.stake_amt.symbol == AssetSymbol::GOLD
-                        && tx.fee.symbol == AssetSymbol::GOLD) {
-                    return Err("fees and stake amount must be in gold".to_owned())
+                    && tx.stake_amt.symbol == AssetSymbol::GOLD
+                    && tx.fee.symbol == AssetSymbol::GOLD)
+                {
+                    return Err("fees and stake amount must be in gold".to_owned());
                 }
                 check_amt!(&tx.bond_fee, "bond_fee");
                 check_amt!(&tx.stake_amt, "stake_amt");
 
                 if tx.bond_fee.lt(&constants::BOND_FEE).unwrap() {
-                    return Err("bond_fee is too small".to_owned())
+                    return Err("bond_fee is too small".to_owned());
                 }
 
-                let mut bal = self.get_balance_with_txs(&tx.staker, additional_txs).ok_or_else(|| {
-                    "failed to get balance"
-                })?;
-                bal.sub(&tx.fee).ok_or("failed to subtract fee")?
-                    .sub(&tx.bond_fee).ok_or("failed to subtract bond_fee")?
-                    .sub(&tx.stake_amt).ok_or("failed to subtract stake_amt")?;
+                let mut bal = self
+                    .get_balance_with_txs(&tx.staker, additional_txs)
+                    .ok_or_else(|| "failed to get balance")?;
+                bal.sub(&tx.fee)
+                    .ok_or("failed to subtract fee")?
+                    .sub(&tx.bond_fee)
+                    .ok_or("failed to subtract bond_fee")?
+                    .sub(&tx.stake_amt)
+                    .ok_or("failed to subtract stake_amt")?;
                 check_suf_bal!(bal.gold);
 
                 let pairs = &tx.signature_pairs;
                 if pairs.len() != 2 {
-                    return Err("must be signed by minter and staker".to_owned())
+                    return Err("must be signed by minter and staker".to_owned());
                 }
 
                 let staker: ScriptHash = (&pairs[1].pub_key).into();
                 if !(pairs[0].pub_key == tx.minter && staker == tx.staker) {
-                    return Err("sigpair minter and staker mismatch".to_owned())
+                    return Err("sigpair minter and staker mismatch".to_owned());
                 }
                 if !tx.verify_all() {
-                    return Err("signature verification failed".to_owned())
+                    return Err("signature verification failed".to_owned());
                 }
-            },
+            }
             TxVariant::TransferTx(transfer) => {
                 if transfer.fee.symbol != transfer.amount.symbol {
-                    return Err("symbol mismatch between fee and amount".to_owned())
+                    return Err("symbol mismatch between fee and amount".to_owned());
                 } else if transfer.from != ScriptHash::from(&transfer.script) {
-                    return Err("from and script hash mismatch".to_owned())
+                    return Err("from and script hash mismatch".to_owned());
                 }
 
-                let success = ScriptEngine::checked_new(tx, &transfer.script).ok_or_else(|| {
-                    "failed to initialize script engine"
-                })?.eval().map_err(|e| {
-                    format!("{}: {:?}", e.pos, e.err)
-                })?;
+                let success = ScriptEngine::checked_new(tx, &transfer.script)
+                    .ok_or_else(|| "failed to initialize script engine")?
+                    .eval()
+                    .map_err(|e| format!("{}: {:?}", e.pos, e.err))?;
                 if !success {
-                    return Err("script returned false".to_owned())
+                    return Err("script returned false".to_owned());
                 }
 
-                let mut bal = self.get_balance_with_txs(&transfer.from, additional_txs).ok_or_else(|| {
-                    "failed to get balance"
-                })?;
-                bal.sub(&transfer.fee).ok_or("failed to subtract fee")?
-                    .sub(&transfer.amount).ok_or("failed to subtract amount")?;
+                let mut bal = self
+                    .get_balance_with_txs(&transfer.from, additional_txs)
+                    .ok_or_else(|| "failed to get balance")?;
+                bal.sub(&transfer.fee)
+                    .ok_or("failed to subtract fee")?
+                    .sub(&transfer.amount)
+                    .ok_or("failed to subtract amount")?;
                 check_suf_bal!(&bal.gold);
                 check_suf_bal!(&bal.silver);
             }
@@ -297,25 +315,27 @@ impl Blockchain {
                 }
                 self.indexer.set_balance(&tx.to, &bal);
                 self.indexer.set_token_supply(&supply);
-            },
+            }
             TxVariant::BondTx(tx) => {
                 let mut bal = self.get_balance(&tx.staker);
-                bal.sub(&tx.fee).unwrap()
-                    .sub(&tx.bond_fee).unwrap()
-                    .sub(&tx.stake_amt).unwrap();
+                bal.sub(&tx.fee)
+                    .unwrap()
+                    .sub(&tx.bond_fee)
+                    .unwrap()
+                    .sub(&tx.stake_amt)
+                    .unwrap();
                 self.indexer.set_balance(&tx.staker, &bal);
                 self.indexer.set_bond(tx);
 
                 let mut supply = self.indexer.get_token_supply();
                 supply.sub(&tx.bond_fee).unwrap();
                 self.indexer.set_token_supply(&supply);
-            },
+            }
             TxVariant::TransferTx(tx) => {
                 let mut from_bal = self.get_balance(&tx.from);
                 let mut to_bal = self.get_balance(&tx.to);
 
-                from_bal.sub(&tx.fee).unwrap()
-                        .sub(&tx.amount).unwrap();
+                from_bal.sub(&tx.fee).unwrap().sub(&tx.amount).unwrap();
                 to_bal.add(&tx.amount).unwrap();
 
                 self.indexer.set_balance(&tx.from, &from_bal);
@@ -337,19 +357,22 @@ impl Blockchain {
         info!("=> Staker private key: {}", staker_key.1.to_wif());
         info!("=> Staker public key: {}", staker_key.0.to_wif());
 
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32;
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as u32;
 
         let bond_tx = BondTx {
             base: Tx {
                 tx_type: TxType::BOND,
                 fee: Asset::from_str("0 GOLD").unwrap(),
                 timestamp,
-                signature_pairs: Vec::new()
+                signature_pairs: Vec::new(),
             },
             minter: minter_key.0.clone(),
             staker: staker_key.0.clone().into(),
             bond_fee: EMPTY_GOLD,
-            stake_amt: Asset::from_str("1 GOLD").unwrap()
+            stake_amt: Asset::from_str("1 GOLD").unwrap(),
         };
 
         let transactions = {
@@ -359,10 +382,10 @@ impl Blockchain {
                     tx_type: TxType::REWARD,
                     fee: Asset::from_str("0 GOLD").unwrap(),
                     timestamp,
-                    signature_pairs: Vec::new()
+                    signature_pairs: Vec::new(),
                 },
                 to: staker_key.0.into(),
-                rewards: vec![Asset::from_str("1 GOLD").unwrap()]
+                rewards: vec![Asset::from_str("1 GOLD").unwrap()],
             }));
             vec.push(TxVariant::BondTx(bond_tx.clone()));
             vec
@@ -373,8 +396,9 @@ impl Blockchain {
             previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
             tx_merkle_root: Digest::from_slice(&[0u8; 32]).unwrap(),
             timestamp: timestamp as u32,
-            transactions
-        }).sign(&minter_key);
+            transactions,
+        })
+        .sign(&minter_key);
 
         self.store.lock().insert_genesis(block);
         self.indexer.set_bond(&bond_tx);

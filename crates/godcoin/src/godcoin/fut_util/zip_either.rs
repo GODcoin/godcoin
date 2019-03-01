@@ -1,4 +1,4 @@
-use futures::{Async, Stream, Poll, stream::Fuse};
+use futures::{stream::Fuse, Async, Poll, Stream};
 
 #[derive(Debug)]
 #[must_use = "streams do nothing unless polled"]
@@ -6,7 +6,7 @@ pub struct ZipEither<S1: Stream, S2: Stream> {
     stream1: Fuse<S1>,
     stream2: Fuse<S2>,
     queued1: Option<S1::Item>,
-    queued2: Option<S2::Item>
+    queued2: Option<S2::Item>,
 }
 
 impl<S1: Stream, S2: Stream<Error = S1::Error>> ZipEither<S1, S2> {
@@ -15,13 +15,16 @@ impl<S1: Stream, S2: Stream<Error = S1::Error>> ZipEither<S1, S2> {
             stream1: stream1.fuse(),
             stream2: stream2.fuse(),
             queued1: None,
-            queued2: None
+            queued2: None,
         }
     }
 }
 
 impl<S1, S2> Stream for ZipEither<S1, S2>
-        where S1: Stream, S2: Stream<Error = S1::Error> {
+where
+    S1: Stream,
+    S2: Stream<Error = S1::Error>,
+{
     type Item = (Option<S1::Item>, Option<S2::Item>);
     type Error = S1::Error;
 
@@ -52,11 +55,11 @@ impl<S1, S2> Stream for ZipEither<S1, S2>
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::mem;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
-    use crate::fut_util::*;
     use super::*;
+    use crate::fut_util::*;
 
     #[test]
     pub fn test_either_left() {
@@ -71,7 +74,9 @@ mod tests {
             assert!(left.is_some());
             assert!(right.is_none());
             Ok(())
-        }).wait().next();
+        })
+        .wait()
+        .next();
 
         mem::drop(tx2);
         assert!(ran.load(Ordering::Relaxed));
@@ -90,7 +95,9 @@ mod tests {
             assert!(left.is_none());
             assert!(right.is_some());
             Ok(())
-        }).wait().next();
+        })
+        .wait()
+        .next();
 
         mem::drop(tx1);
         assert!(ran.load(Ordering::Relaxed));
@@ -110,7 +117,9 @@ mod tests {
             assert!(left.is_some());
             assert!(right.is_some());
             Ok(())
-        }).wait().next();
+        })
+        .wait()
+        .next();
         assert!(ran.load(Ordering::Relaxed));
     }
 }

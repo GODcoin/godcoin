@@ -1,32 +1,25 @@
-use tokio::{
-    net::TcpStream,
-    codec::Framed,
-    prelude::*
-};
-use std::net::SocketAddr;
-use std::{
-    io::Error,
-    fmt
-};
 use crate::*;
+use std::net::SocketAddr;
+use std::{fmt, io::Error};
+use tokio::{codec::Framed, net::TcpStream, prelude::*};
 
 #[derive(Message)]
 pub enum SessionMsg {
     Connected(SessionInfo),
-    Disconnected(SocketAddr)
+    Disconnected(SocketAddr),
 }
 
 #[derive(Clone, Debug)]
 pub enum ConnectionType {
     Inbound,
-    Outbound
+    Outbound,
 }
 
 impl fmt::Display for ConnectionType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ConnectionType::Inbound => f.write_str("inbound"),
-            ConnectionType::Outbound => f.write_str("outbound")
+            ConnectionType::Outbound => f.write_str("outbound"),
         }
     }
 }
@@ -34,18 +27,16 @@ impl fmt::Display for ConnectionType {
 #[derive(Clone, Debug)]
 pub struct SessionInfo {
     pub conn_type: ConnectionType,
-    pub addr: SocketAddr
+    pub addr: SocketAddr,
 }
 
 pub struct Session {
     recipient: Recipient<SessionMsg>,
-    info: SessionInfo
+    info: SessionInfo,
 }
 
 impl Session {
-    pub fn init(server_rx: Recipient<SessionMsg>,
-                conn_type: ConnectionType,
-                stream: TcpStream) {
+    pub fn init(server_rx: Recipient<SessionMsg>, conn_type: ConnectionType, stream: TcpStream) {
         // TODO: perform the handshake
         let addr = stream.peer_addr().unwrap();
         debug!("[{}] Accepted {} connection", addr, conn_type);
@@ -54,10 +45,7 @@ impl Session {
             ctx.add_stream(rx);
             Session {
                 recipient: server_rx,
-                info: SessionInfo {
-                    conn_type,
-                    addr
-                }
+                info: SessionInfo { conn_type, addr },
             }
         });
     }

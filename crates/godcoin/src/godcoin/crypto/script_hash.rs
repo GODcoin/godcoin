@@ -1,8 +1,8 @@
 use sodiumoxide::crypto::hash::sha256::Digest;
 
-use crate::script::{Builder, Script, OpFrame};
-use crate::crypto::{PublicKey, double_sha256};
 use super::*;
+use crate::crypto::{double_sha256, PublicKey};
+use crate::script::{Builder, OpFrame, Script};
 
 pub const SCRIPT_HASH_BUF_PREFIX: u8 = 0x03;
 
@@ -20,28 +20,30 @@ impl ScriptHash {
 impl Wif<ScriptHash, Box<str>> for ScriptHash {
     fn from_wif(s: &str) -> Result<ScriptHash, WifError> {
         if s.len() < 3 || &s[0..3] != PUB_ADDRESS_PREFIX {
-            return Err(WifError::new(WifErrorKind::InvalidPrefix))
+            return Err(WifError::new(WifErrorKind::InvalidPrefix));
         }
         let raw = match bs58::decode(&s[3..]).into_vec() {
             Ok(bytes) => bytes,
-            Err(_) => return Err(WifError::new(WifErrorKind::InvalidBs58Encoding))
+            Err(_) => {
+                return Err(WifError::new(WifErrorKind::InvalidBs58Encoding));
+            }
         };
         if raw.len() != 37 {
-            return Err(WifError::new(WifErrorKind::InvalidLen))
+            return Err(WifError::new(WifErrorKind::InvalidLen));
         } else if raw[0] != SCRIPT_HASH_BUF_PREFIX {
-            return Err(WifError::new(WifErrorKind::InvalidPrefix))
+            return Err(WifError::new(WifErrorKind::InvalidPrefix));
         }
 
         let prefixed_key = &raw[0..raw.len() - 4];
         {
-            let checksum_a = &raw[raw.len() - 4 .. raw.len()];
+            let checksum_a = &raw[raw.len() - 4..raw.len()];
             let checksum_b = &double_sha256(prefixed_key)[0..4];
             if checksum_a != checksum_b {
-                return Err(WifError::new(WifErrorKind::InvalidChecksum))
+                return Err(WifError::new(WifErrorKind::InvalidChecksum));
             }
         }
 
-        let key = &prefixed_key[1 .. prefixed_key.len()];
+        let key = &prefixed_key[1..prefixed_key.len()];
         Ok(ScriptHash::from_slice(key).unwrap())
     }
 
@@ -69,8 +71,8 @@ impl From<&Script> for ScriptHash {
 impl From<PublicKey> for ScriptHash {
     fn from(key: PublicKey) -> ScriptHash {
         let builder = Builder::new()
-                .push(OpFrame::PubKey(key))
-                .push(OpFrame::OpCheckSig);
+            .push(OpFrame::PubKey(key))
+            .push(OpFrame::OpCheckSig);
         (&builder.build()).into()
     }
 }
@@ -78,8 +80,8 @@ impl From<PublicKey> for ScriptHash {
 impl From<&PublicKey> for ScriptHash {
     fn from(key: &PublicKey) -> ScriptHash {
         let builder = Builder::new()
-                .push(OpFrame::PubKey(key.clone()))
-                .push(OpFrame::OpCheckSig);
+            .push(OpFrame::PubKey(key.clone()))
+            .push(OpFrame::OpCheckSig);
         (&builder.build()).into()
     }
 }

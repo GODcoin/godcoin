@@ -1,13 +1,13 @@
-mod session;
-mod server;
 mod codec;
+mod server;
+mod session;
 
 use codec::{Codec, Payload};
-use session::{Session, SessionMsg, SessionInfo, ConnectionType};
+use session::{ConnectionType, Session, SessionInfo, SessionMsg};
 
 pub mod network;
 
-pub use network::{Network, NetCmd};
+pub use network::{NetCmd, Network};
 
-use log::{debug, info, warn, error};
 use actix::prelude::*;
+use log::{debug, error, info, warn};

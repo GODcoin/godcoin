@@ -1,15 +1,15 @@
 use std::borrow::Cow;
 use std::ops::Deref;
 
-pub mod constants;
 pub mod builder;
+pub mod constants;
 pub mod engine;
 pub mod error;
 pub mod op;
 mod stack;
 
-pub use self::constants::*;
 pub use self::builder::*;
+pub use self::constants::*;
 pub use self::engine::*;
 pub use self::error::*;
 pub use self::op::*;

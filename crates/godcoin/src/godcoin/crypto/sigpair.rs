@@ -1,10 +1,10 @@
-use sodiumoxide::crypto::sign;
 use super::key::PublicKey;
+use sodiumoxide::crypto::sign;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SigPair {
     pub pub_key: PublicKey,
-    pub signature: sign::Signature
+    pub signature: sign::Signature,
 }
 
 impl SigPair {

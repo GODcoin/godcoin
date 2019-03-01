@@ -1,23 +1,13 @@
-use std::{
-    fmt,
-    io,
-    collections::HashMap,
-    net::SocketAddr,
-    sync::Arc
-};
 use futures::{
-    task,
-    Sink,
-    Poll,
-    Async,
-    AsyncSink,
+    stream::Stream,
     sync::{mpsc, oneshot},
-    stream::Stream
+    task, Async, AsyncSink, Poll, Sink,
 };
+use log::debug;
+use parking_lot::Mutex;
+use std::{collections::HashMap, fmt, io, net::SocketAddr, sync::Arc};
 use tokio::net::TcpStream;
 use tokio_codec::Framed;
-use parking_lot::Mutex;
-use log::debug;
 
 use super::rpc::*;
 
@@ -30,7 +20,7 @@ type ReqMap = HashMap<u32, oneshot::Sender<RpcPayload>>;
 #[derive(Copy, Clone, Debug)]
 pub enum PeerType {
     NODE = 0,
-    WALLET = 1
+    WALLET = 1,
 }
 
 #[derive(Clone)]
@@ -60,13 +50,11 @@ pub struct Peer {
     reqs: Arc<Mutex<ReqMap>>,
     tx: Tx,
     rx: Rx,
-    frame: RpcFrame
+    frame: RpcFrame,
 }
 
 impl Peer {
-    pub fn new(peer_type: PeerType,
-                addr: SocketAddr,
-                frame: RpcFrame) -> Peer {
+    pub fn new(peer_type: PeerType, addr: SocketAddr, frame: RpcFrame) -> Peer {
         let (tx, rx) = mpsc::unbounded();
         Peer {
             peer_type,
@@ -74,7 +62,7 @@ impl Peer {
             reqs: Arc::new(Mutex::new(HashMap::with_capacity(32))),
             frame,
             tx,
-            rx
+            rx,
         }
     }
 
@@ -85,9 +73,11 @@ impl Peer {
 
 impl fmt::Debug for Peer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Peer {{ peer_type: {:?}, addr: {:?} }}",
-                &self.peer_type,
-                &self.addr)
+        write!(
+            f,
+            "Peer {{ peer_type: {:?}, addr: {:?} }}",
+            &self.peer_type, &self.addr
+        )
     }
 }
 
@@ -103,14 +93,14 @@ impl Stream for Peer {
                     tx.send(payload.clone()).unwrap();
                 }
             }
-            return Ok(Async::Ready(msg))
+            return Ok(Async::Ready(msg));
         }
 
         while let Async::Ready(msg) = self.rx.poll().unwrap() {
             if let Some(msg) = msg {
                 let res = self.frame.start_send(msg).unwrap();
                 match res {
-                    AsyncSink::Ready => {},
+                    AsyncSink::Ready => {}
                     AsyncSink::NotReady(msg) => {
                         self.tx.unbounded_send(msg).unwrap();
                         task::current().notify();

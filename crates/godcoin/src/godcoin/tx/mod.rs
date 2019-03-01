@@ -1,12 +1,13 @@
 use std::borrow::Cow;
 use std::io::Cursor;
 
-use crate::crypto::{PublicKey, ScriptHash, KeyPair, SigPair};
+use crate::asset::Asset;
+use crate::crypto::{KeyPair, PublicKey, ScriptHash, SigPair};
 use crate::script::Script;
 use crate::serializer::*;
-use crate::asset::Asset;
 
-#[macro_use] mod util;
+#[macro_use]
+mod util;
 
 pub mod tx_type;
 pub use self::tx_type::*;
@@ -30,33 +31,33 @@ pub trait SignTx {
 pub enum TxVariant {
     RewardTx(RewardTx),
     BondTx(BondTx),
-    TransferTx(TransferTx)
+    TransferTx(TransferTx),
 }
 
 impl TxVariant {
     pub fn encode(&self, v: &mut Vec<u8>) {
         match self {
-            TxVariant::RewardTx(tx) => { tx.encode(v) },
-            TxVariant::BondTx(tx) => { tx.encode(v) },
-            TxVariant::TransferTx(tx) => { tx.encode(v) }
+            TxVariant::RewardTx(tx) => tx.encode(v),
+            TxVariant::BondTx(tx) => tx.encode(v),
+            TxVariant::TransferTx(tx) => tx.encode(v),
         };
     }
 
     pub fn encode_with_sigs(&self, v: &mut Vec<u8>) {
         macro_rules! encode_sigs {
-            ($name:expr, $vec:expr) => {
-                {
-                    $vec.push_u16($name.signature_pairs.len() as u16);
-                    for sig in &$name.signature_pairs { $vec.push_sig_pair(sig) };
-                    $name.encode($vec);
+            ($name:expr, $vec:expr) => {{
+                $vec.push_u16($name.signature_pairs.len() as u16);
+                for sig in &$name.signature_pairs {
+                    $vec.push_sig_pair(sig)
                 }
-            }
+                $name.encode($vec);
+            }};
         }
 
         match self {
-            TxVariant::RewardTx(tx) => { encode_sigs!(tx, v) },
-            TxVariant::BondTx(tx) => { encode_sigs!(tx, v) },
-            TxVariant::TransferTx(tx) => { encode_sigs!(tx, v) }
+            TxVariant::RewardTx(tx) => encode_sigs!(tx, v),
+            TxVariant::BondTx(tx) => encode_sigs!(tx, v),
+            TxVariant::TransferTx(tx) => encode_sigs!(tx, v),
         };
     }
 
@@ -64,7 +65,9 @@ impl TxVariant {
         let sigs = {
             let len = cur.take_u16().ok()?;
             let mut vec = Vec::with_capacity(len as usize);
-            for _ in 0..len { vec.push(cur.take_sig_pair().ok()?) };
+            for _ in 0..len {
+                vec.push(cur.take_sig_pair().ok()?)
+            }
             vec
         };
         let mut base = Tx::decode_base(cur)?;
@@ -72,7 +75,7 @@ impl TxVariant {
         match base.tx_type {
             TxType::REWARD => Some(TxVariant::RewardTx(RewardTx::decode(cur, base)?)),
             TxType::BOND => Some(TxVariant::BondTx(BondTx::decode(cur, base)?)),
-            TxType::TRANSFER => Some(TxVariant::TransferTx(TransferTx::decode(cur, base)?))
+            TxType::TRANSFER => Some(TxVariant::TransferTx(TransferTx::decode(cur, base)?)),
         }
     }
 }
@@ -84,7 +87,7 @@ impl std::ops::Deref for TxVariant {
         match self {
             TxVariant::RewardTx(tx) => &tx.base,
             TxVariant::BondTx(tx) => &tx.base,
-            TxVariant::TransferTx(tx) => &tx.base
+            TxVariant::TransferTx(tx) => &tx.base,
         }
     }
 }
@@ -106,7 +109,7 @@ pub struct Tx {
     pub tx_type: TxType,
     pub timestamp: u32,
     pub fee: Asset,
-    pub signature_pairs: Vec<SigPair>
+    pub signature_pairs: Vec<SigPair>,
 }
 
 impl Tx {
@@ -121,7 +124,7 @@ impl Tx {
             t if t == TxType::REWARD as u8 => TxType::REWARD,
             t if t == TxType::BOND as u8 => TxType::BOND,
             t if t == TxType::TRANSFER as u8 => TxType::TRANSFER,
-            _ => return None
+            _ => return None,
         };
         let timestamp = cur.take_u32().ok()?;
         let fee = cur.take_asset().ok()?;
@@ -130,7 +133,7 @@ impl Tx {
             tx_type,
             timestamp,
             fee,
-            signature_pairs: Vec::new()
+            signature_pairs: Vec::new(),
         })
     }
 }
@@ -139,7 +142,7 @@ impl Tx {
 pub struct RewardTx {
     pub base: Tx,
     pub to: ScriptHash,
-    pub rewards: Vec<Asset>
+    pub rewards: Vec<Asset>,
 }
 
 impl EncodeTx for RewardTx {
@@ -148,7 +151,9 @@ impl EncodeTx for RewardTx {
         self.encode_base(v);
         v.push_script_hash(&self.to);
         v.push_u32(self.rewards.len() as u32);
-        for r in &self.rewards { v.push_asset(r) };
+        for r in &self.rewards {
+            v.push_asset(r)
+        }
     }
 }
 
@@ -166,7 +171,7 @@ impl DecodeTx<RewardTx> for RewardTx {
         Some(RewardTx {
             base: tx,
             to: key,
-            rewards
+            rewards,
         })
     }
 }
@@ -174,10 +179,10 @@ impl DecodeTx<RewardTx> for RewardTx {
 #[derive(Debug, Clone)]
 pub struct BondTx {
     pub base: Tx,
-    pub minter: PublicKey, // Key that signs blocks
+    pub minter: PublicKey,  // Key that signs blocks
     pub staker: ScriptHash, // Hot wallet that receives rewards and stakes its balance
     pub stake_amt: Asset,
-    pub bond_fee: Asset
+    pub bond_fee: Asset,
 }
 
 impl EncodeTx for BondTx {
@@ -202,7 +207,7 @@ impl DecodeTx<BondTx> for BondTx {
             minter,
             staker,
             stake_amt,
-            bond_fee
+            bond_fee,
         })
     }
 }
@@ -214,7 +219,7 @@ pub struct TransferTx {
     pub to: ScriptHash,
     pub script: Script,
     pub amount: Asset,
-    pub memo: Vec<u8>
+    pub memo: Vec<u8>,
 }
 
 impl EncodeTx for TransferTx {
@@ -242,7 +247,7 @@ impl DecodeTx<TransferTx> for TransferTx {
             to,
             script,
             amount,
-            memo
+            memo,
         })
     }
 }
@@ -258,15 +263,15 @@ tx_sign!(TransferTx);
 mod tests {
     use std::str::FromStr;
 
-    use crate::crypto;
     use super::*;
+    use crate::crypto;
 
     macro_rules! cmp_base_tx {
         ($id:ident, $ty:expr, $ts:expr, $fee:expr) => {
             assert_eq!($id.tx_type, $ty);
             assert_eq!($id.timestamp, $ts);
             assert_eq!($id.fee.to_string(), $fee);
-        }
+        };
     }
 
     #[test]
@@ -277,10 +282,10 @@ mod tests {
                 tx_type: TxType::REWARD,
                 timestamp: 123,
                 fee: get_asset("123 GOLD"),
-                signature_pairs: vec![]
+                signature_pairs: vec![],
             },
             to: to.0.into(),
-            rewards: vec![get_asset("1.50 GOLD"), get_asset("1.0 SILVER")]
+            rewards: vec![get_asset("1.50 GOLD"), get_asset("1.0 SILVER")],
         });
 
         let mut v = vec![];
@@ -298,10 +303,10 @@ mod tests {
                 tx_type: TxType::REWARD,
                 timestamp: 123,
                 fee: get_asset("123 GOLD"),
-                signature_pairs: vec![]
+                signature_pairs: vec![],
             },
             to: to.0.into(),
-            rewards: vec![get_asset("1.50 GOLD"), get_asset("1.0 SILVER")]
+            rewards: vec![get_asset("1.50 GOLD"), get_asset("1.0 SILVER")],
         };
 
         let mut v = vec![];
@@ -327,12 +332,12 @@ mod tests {
                 tx_type: TxType::BOND,
                 timestamp: 1230,
                 fee: get_asset("123 GOLD"),
-                signature_pairs: vec![]
+                signature_pairs: vec![],
             },
             minter: minter.0,
             staker: staker.0.into(),
             stake_amt: get_asset("1.0456 GOLD"),
-            bond_fee: get_asset("1.00000000 GOLD")
+            bond_fee: get_asset("1.00000000 GOLD"),
         };
 
         let mut v = vec![];
@@ -358,13 +363,13 @@ mod tests {
                 tx_type: TxType::TRANSFER,
                 timestamp: 1234567890,
                 fee: get_asset("1.23 GOLD"),
-                signature_pairs: vec![]
+                signature_pairs: vec![],
             },
             from: from.0.into(),
             to: to.0.into(),
             script: Script::new(vec![1, 2, 3, 4]),
             amount: get_asset("1.0456 GOLD"),
-            memo: Vec::from(String::from("Hello world!").as_bytes())
+            memo: Vec::from(String::from("Hello world!").as_bytes()),
         };
 
         let mut v = vec![];
@@ -389,19 +394,21 @@ mod tests {
                 tx_type: TxType::TRANSFER,
                 timestamp: 1234567890,
                 fee: get_asset("1.23 GOLD"),
-                signature_pairs: vec![]
+                signature_pairs: vec![],
             },
             from: KeyPair::gen_keypair().0.into(),
             to: KeyPair::gen_keypair().0.into(),
             script: Script::new(vec![1, 2, 3, 4]),
             amount: get_asset("1.0456 GOLD"),
-            memo: Vec::from(String::from("Hello world!").as_bytes())
+            memo: Vec::from(String::from("Hello world!").as_bytes()),
         };
-        let keys = (0..=4).map(|_| {
-            let key = KeyPair::gen_keypair();
-            transfer_tx.append_sign(&key);
-            key.0
-        }).collect::<Vec<_>>();
+        let keys = (0..=4)
+            .map(|_| {
+                let key = KeyPair::gen_keypair();
+                transfer_tx.append_sign(&key);
+                key.0
+            })
+            .collect::<Vec<_>>();
 
         // Test valid sigs with valid ordering
         assert!(transfer_tx.verify_all());

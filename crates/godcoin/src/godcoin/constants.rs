@@ -3,43 +3,43 @@ use crate::asset::*;
 pub const GOLD_FEE_MIN: Asset = Asset {
     amount: 100,
     decimals: MAX_PRECISION,
-    symbol: AssetSymbol::GOLD
+    symbol: AssetSymbol::GOLD,
 };
 
 pub const SILVER_FEE_MIN: Asset = Asset {
     amount: 1000,
     decimals: MAX_PRECISION,
-    symbol: AssetSymbol::SILVER
+    symbol: AssetSymbol::SILVER,
 };
 
 pub const GOLD_FEE_MULT: Asset = Asset {
     amount: 200_000_000,
     decimals: MAX_PRECISION,
-    symbol: AssetSymbol::GOLD
+    symbol: AssetSymbol::GOLD,
 };
 
 pub const SILVER_FEE_MULT: Asset = Asset {
     amount: 200_000_000,
     decimals: MAX_PRECISION,
-    symbol: AssetSymbol::SILVER
+    symbol: AssetSymbol::SILVER,
 };
 
 pub const GOLD_FEE_NET_MULT: Asset = Asset {
     amount: 100_200_000,
     decimals: MAX_PRECISION,
-    symbol: AssetSymbol::GOLD
+    symbol: AssetSymbol::GOLD,
 };
 
 pub const SILVER_FEE_NET_MULT: Asset = Asset {
     amount: 100_200_000,
     decimals: MAX_PRECISION,
-    symbol: AssetSymbol::SILVER
+    symbol: AssetSymbol::SILVER,
 };
 
 pub const BOND_FEE: Asset = Asset {
     amount: 500_000_000,
     decimals: MAX_PRECISION,
-    symbol: AssetSymbol::GOLD
+    symbol: AssetSymbol::GOLD,
 };
 
 pub const NETWORK_FEE_AVG_WINDOW: u64 = 10;

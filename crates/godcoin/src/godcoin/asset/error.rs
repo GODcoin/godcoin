@@ -5,12 +5,12 @@ pub enum AssetErrorKind {
     InvalidFormat,
     InvalidAssetType,
     InvalidAmount,
-    StrTooLarge
+    StrTooLarge,
 }
 
 #[derive(Debug)]
 pub struct AssetError {
-    pub kind: AssetErrorKind
+    pub kind: AssetErrorKind,
 }
 
 impl Error for AssetError {
@@ -19,7 +19,7 @@ impl Error for AssetError {
             AssetErrorKind::InvalidFormat => "invalid format",
             AssetErrorKind::InvalidAssetType => "invalid asset type",
             AssetErrorKind::InvalidAmount => "invalid amount",
-            AssetErrorKind::StrTooLarge => "asset string too large"
+            AssetErrorKind::StrTooLarge => "asset string too large",
         }
     }
 

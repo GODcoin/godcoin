@@ -1,7 +1,7 @@
-use num_traits::ToPrimitive;
 use num_bigint::BigInt;
-use std::str::FromStr;
+use num_traits::ToPrimitive;
 use std::cmp::max;
+use std::str::FromStr;
 
 mod precision;
 use self::precision::*;
@@ -21,85 +21,105 @@ pub const MAX_PRECISION: u8 = 8;
 pub const EMPTY_GOLD: Asset = Asset {
     amount: 0,
     decimals: 0,
-    symbol: AssetSymbol::GOLD
+    symbol: AssetSymbol::GOLD,
 };
 
 pub const EMPTY_SILVER: Asset = Asset {
     amount: 0,
     decimals: 0,
-    symbol: AssetSymbol::SILVER
+    symbol: AssetSymbol::SILVER,
 };
 
 #[derive(Clone, Debug)]
 pub struct Asset {
     pub amount: i64,
     pub decimals: u8,
-    pub symbol: AssetSymbol
+    pub symbol: AssetSymbol,
 }
 
 impl Asset {
     #[inline]
     pub fn checked_new(amount: i64, decimals: u8, symbol: AssetSymbol) -> Option<Asset> {
-        if decimals > MAX_PRECISION { return None }
+        if decimals > MAX_PRECISION {
+            return None;
+        }
         Some(Asset {
             amount,
             decimals,
-            symbol
+            symbol,
         })
     }
 
     pub fn add(&self, other: &Self) -> Option<Self> {
-        if self.symbol != other.symbol { return None }
+        if self.symbol != other.symbol {
+            return None;
+        }
         let decimals = max(self.decimals, other.decimals);
         let a = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let b = set_decimals_i64(other.amount, other.decimals, decimals)?;
-        Some(Asset { amount: a.checked_add(b)?, decimals, symbol: self.symbol })
+        Some(Asset {
+            amount: a.checked_add(b)?,
+            decimals,
+            symbol: self.symbol,
+        })
     }
 
     pub fn sub(&self, other: &Self) -> Option<Self> {
-        if self.symbol != other.symbol { return None }
+        if self.symbol != other.symbol {
+            return None;
+        }
         let decimals = max(self.decimals, other.decimals);
         let a = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let b = set_decimals_i64(other.amount, other.decimals, decimals)?;
-        Some(Asset { amount: a.checked_sub(b)?, decimals, symbol: self.symbol })
+        Some(Asset {
+            amount: a.checked_sub(b)?,
+            decimals,
+            symbol: self.symbol,
+        })
     }
 
     pub fn mul(&self, other: &Self, precision: u8) -> Option<Self> {
-        if self.symbol != other.symbol || precision > MAX_PRECISION { return None }
+        if self.symbol != other.symbol || precision > MAX_PRECISION {
+            return None;
+        }
         let decimals = self.decimals + other.decimals;
 
         let mul = i128::from(self.amount).checked_mul(i128::from(other.amount))?;
         let final_mul = set_decimals_i128(mul, decimals, precision)?;
-        if final_mul > i128::from(::std::i64::MAX) { return None }
+        if final_mul > i128::from(::std::i64::MAX) {
+            return None;
+        }
         Some(Asset {
             amount: final_mul as i64,
             decimals: precision,
-            symbol: self.symbol
+            symbol: self.symbol,
         })
     }
 
     pub fn div(&self, other: &Self, precision: u8) -> Option<Self> {
-        if self.symbol != other.symbol
-            || other.amount == 0
-            || precision > MAX_PRECISION { return None }
+        if self.symbol != other.symbol || other.amount == 0 || precision > MAX_PRECISION {
+            return None;
+        }
         let decimals = max(max(self.decimals, other.decimals), precision);
         let a = set_decimals_i64(self.amount, self.decimals, decimals * 2)?;
         let b = set_decimals_i64(other.amount, other.decimals, decimals)?;
         Some(Asset {
             amount: set_decimals_i64(a.checked_div(b)?, decimals, precision)?,
             decimals: precision,
-            symbol: self.symbol
+            symbol: self.symbol,
         })
     }
 
     pub fn pow(&self, num: u16, precision: u8) -> Option<Self> {
-        if precision > MAX_PRECISION { return None }
+        if precision > MAX_PRECISION {
+            return None;
+        }
         if num == 0 {
             return Some(Asset {
                 amount: set_decimals_i64(1, 0, precision)?,
                 decimals: precision,
-                symbol: self.symbol
-            })
+                symbol: self.symbol,
+            });
         }
         let big_zero = BigInt::from(0);
         let big_one = BigInt::from(1);
@@ -110,9 +130,13 @@ impl Asset {
             let mut base = BigInt::from(self.amount);
             let mut exp = BigInt::from(num);
             loop {
-                if &exp & &big_one == big_one { res = &res * &base; }
+                if &exp & &big_one == big_one {
+                    res = &res * &base;
+                }
                 exp >>= 1;
-                if exp == big_zero { break };
+                if exp == big_zero {
+                    break;
+                };
                 base = &base * &base;
             }
         }
@@ -121,7 +145,7 @@ impl Asset {
         Some(Asset {
             amount: res.to_i64()?,
             decimals: precision,
-            symbol: self.symbol
+            symbol: self.symbol,
         })
     }
 }
@@ -153,7 +177,9 @@ impl FromStr for Asset {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.len() > MAX_STR_LEN {
-            return Err(AssetError { kind: AssetErrorKind::StrTooLarge })
+            return Err(AssetError {
+                kind: AssetErrorKind::StrTooLarge,
+            });
         }
         let mut split = s.trim().splitn(2, ' ');
 
@@ -163,45 +189,72 @@ impl FromStr for Asset {
             Some(x) => {
                 if let Some(pos) = x.find('.') {
                     let len = x.len() - 1;
-                    if pos > 0 { decimals = (len - pos) as u8; }
-                    else { decimals = len as u8; }
+                    if pos > 0 {
+                        decimals = (len - pos) as u8;
+                    } else {
+                        decimals = len as u8;
+                    }
 
                     if decimals > MAX_PRECISION {
-                        return Err(AssetError { kind: AssetErrorKind::InvalidAmount })
+                        return Err(AssetError {
+                            kind: AssetErrorKind::InvalidAmount,
+                        });
                     }
 
                     amount = match x.replace('.', "").parse() {
                         Ok(x) => x,
-                        Err(_) => return Err(AssetError { kind: AssetErrorKind::InvalidAmount })
+                        Err(_) => {
+                            return Err(AssetError {
+                                kind: AssetErrorKind::InvalidAmount,
+                            });
+                        }
                     }
                 } else {
                     amount = match x.parse() {
                         Ok(x) => x,
-                        Err(_) => return Err(AssetError { kind: AssetErrorKind::InvalidAmount })
+                        Err(_) => {
+                            return Err(AssetError {
+                                kind: AssetErrorKind::InvalidAmount,
+                            });
+                        }
                     }
                 }
-            },
-            None => return Err(AssetError { kind: AssetErrorKind::InvalidFormat })
+            }
+            None => {
+                return Err(AssetError {
+                    kind: AssetErrorKind::InvalidFormat,
+                });
+            }
         };
 
         let symbol = match split.next() {
-            Some(x) => {
-                match AssetSymbol::parse_str(x) {
-                    Some(x) => x,
-                    None => return Err(AssetError { kind: AssetErrorKind::InvalidAssetType })
+            Some(x) => match AssetSymbol::parse_str(x) {
+                Some(x) => x,
+                None => {
+                    return Err(AssetError {
+                        kind: AssetErrorKind::InvalidAssetType,
+                    });
                 }
             },
-            None => return Err(AssetError { kind: AssetErrorKind::InvalidFormat })
+            None => {
+                return Err(AssetError {
+                    kind: AssetErrorKind::InvalidFormat,
+                });
+            }
         };
 
-        Ok(Asset { amount, decimals, symbol })
+        Ok(Asset {
+            amount,
+            decimals,
+            symbol,
+        })
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct Balance {
     pub gold: Asset,
-    pub silver: Asset
+    pub silver: Asset,
 }
 
 macro_rules! agnostic_op {
@@ -213,7 +266,7 @@ macro_rules! agnostic_op {
                 match asset.symbol {
                     AssetSymbol::GOLD => {
                         self.gold = self.gold.$op(asset)?;
-                    },
+                    }
                     AssetSymbol::SILVER => {
                         self.silver = self.silver.$op(asset)?;
                     }
@@ -231,7 +284,7 @@ impl Default for Balance {
     fn default() -> Balance {
         Balance {
             gold: EMPTY_GOLD,
-            silver: EMPTY_SILVER
+            silver: EMPTY_SILVER,
         }
     }
 }
@@ -283,7 +336,10 @@ mod tests {
         c("a100 GOLD", AssetErrorKind::InvalidAmount);
         c("100a GOLD", AssetErrorKind::InvalidAmount);
 
-        c("1234567890123456789012345678 GOLD", AssetErrorKind::StrTooLarge);
+        c(
+            "1234567890123456789012345678 GOLD",
+            AssetErrorKind::StrTooLarge,
+        );
         c("1", AssetErrorKind::InvalidFormat);
 
         c("1.0 GOLD a", AssetErrorKind::InvalidAssetType);
@@ -322,20 +378,41 @@ mod tests {
         let a = get_asset("123.456 GOLD");
         c(&a.add(&get_asset("2.0 GOLD")).unwrap(), "125.456 GOLD");
         c(&a.add(&get_asset("-2.0 GOLD")).unwrap(), "121.456 GOLD");
-        c(&a.add(&get_asset(".00000001 GOLD")).unwrap(), "123.45600001 GOLD");
+        c(
+            &a.add(&get_asset(".00000001 GOLD")).unwrap(),
+            "123.45600001 GOLD",
+        );
         c(&a.sub(&get_asset("2.0 GOLD")).unwrap(), "121.456 GOLD");
         c(&a.sub(&get_asset("-2.0 GOLD")).unwrap(), "125.456 GOLD");
-        c(&a.mul(&get_asset("100000.11111111 GOLD"), 8).unwrap(), "12345613.71733319 GOLD");
-        c(&a.mul(&get_asset("-100000.11111111 GOLD"), 8).unwrap(), "-12345613.71733319 GOLD");
+        c(
+            &a.mul(&get_asset("100000.11111111 GOLD"), 8).unwrap(),
+            "12345613.71733319 GOLD",
+        );
+        c(
+            &a.mul(&get_asset("-100000.11111111 GOLD"), 8).unwrap(),
+            "-12345613.71733319 GOLD",
+        );
         c(&a.div(&get_asset("23 GOLD"), 3).unwrap(), "5.367 GOLD");
-        c(&a.div(&get_asset("-23 GOLD"), 8).unwrap(), "-5.36765217 GOLD");
+        c(
+            &a.div(&get_asset("-23 GOLD"), 8).unwrap(),
+            "-5.36765217 GOLD",
+        );
         c(&a.pow(2, 8).unwrap(), "15241.38393600 GOLD");
         c(&a.pow(3, 8).unwrap(), "1881640.29520281 GOLD");
         c(&a, "123.456 GOLD");
 
-        c(&get_asset("1.0002 GOLD").pow(1000, 8).unwrap(), "1.22137833 GOLD");
-        c(&get_asset("10 GOLD").div(&get_asset("2 GOLD"), 0).unwrap(), "5 GOLD");
-        c(&get_asset("5 GOLD").div(&get_asset("10 GOLD"), 1).unwrap(), "0.5 GOLD");
+        c(
+            &get_asset("1.0002 GOLD").pow(1000, 8).unwrap(),
+            "1.22137833 GOLD",
+        );
+        c(
+            &get_asset("10 GOLD").div(&get_asset("2 GOLD"), 0).unwrap(),
+            "5 GOLD",
+        );
+        c(
+            &get_asset("5 GOLD").div(&get_asset("10 GOLD"), 1).unwrap(),
+            "0.5 GOLD",
+        );
 
         assert!(&a.div(&get_asset("0 GOLD"), 1).is_none());
     }

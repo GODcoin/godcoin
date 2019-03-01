@@ -1,29 +1,27 @@
-use futures::{
-    task::AtomicTask,
-    Stream,
-    Async,
-    Poll
-};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use crossbeam_channel::TryRecvError;
+use futures::{task::AtomicTask, Async, Poll, Stream};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 pub fn unbounded<T>() -> (ChannelSender<T>, ChannelStream<T>) {
     let (tx, rx) = crossbeam_channel::unbounded::<T>();
     let tx = ChannelSender {
         tx,
-        task: Arc::new(AtomicTask::new())
+        task: Arc::new(AtomicTask::new()),
     };
     let rx = ChannelStream {
         rx,
         task: Arc::clone(&tx.task),
-        is_done: Arc::new(AtomicBool::new(false))
+        is_done: Arc::new(AtomicBool::new(false)),
     };
     (tx, rx)
 }
 
 pub struct ChannelSender<T> {
     tx: crossbeam_channel::Sender<T>,
-    task: Arc<AtomicTask>
+    task: Arc<AtomicTask>,
 }
 
 impl<T> ChannelSender<T> {
@@ -37,7 +35,7 @@ impl<T> Clone for ChannelSender<T> {
     fn clone(&self) -> ChannelSender<T> {
         ChannelSender {
             tx: self.tx.clone(),
-            task: Arc::clone(&self.task)
+            task: Arc::clone(&self.task),
         }
     }
 }
@@ -52,7 +50,7 @@ impl<T> Drop for ChannelSender<T> {
 pub struct ChannelStream<T> {
     rx: crossbeam_channel::Receiver<T>,
     task: Arc<AtomicTask>,
-    is_done: Arc<AtomicBool>
+    is_done: Arc<AtomicBool>,
 }
 
 impl<T> ChannelStream<T> {
@@ -66,7 +64,7 @@ impl<T> Clone for ChannelStream<T> {
         ChannelStream {
             rx: self.rx.clone(),
             task: Arc::clone(&self.task),
-            is_done: Arc::clone(&self.is_done)
+            is_done: Arc::clone(&self.is_done),
         }
     }
 }
@@ -79,25 +77,23 @@ impl<T> Stream for ChannelStream<T> {
         self.task.register();
         match self.rx.try_recv() {
             Ok(v) => Ok(Async::Ready(Some(v))),
-            Err(e) => {
-                match e {
-                    TryRecvError::Empty => Ok(Async::NotReady),
-                    TryRecvError::Disconnected => {
-                        self.is_done.store(true, Ordering::Release);
-                        Ok(Async::Ready(None))
-                    }
+            Err(e) => match e {
+                TryRecvError::Empty => Ok(Async::NotReady),
+                TryRecvError::Disconnected => {
+                    self.is_done.store(true, Ordering::Release);
+                    Ok(Async::Ready(None))
                 }
-            }
+            },
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicUsize;
+    use super::*;
     use futures::Future;
     use std::mem;
-    use super::*;
+    use std::sync::atomic::AtomicUsize;
 
     #[test]
     fn test_channel_sending() {
@@ -105,27 +101,33 @@ mod tests {
         let num = Arc::new(AtomicUsize::new(0));
 
         tx.send(0);
-        rx.clone().and_then(|val| {
-            assert_eq!(val, num.load(Ordering::Relaxed));
-            Ok(())
-        }).wait().next();
+        rx.clone()
+            .and_then(|val| {
+                assert_eq!(val, num.load(Ordering::Relaxed));
+                Ok(())
+            })
+            .wait()
+            .next();
 
         num.store(1, Ordering::Relaxed);
         tx.send(1);
-        rx.clone().and_then(|val| {
-            assert_eq!(val, num.load(Ordering::Relaxed));
-            Ok(())
-        }).wait().next();
+        rx.clone()
+            .and_then(|val| {
+                assert_eq!(val, num.load(Ordering::Relaxed));
+                Ok(())
+            })
+            .wait()
+            .next();
 
         mem::drop(tx);
-        rx.clone().for_each(|_| { Ok(()) }).wait().unwrap();
+        rx.clone().for_each(|_| Ok(())).wait().unwrap();
         assert!(rx.is_done());
     }
 
     #[test]
     fn test_channel_is_done() {
         let (_, rx) = unbounded::<()>();
-        rx.clone().for_each(|_| { Ok(()) }).wait().unwrap();
+        rx.clone().for_each(|_| Ok(())).wait().unwrap();
         assert!(rx.is_done());
     }
 }

@@ -1,6 +1,6 @@
-use std::sync::mpsc;
 use godcoin::*;
 use log::info;
+use std::sync::mpsc;
 
 pub fn generate_keypair(shutdown_handle: &mpsc::Sender<()>) {
     let pair = KeyPair::gen_keypair();

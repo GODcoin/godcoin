@@ -32,7 +32,7 @@ macro_rules! tx_sign {
                 self.encode(&mut buf);
                 for pair in &self.base.signature_pairs {
                     if !pair.pub_key.verify(&buf, &pair.signature) {
-                        return false
+                        return false;
                     }
                 }
                 true
@@ -52,19 +52,19 @@ macro_rules! tx_sign {
                         if key == &pair.pub_key {
                             found = true;
                             if !pair.pub_key.verify(&buf, &pair.signature) {
-                                return false
+                                return false;
                             }
                             break;
                         }
                         iter_num += 1;
                     }
                     if !found {
-                        return false
+                        return false;
                     }
                 }
 
                 true
             }
         }
-    }
+    };
 }

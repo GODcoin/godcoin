@@ -3,5 +3,5 @@
 pub enum TxType {
     REWARD = 0,
     TRANSFER = 1,
-    BOND = 2
+    BOND = 2,
 }

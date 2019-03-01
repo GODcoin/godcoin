@@ -1,12 +1,12 @@
-use rocksdb::{DB, ColumnFamilyDescriptor, Options};
-use std::path::Path;
+use rocksdb::{ColumnFamilyDescriptor, Options, DB};
 use std::io::Cursor;
 use std::mem;
+use std::path::Path;
 
-use crate::crypto::{PublicKey, ScriptHash};
-use crate::tx::{TxVariant, BondTx};
 use crate::asset::Balance;
+use crate::crypto::{PublicKey, ScriptHash};
 use crate::serializer::*;
+use crate::tx::{BondTx, TxVariant};
 
 const CF_BLOCK_BYTE_POS: &str = "block_byte_pos";
 const CF_ADDR_BAL: &str = "address_balance";
@@ -16,7 +16,7 @@ const KEY_CHAIN_HEIGHT: &[u8] = b"chain_height";
 const KEY_TOKEN_SUPPLY: &[u8] = b"token_supply";
 
 pub struct Indexer {
-    db: DB
+    db: DB,
 }
 
 impl Indexer {
@@ -28,7 +28,7 @@ impl Indexer {
         let col_families = vec![
             ColumnFamilyDescriptor::new(CF_BLOCK_BYTE_POS, Options::default()),
             ColumnFamilyDescriptor::new(CF_ADDR_BAL, Options::default()),
-            ColumnFamilyDescriptor::new(CF_BOND, Options::default())
+            ColumnFamilyDescriptor::new(CF_BOND, Options::default()),
         ];
         let db = DB::open_cf_descriptors(&db_opts, path, col_families).unwrap();
         Indexer { db }
@@ -36,11 +36,14 @@ impl Indexer {
 
     pub fn get_block_byte_pos(&self, height: u64) -> Option<u64> {
         let cf = self.db.cf_handle(CF_BLOCK_BYTE_POS).unwrap();
-        let buf = self.db.get_cf(cf, &{
-            let mut key = Vec::with_capacity(8);
-            key.push_u64(height);
-            key
-        }).unwrap()?;
+        let buf = self
+            .db
+            .get_cf(cf, &{
+                let mut key = Vec::with_capacity(8);
+                key.push_u64(height);
+                key
+            })
+            .unwrap()?;
 
         Some(u64_from_buf!(buf))
     }
@@ -58,7 +61,7 @@ impl Indexer {
     pub fn get_chain_height(&self) -> u64 {
         match self.db.get(KEY_CHAIN_HEIGHT).unwrap() {
             Some(val) => u64_from_buf!(val),
-            None => 0
+            None => 0,
         }
     }
 
@@ -75,7 +78,7 @@ impl Indexer {
         let tx = TxVariant::decode_with_sigs(cur).unwrap();
         match tx {
             TxVariant::BondTx(bond) => Some(bond),
-            _ => panic!("expected bond transaction")
+            _ => panic!("expected bond transaction"),
         }
     }
 
@@ -120,10 +123,9 @@ impl Indexer {
                 let gold = cur.take_asset().unwrap();
                 let silver = cur.take_asset().unwrap();
                 Balance { gold, silver }
-            },
-            None => Balance::default()
+            }
+            None => Balance::default(),
         }
-
     }
 
     pub fn set_token_supply(&self, bal: &Balance) {
@@ -139,9 +141,9 @@ impl Indexer {
 
 #[cfg(test)]
 mod tests {
-    use rand::{thread_rng, Rng, distributions::Alphanumeric};
-    use std::{env, fs, panic};
     use super::*;
+    use rand::{distributions::Alphanumeric, thread_rng, Rng};
+    use std::{env, fs, panic};
 
     #[test]
     fn test_get_block_pos() {
@@ -162,10 +164,17 @@ mod tests {
     }
 
     fn run_test<F>(func: F)
-            where F: FnOnce(Indexer) -> () + panic::UnwindSafe {
+    where
+        F: FnOnce(Indexer) -> () + panic::UnwindSafe,
+    {
         let mut tmp_dir = env::temp_dir();
         let mut s = String::from("godcoin_test_");
-        s.push_str(&thread_rng().sample_iter(&Alphanumeric).take(4).collect::<String>());
+        s.push_str(
+            &thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(4)
+                .collect::<String>(),
+        );
         tmp_dir.push(s);
         fs::create_dir(&tmp_dir).expect(&format!("Could not create temp dir {:?}", &tmp_dir));
 

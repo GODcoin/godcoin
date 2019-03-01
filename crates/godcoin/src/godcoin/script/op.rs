@@ -15,7 +15,7 @@ pub enum Operand {
     OpReturn = 0x13,
 
     // Crypto
-    OpCheckSig = 0x20
+    OpCheckSig = 0x20,
 }
 
 impl From<Operand> for u8 {
@@ -38,11 +38,15 @@ pub enum OpFrame {
     OpReturn,
 
     // Crypto
-    OpCheckSig
+    OpCheckSig,
 }
 
 impl From<bool> for OpFrame {
     fn from(b: bool) -> OpFrame {
-        if b { OpFrame::True } else { OpFrame::False }
+        if b {
+            OpFrame::True
+        } else {
+            OpFrame::False
+        }
     }
 }

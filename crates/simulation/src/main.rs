@@ -1,6 +1,6 @@
-use godcoin_p2p::{Network, NetCmd};
 use actix::actors::signal;
 use actix::prelude::*;
+use godcoin_p2p::{NetCmd, Network};
 use log::info;
 
 struct Signals;

@@ -5,18 +5,20 @@ use super::error::*;
 use super::OpFrame;
 
 pub struct Stack {
-    inner: Vec<OpFrame>
+    inner: Vec<OpFrame>,
 }
 
 impl Stack {
     pub fn new() -> Stack {
         Stack {
-            inner: Vec::with_capacity(MAX_FRAME_STACK)
+            inner: Vec::with_capacity(MAX_FRAME_STACK),
         }
     }
 
     pub fn push<T>(&mut self, op: T) -> Result<(), EvalErrType>
-            where T: Into<OpFrame> {
+    where
+        T: Into<OpFrame>,
+    {
         if self.inner.len() < MAX_FRAME_STACK {
             self.inner.push(op.into());
             Ok(())
@@ -34,7 +36,7 @@ impl Stack {
         match frame {
             OpFrame::False => Ok(false),
             OpFrame::True => Ok(true),
-            _ => Err(EvalErrType::InvalidItemOnStack)
+            _ => Err(EvalErrType::InvalidItemOnStack),
         }
     }
 
@@ -42,7 +44,7 @@ impl Stack {
         let frame = self.pop()?;
         match frame {
             OpFrame::PubKey(key) => Ok(key),
-            _ => Err(EvalErrType::InvalidItemOnStack)
+            _ => Err(EvalErrType::InvalidItemOnStack),
         }
     }
 

@@ -1,8 +1,8 @@
-use crate::blockchain::{SignedBlock, Properties};
-use crate::crypto::ScriptHash;
-use crate::asset::Balance;
-use crate::tx::TxVariant;
 use super::peer::*;
+use crate::asset::Balance;
+use crate::blockchain::{Properties, SignedBlock};
+use crate::crypto::ScriptHash;
+use crate::tx::TxVariant;
 
 pub mod codec;
 
@@ -16,7 +16,7 @@ pub enum RpcMsgType {
     Properties = 4,
     Block = 5,
     Balance = 6,
-    TotalFee = 7
+    TotalFee = 7,
 }
 
 #[derive(Clone, Debug)]
@@ -28,31 +28,31 @@ pub enum RpcMsg {
     Properties(RpcVariant<(), Properties>),
     Block(Box<RpcVariant<u64, Option<SignedBlock>>>),
     Balance(RpcVariant<ScriptHash, Balance>),
-    TotalFee(RpcVariant<ScriptHash, Balance>)
+    TotalFee(RpcVariant<ScriptHash, Balance>),
 }
 
 #[derive(Clone, Debug)]
 pub struct RpcPayload {
     pub id: u32,
-    pub msg: Option<RpcMsg>
+    pub msg: Option<RpcMsg>,
 }
 
 #[repr(u8)]
 pub enum RpcEventType {
     TX = 0,
-    BLOCK = 1
+    BLOCK = 1,
 }
 
 #[derive(Clone, Debug)]
 pub enum RpcEvent {
     Tx(TxVariant),
-    Block(SignedBlock)
+    Block(SignedBlock),
 }
 
 #[derive(Clone, Debug)]
 pub enum RpcVariant<A, B> {
     Req(A),
-    Res(B)
+    Res(B),
 }
 
 impl<A, B> RpcVariant<A, B> {
@@ -60,7 +60,7 @@ impl<A, B> RpcVariant<A, B> {
     pub fn req_ref(&self) -> Option<&A> {
         match self {
             RpcVariant::Req(a) => Some(&a),
-            RpcVariant::Res(_) => None
+            RpcVariant::Res(_) => None,
         }
     }
 
@@ -68,7 +68,7 @@ impl<A, B> RpcVariant<A, B> {
     pub fn req(self) -> Option<A> {
         match self {
             RpcVariant::Req(a) => Some(a),
-            RpcVariant::Res(_) => None
+            RpcVariant::Res(_) => None,
         }
     }
 
@@ -76,7 +76,7 @@ impl<A, B> RpcVariant<A, B> {
     pub fn res_ref(&self) -> Option<&B> {
         match self {
             RpcVariant::Req(_) => None,
-            RpcVariant::Res(b) => Some(&b)
+            RpcVariant::Res(b) => Some(&b),
         }
     }
 
@@ -84,7 +84,7 @@ impl<A, B> RpcVariant<A, B> {
     pub fn res(self) -> Option<B> {
         match self {
             RpcVariant::Req(_) => None,
-            RpcVariant::Res(b) => Some(b)
+            RpcVariant::Res(b) => Some(b),
         }
     }
 }
@@ -92,5 +92,5 @@ impl<A, B> RpcVariant<A, B> {
 #[repr(u8)]
 pub enum RpcVariantType {
     Req = 0,
-    Res = 1
+    Res = 1,
 }

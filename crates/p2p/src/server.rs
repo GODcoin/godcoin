@@ -1,9 +1,9 @@
-use tokio::net::TcpStream;
-use std::io::Error;
 use crate::*;
+use std::io::Error;
+use tokio::net::TcpStream;
 
 pub struct Server {
-    pub recipient: Recipient<SessionMsg>
+    pub recipient: Recipient<SessionMsg>,
 }
 
 impl Actor for Server {

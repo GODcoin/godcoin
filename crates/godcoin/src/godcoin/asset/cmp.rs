@@ -1,9 +1,11 @@
-use std::cmp;
 use crate::asset::*;
+use std::cmp;
 
 impl Asset {
     pub fn gt(&self, other: &Asset) -> Option<bool> {
-        if self.symbol != other.symbol { return None }
+        if self.symbol != other.symbol {
+            return None;
+        }
         let decimals = cmp::max(self.decimals, other.decimals);
         let t = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let o = set_decimals_i64(other.amount, other.decimals, decimals)?;
@@ -11,7 +13,9 @@ impl Asset {
     }
 
     pub fn geq(&self, other: &Asset) -> Option<bool> {
-        if self.symbol != other.symbol { return None }
+        if self.symbol != other.symbol {
+            return None;
+        }
         let decimals = cmp::max(self.decimals, other.decimals);
         let t = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let o = set_decimals_i64(other.amount, other.decimals, decimals)?;
@@ -27,7 +31,9 @@ impl Asset {
     }
 
     pub fn eq(&self, other: &Asset) -> Option<bool> {
-        if self.symbol != other.symbol { return None }
+        if self.symbol != other.symbol {
+            return None;
+        }
         let decimals = cmp::max(self.decimals, other.decimals);
         let t = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let o = set_decimals_i64(other.amount, other.decimals, decimals)?;

@@ -1,12 +1,15 @@
 #[derive(Debug, Clone)]
 pub struct EvalErr {
     pub pos: u32,
-    pub err: EvalErrType
+    pub err: EvalErrType,
 }
 
 impl EvalErr {
     pub fn new(pos: usize, err: EvalErrType) -> EvalErr {
-        EvalErr { pos: pos as u32, err }
+        EvalErr {
+            pos: pos as u32,
+            err,
+        }
     }
 }
 

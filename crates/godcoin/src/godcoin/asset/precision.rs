@@ -21,7 +21,7 @@ const DECIMAL_MULT_I64: [i64; 19] = [
     1000000000000000,
     10000000000000000,
     100000000000000000,
-    1000000000000000000
+    1000000000000000000,
 ];
 
 const DECIMAL_MULT_I128: [i128; 39] = [
@@ -63,11 +63,11 @@ const DECIMAL_MULT_I128: [i128; 39] = [
     100000000000000000000000000000000000,
     1000000000000000000000000000000000000,
     10000000000000000000000000000000000000,
-    100000000000000000000000000000000000000
+    100000000000000000000000000000000000000,
 ];
 
 macro_rules! create_decimal_fn {
-    ($ty:ty, $set_decimals:ident, $DECIMAL_MULT:ident) => (
+    ($ty:ty, $set_decimals:ident, $DECIMAL_MULT:ident) => {
         pub fn $set_decimals(num: $ty, orig_dec: u8, new_dec: u8) -> Option<$ty> {
             if orig_dec > new_dec {
                 num.checked_div($DECIMAL_MULT[(orig_dec - new_dec) as usize])
@@ -77,7 +77,7 @@ macro_rules! create_decimal_fn {
                 Some(num)
             }
         }
-    )
+    };
 }
 
 create_decimal_fn!(i64, set_decimals_i64, DECIMAL_MULT_I64);

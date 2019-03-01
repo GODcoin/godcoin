@@ -2,7 +2,7 @@
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum AssetSymbol {
     GOLD = 0u8,
-    SILVER = 1u8
+    SILVER = 1u8,
 }
 
 impl AssetSymbol {
@@ -10,14 +10,14 @@ impl AssetSymbol {
         match s {
             "GOLD" => Some(AssetSymbol::GOLD),
             "SILVER" => Some(AssetSymbol::SILVER),
-            _ => None
+            _ => None,
         }
     }
 
     pub fn as_str(self) -> &'static str {
         match self {
             AssetSymbol::GOLD => "GOLD",
-            AssetSymbol::SILVER => "SILVER"
+            AssetSymbol::SILVER => "SILVER",
         }
     }
 }

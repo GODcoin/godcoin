@@ -10,5 +10,5 @@ pub type ClientReceiver = ChannelStream<ClientEvent>;
 pub enum ClientEvent {
     Message(Box<RpcPayload>),
     Connect,
-    Disconnect
+    Disconnect,
 }

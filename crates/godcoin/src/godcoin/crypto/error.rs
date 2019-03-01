@@ -5,19 +5,17 @@ pub enum WifErrorKind {
     InvalidLen,
     InvalidPrefix,
     InvalidChecksum,
-    InvalidBs58Encoding
+    InvalidBs58Encoding,
 }
 
 #[derive(Debug)]
 pub struct WifError {
-    pub kind: WifErrorKind
+    pub kind: WifErrorKind,
 }
 
 impl WifError {
     pub fn new(kind: WifErrorKind) -> WifError {
-        WifError {
-            kind
-        }
+        WifError { kind }
     }
 }
 
@@ -27,7 +25,7 @@ impl Error for WifError {
             WifErrorKind::InvalidLen => "invalid length",
             WifErrorKind::InvalidPrefix => "invalid prefix",
             WifErrorKind::InvalidChecksum => "invalid checksum",
-            WifErrorKind::InvalidBs58Encoding => "invalid bs58 encoding"
+            WifErrorKind::InvalidBs58Encoding => "invalid bs58 encoding",
         }
     }
 

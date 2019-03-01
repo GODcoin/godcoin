@@ -1,10 +1,10 @@
-use std::io::{Read, Cursor, Seek, SeekFrom, Write};
-use std::fs::{OpenOptions, File};
-use std::collections::HashMap;
+use crc32c::*;
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
-use crc32c::*;
 
 use crate::blockchain::{block::*, index::*};
 
@@ -18,18 +18,18 @@ pub struct BlockStore {
     genesis_block: Option<Arc<SignedBlock>>,
 
     file: RefCell<File>,
-    byte_pos_tail: u64
+    byte_pos_tail: u64,
 }
 
 impl BlockStore {
-
     pub fn new(path: &Path, indexer: Arc<Indexer>) -> BlockStore {
         let (file, tail) = {
             let f = OpenOptions::new()
-                                .create(true)
-                                .read(true)
-                                .append(true)
-                                .open(path).unwrap();
+                .create(true)
+                .read(true)
+                .append(true)
+                .open(path)
+                .unwrap();
             let m = f.metadata().unwrap();
             (f, m.len())
         };
@@ -43,12 +43,17 @@ impl BlockStore {
             genesis_block: None,
 
             file: RefCell::new(file),
-            byte_pos_tail: tail
+            byte_pos_tail: tail,
         };
         store.genesis_block = store.get(0);
 
-        { // Initialize the cache
-            let min = if height < MAX_CACHE_SIZE { height } else { height - 100 };
+        {
+            // Initialize the cache
+            let min = if height < MAX_CACHE_SIZE {
+                height
+            } else {
+                height - 100
+            };
             let max = min + MAX_CACHE_SIZE;
             for height in min..=max {
                 if let Some(block) = store.get_from_disk(height) {
@@ -69,10 +74,10 @@ impl BlockStore {
 
     pub fn get(&self, height: u64) -> Option<Arc<SignedBlock>> {
         if height > self.height {
-            return None
+            return None;
         } else if height == 0 {
             if let Some(ref block) = self.genesis_block {
-                return Some(Arc::clone(block))
+                return Some(Arc::clone(block));
             }
         }
         if let Some(block) = self.blocks.get(&height) {
@@ -83,7 +88,9 @@ impl BlockStore {
     }
 
     fn get_from_disk(&self, height: u64) -> Option<SignedBlock> {
-        if height > self.height { return None }
+        if height > self.height {
+            return None;
+        }
 
         let pos = self.indexer.get_block_byte_pos(height)?;
         let mut f = self.file.borrow_mut();
@@ -99,7 +106,9 @@ impl BlockStore {
 
         let block_vec = {
             let mut buf = Vec::with_capacity(block_len);
-            unsafe { buf.set_len(block_len); }
+            unsafe {
+                buf.set_len(block_len);
+            }
             f.read_exact(&mut buf).unwrap();
             assert_eq!(crc, crc32c(&buf));
             buf
@@ -115,7 +124,8 @@ impl BlockStore {
         let byte_pos = self.byte_pos_tail;
         self.write_to_disk(&block);
 
-        { // Update internal cache
+        {
+            // Update internal cache
             let height = block.height;
             self.height = height;
             self.indexer.set_block_byte_pos(height, byte_pos);
@@ -132,7 +142,10 @@ impl BlockStore {
 
     pub fn insert_genesis(&mut self, block: SignedBlock) {
         assert_eq!(block.height, 0, "expected to be 0");
-        assert!(self.genesis_block.is_none(), "expected genesis block to not exist");
+        assert!(
+            self.genesis_block.is_none(),
+            "expected genesis block to not exist"
+        );
         self.write_to_disk(&block);
         self.genesis_block = Some(Arc::new(block));
         self.indexer.set_block_byte_pos(0, 0);
