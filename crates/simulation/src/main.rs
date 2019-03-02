@@ -47,10 +47,10 @@ impl Handler<NetMsg> for MsgHandler {
                     self.net_id, msg.addr
                 );
             }
-            NetMsg::Message(ses, payload) => {
+            NetMsg::Message(ses_id, payload) => {
                 info!(
                     "[net:{}] Received message from {} with: {:?}",
-                    self.net_id, ses.addr, payload
+                    self.net_id, ses_id, payload
                 );
             }
         }

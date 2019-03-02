@@ -20,7 +20,7 @@ impl Message for NetCmd {
 pub enum NetMsg {
     Connected(SessionInfo),
     Disconnected(SessionInfo),
-    Message(SessionInfo, Payload),
+    Message(SessionId, Payload),
 }
 
 impl Message for NetMsg {
@@ -40,10 +40,10 @@ impl Network {
         }
     }
 
-    fn broadcast(&self, msg: &Payload, skip: SocketAddr) {
+    fn broadcast(&self, msg: &Payload, skip: SessionId) {
         self.sessions
             .values()
-            .filter(|ses| ses.addr != skip)
+            .filter(|ses| ses.id != skip)
             .for_each(|ses| {
                 let _ = ses.recipient.do_send(msg.clone());
             });
@@ -103,11 +103,11 @@ impl Handler<SessionMsg> for Network {
                     .unwrap_or_else(|| panic!("Expected disconnected peer to exist: {}", addr));
                 self.recipient.do_send(NetMsg::Disconnected(ses)).unwrap();
             }
-            SessionMsg::Message(ses, payload) => {
+            SessionMsg::Message(ses_id, payload) => {
                 // TODO: ID caching to prevent broadcast loops
-                self.broadcast(&payload, ses.addr);
+                self.broadcast(&payload, ses_id);
                 self.recipient
-                    .do_send(NetMsg::Message(ses, payload))
+                    .do_send(NetMsg::Message(ses_id, payload))
                     .unwrap();
             }
         }

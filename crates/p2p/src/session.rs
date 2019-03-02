@@ -3,11 +3,13 @@ use std::net::SocketAddr;
 use std::{fmt, io::Error};
 use tokio::{codec::FramedRead, io::WriteHalf, net::TcpStream, prelude::*};
 
+pub type SessionId = SocketAddr;
+
 #[derive(Message)]
 pub enum SessionMsg {
     Connected(SessionInfo),
     Disconnected(SocketAddr),
-    Message(SessionInfo, Payload),
+    Message(SessionId, Payload),
 }
 
 #[derive(Clone, Debug)]
@@ -27,6 +29,7 @@ impl fmt::Display for ConnectionType {
 
 #[derive(Clone)]
 pub struct SessionInfo {
+    pub id: SocketAddr,
     pub conn_type: ConnectionType,
     pub addr: SocketAddr,
     pub recipient: Recipient<Payload>,
@@ -60,6 +63,7 @@ impl Session {
                 recipient: server_rx,
                 write: actix::io::FramedWrite::new(w, Codec::new(), ctx),
                 info: SessionInfo {
+                    id: addr,
                     conn_type,
                     addr,
                     recipient,
@@ -100,7 +104,7 @@ impl StreamHandler<Payload, Error> for Session {
     fn handle(&mut self, msg: Payload, _: &mut Self::Context) {
         debug!("[{}] Received payload: {:?}", self.info.addr, msg);
         self.recipient
-            .do_send(SessionMsg::Message(self.info.clone(), msg))
+            .do_send(SessionMsg::Message(self.info.id, msg))
             .unwrap();
     }
 
