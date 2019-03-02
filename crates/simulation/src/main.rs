@@ -1,6 +1,6 @@
 use actix::actors::signal;
 use actix::prelude::*;
-use godcoin_p2p::{NetCmd, Network};
+use godcoin_p2p::{session, NetCmd, NetMsg, Network};
 use log::info;
 
 struct Signals;
@@ -20,6 +20,37 @@ impl Handler<signal::Signal> for Signals {
     }
 }
 
+struct MsgHandler {
+    net_id: usize,
+}
+
+impl Actor for MsgHandler {
+    type Context = Context<Self>;
+}
+
+impl Handler<NetMsg> for MsgHandler {
+    type Result = ();
+
+    fn handle(&mut self, msg: NetMsg, _: &mut Self::Context) {
+        match msg {
+            NetMsg::Connected(msg) => match msg.conn_type {
+                session::ConnectionType::Inbound => {
+                    info!("[net:{}] Accepted connection -> {}", self.net_id, msg.addr);
+                }
+                session::ConnectionType::Outbound => {
+                    info!("[net:{}] Connected to node -> {}", self.net_id, msg.addr);
+                }
+            },
+            NetMsg::Disconnected(msg) => {
+                info!(
+                    "[net:{}] Connection disconnected -> {}",
+                    self.net_id, msg.addr
+                );
+            }
+        }
+    }
+}
+
 fn main() {
     let env = env_logger::Env::new().filter_or(env_logger::DEFAULT_FILTER_ENV, "godcoin=debug");
     env_logger::init_from_env(env);
@@ -32,12 +63,14 @@ fn main() {
         addr.do_send(signal::Subscribe(sig_addr.recipient()));
     }
     {
-        let net = Network::new();
+        let handler = MsgHandler { net_id: 0 }.start();
+        let net = Network::new(handler.recipient());
         let addr = net.start();
         addr.do_send(NetCmd::Listen("127.0.0.1:7777".parse().unwrap()));
     }
     {
-        let net = Network::new();
+        let handler = MsgHandler { net_id: 1 }.start();
+        let net = Network::new(handler.recipient());
         let addr = net.start();
         addr.do_send(NetCmd::Connect("127.0.0.1:7777".parse().unwrap()));
     }

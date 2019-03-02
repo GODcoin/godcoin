@@ -16,9 +16,10 @@ impl Message for NetCmd {
     type Result = ();
 }
 
+#[derive(Debug)]
 pub enum NetMsg {
-    Connected,
-    Disconnected,
+    Connected(SessionInfo),
+    Disconnected(SessionInfo),
 }
 
 impl Message for NetMsg {
@@ -26,18 +27,14 @@ impl Message for NetMsg {
 }
 
 pub struct Network {
+    recipient: Recipient<NetMsg>,
     sessions: HashMap<SocketAddr, SessionInfo>,
 }
 
 impl Network {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl Default for Network {
-    fn default() -> Self {
+    pub fn new(recipient: Recipient<NetMsg>) -> Self {
         Network {
+            recipient,
             sessions: HashMap::with_capacity(32),
         }
     }
@@ -56,7 +53,7 @@ impl Handler<NetCmd> for Network {
                 let recipient = ctx.address().recipient();
                 Server::create(move |ctx| {
                     let s = TcpListener::bind(&bind_addr).unwrap();
-                    info!("Accepting inbound connections on {}", bind_addr);
+                    debug!("Accepting inbound connections on {}", bind_addr);
                     ctx.add_stream(s.incoming());
                     Server { recipient }
                 });
@@ -85,15 +82,16 @@ impl Handler<SessionMsg> for Network {
         match msg {
             SessionMsg::Connected(ses) => {
                 let addr = ses.addr;
-                let prev = self.sessions.insert(addr, ses);
+                let prev = self.sessions.insert(addr, ses.clone());
                 assert!(prev.is_none());
-                info!("[{}] Connected!", addr);
+                self.recipient.do_send(NetMsg::Connected(ses)).unwrap();
             }
             SessionMsg::Disconnected(addr) => {
-                self.sessions
+                let ses = self
+                    .sessions
                     .remove(&addr)
                     .unwrap_or_else(|| panic!("Expected disconnected peer to exist: {}", addr));
-                info!("[{}] Disconnected!", addr);
+                self.recipient.do_send(NetMsg::Disconnected(ses)).unwrap();
             }
         }
     }
