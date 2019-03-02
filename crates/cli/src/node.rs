@@ -15,10 +15,13 @@ impl<'a> Node<'a> {
         use std::{env, path::*};
 
         let home: PathBuf = {
-            use dirs;
-            let home = env::var("GODCOIN_HOME")
-                .map(|s| PathBuf::from(s))
-                .unwrap_or_else(|_| Path::join(&dirs::data_local_dir().unwrap(), "godcoin"));
+            let home = {
+                use dirs;
+                match env::var("GODCOIN_HOME") {
+                    Ok(s) => PathBuf::from(s),
+                    Err(_) => Path::join(&dirs::data_local_dir().unwrap(), "godcoin"),
+                }
+            };
             if !Path::is_dir(&home) {
                 let res = std::fs::create_dir(&home);
                 res.unwrap_or_else(|_| panic!("Failed to create dir at {:?}", &home));
