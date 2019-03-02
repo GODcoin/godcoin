@@ -1,7 +1,7 @@
 use crate::*;
 use std::net::SocketAddr;
 use std::{fmt, io::Error};
-use tokio::{codec::Framed, net::TcpStream, prelude::*};
+use tokio::{codec::FramedRead, io::WriteHalf, net::TcpStream, prelude::*};
 
 #[derive(Message)]
 pub enum SessionMsg {
@@ -25,14 +25,25 @@ impl fmt::Display for ConnectionType {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SessionInfo {
     pub conn_type: ConnectionType,
     pub addr: SocketAddr,
+    pub recipient: Recipient<Payload>,
+}
+
+impl std::fmt::Debug for SessionInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("SessionInfo")
+            .field("conn_type", &self.conn_type)
+            .field("addr", &self.addr)
+            .finish()
+    }
 }
 
 pub struct Session {
     recipient: Recipient<SessionMsg>,
+    write: actix::io::FramedWrite<WriteHalf<TcpStream>, Codec>,
     info: SessionInfo,
 }
 
@@ -42,11 +53,17 @@ impl Session {
         let addr = stream.peer_addr().unwrap();
         debug!("[{}] Accepted {} connection", addr, conn_type);
         Session::create(move |ctx| {
-            let (_, rx) = Framed::new(stream, Codec::new()).split();
-            ctx.add_stream(rx);
+            let (r, w) = stream.split();
+            ctx.add_stream(FramedRead::new(r, Codec::new()));
+            let recipient = ctx.address().recipient();
             Session {
                 recipient: server_rx,
-                info: SessionInfo { conn_type, addr },
+                write: actix::io::FramedWrite::new(w, Codec::new(), ctx),
+                info: SessionInfo {
+                    conn_type,
+                    addr,
+                    recipient,
+                },
             }
         });
     }
@@ -68,9 +85,20 @@ impl Actor for Session {
     }
 }
 
+impl actix::io::WriteHandler<Error> for Session {}
+
+impl Handler<Payload> for Session {
+    type Result = ();
+
+    fn handle(&mut self, msg: Payload, _: &mut Self::Context) {
+        debug!("[{}] Sent payload: {:?}", self.info.addr, &msg);
+        self.write.write(msg);
+    }
+}
+
 impl StreamHandler<Payload, Error> for Session {
     fn handle(&mut self, msg: Payload, _: &mut Self::Context) {
-        debug!("[{}] Received frame: {:?}", self.info.addr, msg);
+        debug!("[{}] Received payload: {:?}", self.info.addr, msg);
         self.recipient
             .do_send(SessionMsg::Message(self.info.clone(), msg))
             .unwrap();

@@ -39,6 +39,15 @@ impl Network {
             sessions: HashMap::with_capacity(32),
         }
     }
+
+    fn broadcast(&self, msg: &Payload, skip: SocketAddr) {
+        self.sessions
+            .values()
+            .filter(|ses| ses.addr != skip)
+            .for_each(|ses| {
+                let _ = ses.recipient.do_send(msg.clone());
+            });
+    }
 }
 
 impl Actor for Network {
@@ -95,6 +104,8 @@ impl Handler<SessionMsg> for Network {
                 self.recipient.do_send(NetMsg::Disconnected(ses)).unwrap();
             }
             SessionMsg::Message(ses, payload) => {
+                // TODO: ID caching to prevent broadcast loops
+                self.broadcast(&payload, ses.addr);
                 self.recipient
                     .do_send(NetMsg::Message(ses, payload))
                     .unwrap();
