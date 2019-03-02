@@ -47,12 +47,19 @@ impl Handler<NetMsg> for MsgHandler {
                     self.net_id, msg.addr
                 );
             }
+            NetMsg::Message(ses, payload) => {
+                info!(
+                    "[net:{}] Received message from {} with: {:?}",
+                    self.net_id, ses.addr, payload
+                );
+            }
         }
     }
 }
 
 fn main() {
-    let env = env_logger::Env::new().filter_or(env_logger::DEFAULT_FILTER_ENV, "godcoin=debug");
+    let env = env_logger::Env::new()
+        .filter_or(env_logger::DEFAULT_FILTER_ENV, "godcoin_simulation=debug");
     env_logger::init_from_env(env);
 
     let sys = System::new("simulation");
@@ -67,6 +74,7 @@ fn main() {
         let net = Network::new(handler.recipient());
         let addr = net.start();
         addr.do_send(NetCmd::Listen("127.0.0.1:7777".parse().unwrap()));
+        info!("[net:{}] Accepting connections on 127.0.0.1:7777", 0);
     }
     {
         let handler = MsgHandler { net_id: 1 }.start();

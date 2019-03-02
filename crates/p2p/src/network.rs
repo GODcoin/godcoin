@@ -20,6 +20,7 @@ impl Message for NetCmd {
 pub enum NetMsg {
     Connected(SessionInfo),
     Disconnected(SessionInfo),
+    Message(SessionInfo, Payload),
 }
 
 impl Message for NetMsg {
@@ -92,6 +93,11 @@ impl Handler<SessionMsg> for Network {
                     .remove(&addr)
                     .unwrap_or_else(|| panic!("Expected disconnected peer to exist: {}", addr));
                 self.recipient.do_send(NetMsg::Disconnected(ses)).unwrap();
+            }
+            SessionMsg::Message(ses, payload) => {
+                self.recipient
+                    .do_send(NetMsg::Message(ses, payload))
+                    .unwrap();
             }
         }
     }

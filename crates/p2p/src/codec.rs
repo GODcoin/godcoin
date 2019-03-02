@@ -9,8 +9,8 @@ const MAX_ID_LEN: u8 = 64;
 
 #[derive(Debug)]
 pub struct Payload {
-    id: BytesMut,
-    msg: BytesMut,
+    pub id: BytesMut,
+    pub msg: BytesMut,
 }
 
 #[derive(Default, Debug)]

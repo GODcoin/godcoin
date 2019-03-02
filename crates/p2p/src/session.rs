@@ -7,6 +7,7 @@ use tokio::{codec::Framed, net::TcpStream, prelude::*};
 pub enum SessionMsg {
     Connected(SessionInfo),
     Disconnected(SocketAddr),
+    Message(SessionInfo, Payload),
 }
 
 #[derive(Clone, Debug)]
@@ -70,6 +71,9 @@ impl Actor for Session {
 impl StreamHandler<Payload, Error> for Session {
     fn handle(&mut self, msg: Payload, _: &mut Self::Context) {
         debug!("[{}] Received frame: {:?}", self.info.addr, msg);
+        self.recipient
+            .do_send(SessionMsg::Message(self.info.clone(), msg))
+            .unwrap();
     }
 
     fn error(&mut self, err: Error, _: &mut Self::Context) -> Running {
