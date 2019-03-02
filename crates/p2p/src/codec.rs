@@ -185,12 +185,13 @@ mod tests {
     #[test]
     fn test_decode_multiple_multipart_frames() {
         let mut codec = Codec::new();
+        #[rustfmt::skip]
         let mut bytes = BytesMut::from(vec![
             6, // ID len
             0, 0, 0, 11, // Msg len
             0, 1, 2, 3, 4, 5, // ID
             255, 254, 253, 252, 251, 250, 249, 248, 247, 246, 245, // Msg
-            3,   // ID len
+            3, // ID len
         ]);
         assert_decode!(
             codec,
@@ -224,6 +225,7 @@ mod tests {
     #[test]
     fn test_decode_multiple_full_frames() {
         let mut codec = Codec::new();
+        #[rustfmt::skip]
         let mut bytes = BytesMut::from(vec![
             // First payload
             6, // ID len
@@ -231,8 +233,15 @@ mod tests {
             0, 1, 2, 3, 4, 5, // ID
             255, 254, 253, 252, 251, 250, 249, 248, 247, 246, 245, // Msg
             // Second payload
-            3, 0, 0, 0, 4, 1, 1, 1, 2, 2, 2, 2, // Third payload
-            4, 0, 0, 0, 5, 3, 3, 3, 3, 4, 4, 4, 4, 4,
+            3,
+            0, 0, 0, 4,
+            1, 1, 1,
+            2, 2, 2, 2,
+            // Third payload
+            4,
+            0, 0, 0, 5,
+            3, 3, 3, 3,
+            4, 4, 4, 4, 4
         ]);
 
         assert_decode!(
