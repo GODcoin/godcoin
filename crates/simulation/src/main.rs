@@ -55,16 +55,16 @@ impl Handler<NetMsg> for MsgHandler {
         match msg {
             NetMsg::Connected(msg) => match msg.conn_type {
                 session::ConnectionType::Inbound => {
-                    info!("[net:{}] Accepted connection -> {}", self.net_id, msg.addr);
+                    info!("[net:{}] Accepted connection -> {}", self.net_id, msg.peer_addr);
                 }
                 session::ConnectionType::Outbound => {
-                    info!("[net:{}] Connected to node -> {}", self.net_id, msg.addr);
+                    info!("[net:{}] Connected to node -> {}", self.net_id, msg.peer_addr);
                 }
             },
             NetMsg::Disconnected(msg) => {
                 info!(
                     "[net:{}] Connection disconnected -> {}",
-                    self.net_id, msg.addr
+                    self.net_id, msg.peer_addr
                 );
             }
             NetMsg::Message(ses_id, payload) => {

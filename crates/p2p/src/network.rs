@@ -10,7 +10,7 @@ use tokio::{
 pub enum NetCmd {
     Listen(SocketAddr),
     Connect(SocketAddr),
-    Disconnect(SocketAddr),
+    Disconnect(SessionId),
 }
 
 impl Message for NetCmd {
@@ -30,7 +30,7 @@ impl Message for NetMsg {
 
 pub struct Network {
     recipient: Recipient<NetMsg>,
-    sessions: HashMap<SocketAddr, SessionInfo>,
+    sessions: HashMap<SessionId, SessionInfo>,
 }
 
 impl Network {
@@ -46,7 +46,7 @@ impl Network {
             .values()
             .filter(|ses| ses.id != skip)
             .for_each(|ses| {
-                ses.ses_addr.do_send(msg.clone());
+                ses.address.do_send(msg.clone());
             });
     }
 }
@@ -82,9 +82,9 @@ impl Handler<NetCmd> for Network {
                         }),
                 );
             }
-            NetCmd::Disconnect(addr) => {
-                if let Some(ses) = self.sessions.get(&addr) {
-                    ses.ses_addr.do_send(session::Disconnect);
+            NetCmd::Disconnect(id) => {
+                if let Some(ses) = self.sessions.get(&id) {
+                    ses.address.do_send(session::Disconnect);
                 }
             }
         }
@@ -97,8 +97,8 @@ impl Handler<SessionMsg> for Network {
     fn handle(&mut self, msg: SessionMsg, _: &mut Self::Context) {
         match msg {
             SessionMsg::Connected(ses) => {
-                let addr = ses.addr;
-                let prev = self.sessions.insert(addr, ses.clone());
+                let id = ses.id;
+                let prev = self.sessions.insert(id, ses.clone());
                 assert!(prev.is_none());
                 self.recipient.do_send(NetMsg::Connected(ses)).unwrap();
             }
