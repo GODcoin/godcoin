@@ -2,6 +2,10 @@ use actix::actors::signal;
 use actix::prelude::*;
 use godcoin_p2p::{session, NetCmd, NetMsg, Network};
 use log::info;
+use std::{
+    net::SocketAddr,
+    time::Duration
+};
 
 struct Signals;
 
@@ -18,6 +22,22 @@ impl Handler<signal::Signal> for Signals {
             System::current().stop();
         }
     }
+}
+
+struct DisconnectTimer {
+    dur: Duration,
+    node_addr: SocketAddr,
+    addr: Addr<Network>,
+}
+
+impl Actor for DisconnectTimer {
+   type Context = Context<Self>;
+
+   fn started(&mut self, ctx: &mut Context<Self>) {
+       ctx.run_later(self.dur, |act, _| {
+           act.addr.do_send(NetCmd::Disconnect(act.node_addr));
+       });
+   }
 }
 
 struct MsgHandler {
@@ -80,7 +100,14 @@ fn main() {
         let handler = MsgHandler { net_id: 1 }.start();
         let net = Network::new(handler.recipient());
         let addr = net.start();
-        addr.do_send(NetCmd::Connect("127.0.0.1:7777".parse().unwrap()));
+        let node_addr = "127.0.0.1:7777".parse().unwrap();
+        addr.do_send(NetCmd::Connect(node_addr));
+
+        DisconnectTimer {
+            dur: Duration::from_secs(5),
+            node_addr,
+            addr
+        }.start();
     }
 
     sys.run();

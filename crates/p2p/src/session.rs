@@ -12,6 +12,9 @@ pub enum SessionMsg {
     Message(SessionId, Payload),
 }
 
+#[derive(Message)]
+pub struct Disconnect;
+
 #[derive(Clone, Debug)]
 pub enum ConnectionType {
     Inbound,
@@ -32,7 +35,7 @@ pub struct SessionInfo {
     pub id: SocketAddr,
     pub conn_type: ConnectionType,
     pub addr: SocketAddr,
-    pub recipient: Recipient<Payload>,
+    pub ses_addr: Addr<Session>,
 }
 
 impl std::fmt::Debug for SessionInfo {
@@ -58,7 +61,6 @@ impl Session {
         Session::create(move |ctx| {
             let (r, w) = stream.split();
             ctx.add_stream(FramedRead::new(r, Codec::new()));
-            let recipient = ctx.address().recipient();
             Session {
                 recipient: server_rx,
                 write: actix::io::FramedWrite::new(w, Codec::new(), ctx),
@@ -66,7 +68,7 @@ impl Session {
                     id: addr,
                     conn_type,
                     addr,
-                    recipient,
+                    ses_addr: ctx.address(),
                 },
             }
         });
@@ -90,6 +92,14 @@ impl Actor for Session {
 }
 
 impl actix::io::WriteHandler<Error> for Session {}
+
+impl Handler<Disconnect> for Session {
+    type Result = ();
+
+    fn handle(&mut self, _: Disconnect, ctx: &mut Self::Context) {
+        ctx.stop();
+    }
+}
 
 impl Handler<Payload> for Session {
     type Result = ();

@@ -10,6 +10,7 @@ use tokio::{
 pub enum NetCmd {
     Listen(SocketAddr),
     Connect(SocketAddr),
+    Disconnect(SocketAddr),
 }
 
 impl Message for NetCmd {
@@ -45,7 +46,7 @@ impl Network {
             .values()
             .filter(|ses| ses.id != skip)
             .for_each(|ses| {
-                let _ = ses.recipient.do_send(msg.clone());
+                ses.ses_addr.do_send(msg.clone());
             });
     }
 }
@@ -80,6 +81,11 @@ impl Handler<NetCmd> for Network {
                             warn!("[{}] Failed to connect to peer: {:?}", addr, e);
                         }),
                 );
+            }
+            NetCmd::Disconnect(addr) => {
+                if let Some(ses) = self.sessions.get(&addr) {
+                    ses.ses_addr.do_send(session::Disconnect);
+                }
             }
         }
     }
