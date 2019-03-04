@@ -54,7 +54,7 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn init(server_rx: Recipient<SessionMsg>, conn_type: ConnectionType, stream: TcpStream) {
+    pub fn init(tx: Recipient<SessionMsg>, conn_type: ConnectionType, stream: TcpStream) {
         // TODO: perform the handshake
         let peer_addr = stream.peer_addr().unwrap();
         debug!("[{}] Accepted {} connection", peer_addr, conn_type);
@@ -62,7 +62,7 @@ impl Session {
             let (r, w) = stream.split();
             ctx.add_stream(FramedRead::new(r, Codec::new()));
             Session {
-                recipient: server_rx,
+                recipient: tx,
                 write: actix::io::FramedWrite::new(w, Codec::new(), ctx),
                 info: SessionInfo {
                     id: peer_addr,

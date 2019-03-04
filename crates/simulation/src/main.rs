@@ -2,10 +2,7 @@ use actix::actors::signal;
 use actix::prelude::*;
 use godcoin_p2p::{session, NetCmd, NetMsg, Network};
 use log::info;
-use std::{
-    net::SocketAddr,
-    time::Duration
-};
+use std::{net::SocketAddr, time::Duration};
 
 struct Signals;
 
@@ -31,13 +28,13 @@ struct DisconnectTimer {
 }
 
 impl Actor for DisconnectTimer {
-   type Context = Context<Self>;
+    type Context = Context<Self>;
 
-   fn started(&mut self, ctx: &mut Context<Self>) {
-       ctx.run_later(self.dur, |act, _| {
-           act.addr.do_send(NetCmd::Disconnect(act.node_addr));
-       });
-   }
+    fn started(&mut self, ctx: &mut Context<Self>) {
+        ctx.run_later(self.dur, |act, _| {
+            act.addr.do_send(NetCmd::Disconnect(act.node_addr));
+        });
+    }
 }
 
 struct MsgHandler {
@@ -55,10 +52,16 @@ impl Handler<NetMsg> for MsgHandler {
         match msg {
             NetMsg::Connected(msg) => match msg.conn_type {
                 session::ConnectionType::Inbound => {
-                    info!("[net:{}] Accepted connection -> {}", self.net_id, msg.peer_addr);
+                    info!(
+                        "[net:{}] Accepted connection -> {}",
+                        self.net_id, msg.peer_addr
+                    );
                 }
                 session::ConnectionType::Outbound => {
-                    info!("[net:{}] Connected to node -> {}", self.net_id, msg.peer_addr);
+                    info!(
+                        "[net:{}] Connected to node -> {}",
+                        self.net_id, msg.peer_addr
+                    );
                 }
             },
             NetMsg::Disconnected(msg) => {
@@ -106,8 +109,9 @@ fn main() {
         DisconnectTimer {
             dur: Duration::from_secs(5),
             node_addr,
-            addr
-        }.start();
+            addr,
+        }
+        .start();
     }
 
     sys.run();
