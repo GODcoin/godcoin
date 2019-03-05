@@ -5,7 +5,7 @@ mod codec;
 mod server;
 
 pub use codec::Payload;
-pub use network::{NetCmd, NetMsg, Network};
+pub use network::{msg, NetCmd, Network};
 pub use session::{SessionId, SessionInfo};
 
 use actix::prelude::*;

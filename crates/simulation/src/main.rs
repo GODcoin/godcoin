@@ -1,6 +1,6 @@
 use actix::actors::signal;
 use actix::prelude::*;
-use godcoin_p2p::{session, NetCmd, NetMsg, Network};
+use godcoin_p2p::{msg, session, NetCmd, Network};
 use log::info;
 use std::{net::SocketAddr, time::Duration};
 
@@ -45,38 +45,49 @@ impl Actor for MsgHandler {
     type Context = Context<Self>;
 }
 
-impl Handler<NetMsg> for MsgHandler {
+impl Handler<msg::Connected> for MsgHandler {
     type Result = ();
 
-    fn handle(&mut self, msg: NetMsg, _: &mut Self::Context) {
-        match msg {
-            NetMsg::Connected(msg) => match msg.conn_type {
-                session::ConnectionType::Inbound => {
-                    info!(
-                        "[net:{}] Accepted connection -> {}",
-                        self.net_id, msg.peer_addr
-                    );
-                }
-                session::ConnectionType::Outbound => {
-                    info!(
-                        "[net:{}] Connected to node -> {}",
-                        self.net_id, msg.peer_addr
-                    );
-                }
-            },
-            NetMsg::Disconnected(msg) => {
+    fn handle(&mut self, msg: msg::Connected, _: &mut Self::Context) {
+        let msg::Connected(ses) = msg;
+        match ses.conn_type {
+            session::ConnectionType::Inbound => {
                 info!(
-                    "[net:{}] Connection disconnected -> {}",
-                    self.net_id, msg.peer_addr
+                    "[net:{}] Accepted connection -> {}",
+                    self.net_id, ses.peer_addr
                 );
             }
-            NetMsg::Message(ses_id, payload) => {
+            session::ConnectionType::Outbound => {
                 info!(
-                    "[net:{}] Received message from {} with: {:?}",
-                    self.net_id, ses_id, payload
+                    "[net:{}] Connected to node -> {}",
+                    self.net_id, ses.peer_addr
                 );
             }
         }
+    }
+}
+
+impl Handler<msg::Disconnected> for MsgHandler {
+    type Result = ();
+
+    fn handle(&mut self, msg: msg::Disconnected, _: &mut Self::Context) {
+        let msg::Disconnected(ses) = msg;
+        info!(
+            "[net:{}] Connection disconnected -> {}",
+            self.net_id, ses.peer_addr
+        );
+    }
+}
+
+impl Handler<msg::Message> for MsgHandler {
+    type Result = ();
+
+    fn handle(&mut self, msg: msg::Message, _: &mut Self::Context) {
+        let msg::Message(ses_id, payload) = msg;
+        info!(
+            "[net:{}] Received message from {} with: {:?}",
+            self.net_id, ses_id, payload
+        );
     }
 }
 
@@ -94,14 +105,18 @@ fn main() {
     }
     {
         let handler = MsgHandler { net_id: 0 }.start();
-        let net = Network::new(handler.recipient());
+        let mut net = Network::new(&handler);
+        net.subscribe_connect(&handler);
+        net.subscribe_disconnect(&handler);
         let addr = net.start();
         addr.do_send(NetCmd::Listen("127.0.0.1:7777".parse().unwrap()));
         info!("[net:{}] Accepting connections on 127.0.0.1:7777", 0);
     }
     {
         let handler = MsgHandler { net_id: 1 }.start();
-        let net = Network::new(handler.recipient());
+        let mut net = Network::new(&handler);
+        net.subscribe_connect(&handler);
+        net.subscribe_disconnect(&handler);
         let addr = net.start();
         let node_addr = "127.0.0.1:7777".parse().unwrap();
         addr.do_send(NetCmd::Connect(node_addr));
