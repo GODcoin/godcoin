@@ -136,7 +136,6 @@ impl<S: 'static> Handler<SessionMsg> for Network<S> {
             }
             SessionMsg::Message(ses_id, payload) => {
                 // TODO: ID caching to prevent broadcast loops
-                self.broadcast(&payload, ses_id);
                 if (self.handlers.message)(&mut self.state, ses_id, &payload) {
                     self.broadcast(&payload, ses_id);
                 }
