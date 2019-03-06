@@ -65,11 +65,12 @@ fn disconnected(state: &mut NetInfo, ses: SessionInfo) {
     );
 }
 
-fn message(state: &mut NetInfo, id: SessionId, payload: Payload) {
+fn message(state: &mut NetInfo, id: SessionId, payload: &Payload) -> bool {
     info!(
         "[net:{}] Received message from {} with: {:?}",
         state.net_id, id, payload
     );
+    true
 }
 
 fn main() {
@@ -84,28 +85,32 @@ fn main() {
         let addr = signal::ProcessSignals::from_registry();
         addr.do_send(signal::Subscribe(sig_addr.recipient()));
     }
-    {
-        let net = Network::new(NetInfo { net_id: 0 }, message)
-            .on_connect(connected)
-            .on_disconnect(disconnected)
-            .start();
-        net.do_send(NetCmd::Listen("127.0.0.1:7777".parse().unwrap()));
-        info!("[net:{}] Accepting connections on 127.0.0.1:7777", 0);
-    }
-    {
-        let net = Network::new(NetInfo { net_id: 1 }, message)
-            .on_connect(connected)
-            .on_disconnect(disconnected)
-            .start();
-        let node_addr = "127.0.0.1:7777".parse().unwrap();
-        net.do_send(NetCmd::Connect(node_addr));
 
-        DisconnectTimer {
+    let nets = {
+        let net_count = 2;
+        let mut nets = Vec::with_capacity(net_count);
+        for net_id in 0..net_count {
+            let net = Network::new(NetInfo { net_id }, message)
+                .on_connect(connected)
+                .on_disconnect(disconnected)
+                .start();
+            nets.push(net);
+        }
+        nets
+    };
+
+    nets[0].do_send(NetCmd::Listen("127.0.0.1:7777".parse().unwrap()));
+    info!("[net:0] Accepting connections on 127.0.0.1:7777");
+
+    let node_addr = "127.0.0.1:7777".parse().unwrap();
+    nets[1].do_send(NetCmd::Connect(node_addr));
+    {
+        let timer = DisconnectTimer {
             dur: Duration::from_secs(5),
             node_addr,
-            addr: net,
-        }
-        .start();
+            addr: nets[1].clone(),
+        };
+        timer.start();
     }
 
     sys.run();

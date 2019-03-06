@@ -20,7 +20,7 @@ impl Message for NetCmd {
 struct Handlers<S: 'static> {
     connected: Option<Box<Fn(&mut S, SessionInfo) -> () + 'static>>,
     disconnected: Option<Box<Fn(&mut S, SessionInfo) -> () + 'static>>,
-    message: Box<Fn(&mut S, SessionId, Payload) -> () + 'static>,
+    message: Box<Fn(&mut S, SessionId, &Payload) -> bool + 'static>,
 }
 
 pub struct Network<S: 'static> {
@@ -32,7 +32,7 @@ pub struct Network<S: 'static> {
 impl<S: 'static> Network<S> {
     pub fn new<F>(state: S, msg_handler: F) -> Self
     where
-        F: Fn(&mut S, SessionId, Payload) -> () + 'static,
+        F: Fn(&mut S, SessionId, &Payload) -> bool + 'static,
     {
         let handlers = Handlers {
             connected: None,
@@ -137,7 +137,9 @@ impl<S: 'static> Handler<SessionMsg> for Network<S> {
             SessionMsg::Message(ses_id, payload) => {
                 // TODO: ID caching to prevent broadcast loops
                 self.broadcast(&payload, ses_id);
-                (self.handlers.message)(&mut self.state, ses_id, payload);
+                if (self.handlers.message)(&mut self.state, ses_id, &payload) {
+                    self.broadcast(&payload, ses_id);
+                }
             }
         }
     }
