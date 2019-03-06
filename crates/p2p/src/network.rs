@@ -17,48 +17,49 @@ impl Message for NetCmd {
     type Result = ();
 }
 
-struct PoBox {
-    connected: Option<Recipient<msg::Connected>>,
-    disconnected: Option<Recipient<msg::Disconnected>>,
-    message: Recipient<msg::Message>,
+struct Handlers<S: 'static> {
+    connected: Option<Box<Fn(&mut S, SessionInfo) -> () + 'static>>,
+    disconnected: Option<Box<Fn(&mut S, SessionInfo) -> () + 'static>>,
+    message: Box<Fn(&mut S, SessionId, Payload) -> () + 'static>,
 }
 
-pub struct Network {
-    po_box: PoBox,
+pub struct Network<S: 'static> {
+    state: S,
+    handlers: Handlers<S>,
     sessions: HashMap<SessionId, SessionInfo>,
 }
 
-impl Network {
-    pub fn new<T>(msg_handler: &Addr<T>) -> Self
+impl<S: 'static> Network<S> {
+    pub fn new<F>(state: S, msg_handler: F) -> Self
     where
-        T: Handler<msg::Message>,
-        T::Context: actix::dev::ToEnvelope<T, msg::Message>,
+        F: Fn(&mut S, SessionId, Payload) -> () + 'static,
     {
-        let po_box = PoBox {
+        let handlers = Handlers {
             connected: None,
             disconnected: None,
-            message: msg_handler.clone().recipient(),
+            message: Box::new(msg_handler),
         };
         Network {
-            po_box,
+            state,
+            handlers,
             sessions: HashMap::with_capacity(32),
         }
     }
 
-    pub fn subscribe_connect<T: Actor>(&mut self, tx: &Addr<T>)
+    pub fn on_connect<F>(mut self, f: F) -> Network<S>
     where
-        T: Handler<msg::Connected>,
-        T::Context: actix::dev::ToEnvelope<T, msg::Connected>,
+        F: Fn(&mut S, SessionInfo) -> () + 'static,
     {
-        self.po_box.connected.replace(tx.clone().recipient());
+        self.handlers.connected.replace(Box::new(f));
+        self
     }
 
-    pub fn subscribe_disconnect<T: Actor>(&mut self, tx: &Addr<T>)
+    pub fn on_disconnect<F>(mut self, f: F) -> Network<S>
     where
-        T: Handler<msg::Disconnected>,
-        T::Context: actix::dev::ToEnvelope<T, msg::Disconnected>,
+        F: Fn(&mut S, SessionInfo) -> () + 'static,
     {
-        self.po_box.disconnected.replace(tx.clone().recipient());
+        self.handlers.disconnected.replace(Box::new(f));
+        self
     }
 
     fn broadcast(&self, msg: &Payload, skip: SessionId) {
@@ -71,11 +72,11 @@ impl Network {
     }
 }
 
-impl Actor for Network {
+impl<S: 'static> Actor for Network<S> {
     type Context = Context<Self>;
 }
 
-impl Handler<NetCmd> for Network {
+impl<S: 'static> Handler<NetCmd> for Network<S> {
     type Result = ();
 
     fn handle(&mut self, msg: NetCmd, ctx: &mut Self::Context) {
@@ -111,7 +112,7 @@ impl Handler<NetCmd> for Network {
     }
 }
 
-impl Handler<SessionMsg> for Network {
+impl<S: 'static> Handler<SessionMsg> for Network<S> {
     type Result = ();
 
     fn handle(&mut self, msg: SessionMsg, _: &mut Self::Context) {
@@ -120,8 +121,8 @@ impl Handler<SessionMsg> for Network {
                 let id = ses.id;
                 let prev = self.sessions.insert(id, ses.clone());
                 assert!(prev.is_none());
-                if let Some(tx) = &self.po_box.connected {
-                    tx.do_send(msg::Connected(ses)).unwrap();
+                if let Some(f) = &self.handlers.connected {
+                    f(&mut self.state, ses);
                 }
             }
             SessionMsg::Disconnected(addr) => {
@@ -129,43 +130,15 @@ impl Handler<SessionMsg> for Network {
                     .sessions
                     .remove(&addr)
                     .unwrap_or_else(|| panic!("Expected disconnected peer to exist: {}", addr));
-                if let Some(tx) = &self.po_box.disconnected {
-                    tx.do_send(msg::Disconnected(ses)).unwrap();
+                if let Some(f) = &self.handlers.disconnected {
+                    f(&mut self.state, ses);
                 }
             }
             SessionMsg::Message(ses_id, payload) => {
                 // TODO: ID caching to prevent broadcast loops
                 self.broadcast(&payload, ses_id);
-                self.po_box
-                    .message
-                    .do_send(msg::Message(ses_id, payload))
-                    .unwrap();
+                (self.handlers.message)(&mut self.state, ses_id, payload);
             }
         }
-    }
-}
-
-pub mod msg {
-    use super::*;
-
-    #[derive(Clone, Debug)]
-    pub struct Connected(pub SessionInfo);
-
-    impl actix::Message for Connected {
-        type Result = ();
-    }
-
-    #[derive(Clone, Debug)]
-    pub struct Disconnected(pub SessionInfo);
-
-    impl actix::Message for Disconnected {
-        type Result = ();
-    }
-
-    #[derive(Clone, Debug)]
-    pub struct Message(pub SessionId, pub Payload);
-
-    impl actix::Message for Message {
-        type Result = ();
     }
 }

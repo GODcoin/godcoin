@@ -1,6 +1,6 @@
 use actix::actors::signal;
 use actix::prelude::*;
-use godcoin_p2p::{msg, session, NetCmd, Network};
+use godcoin_p2p::{session::*, NetCmd, Network, Payload};
 use log::info;
 use std::{net::SocketAddr, time::Duration};
 
@@ -21,13 +21,13 @@ impl Handler<signal::Signal> for Signals {
     }
 }
 
-struct DisconnectTimer {
+struct DisconnectTimer<S: 'static> {
     dur: Duration,
     node_addr: SocketAddr,
-    addr: Addr<Network>,
+    addr: Addr<Network<S>>,
 }
 
-impl Actor for DisconnectTimer {
+impl<S: 'static> Actor for DisconnectTimer<S> {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Context<Self>) {
@@ -37,58 +37,39 @@ impl Actor for DisconnectTimer {
     }
 }
 
-struct MsgHandler {
+struct NetInfo {
     net_id: usize,
 }
 
-impl Actor for MsgHandler {
-    type Context = Context<Self>;
-}
-
-impl Handler<msg::Connected> for MsgHandler {
-    type Result = ();
-
-    fn handle(&mut self, msg: msg::Connected, _: &mut Self::Context) {
-        let msg::Connected(ses) = msg;
-        match ses.conn_type {
-            session::ConnectionType::Inbound => {
-                info!(
-                    "[net:{}] Accepted connection -> {}",
-                    self.net_id, ses.peer_addr
-                );
-            }
-            session::ConnectionType::Outbound => {
-                info!(
-                    "[net:{}] Connected to node -> {}",
-                    self.net_id, ses.peer_addr
-                );
-            }
+fn connected(state: &mut NetInfo, ses: SessionInfo) {
+    match ses.conn_type {
+        ConnectionType::Inbound => {
+            info!(
+                "[net:{}] Accepted connection -> {}",
+                state.net_id, ses.peer_addr
+            );
+        }
+        ConnectionType::Outbound => {
+            info!(
+                "[net:{}] Connected to node -> {}",
+                state.net_id, ses.peer_addr
+            );
         }
     }
 }
 
-impl Handler<msg::Disconnected> for MsgHandler {
-    type Result = ();
-
-    fn handle(&mut self, msg: msg::Disconnected, _: &mut Self::Context) {
-        let msg::Disconnected(ses) = msg;
-        info!(
-            "[net:{}] Connection disconnected -> {}",
-            self.net_id, ses.peer_addr
-        );
-    }
+fn disconnected(state: &mut NetInfo, ses: SessionInfo) {
+    info!(
+        "[net:{}] Connection disconnected -> {}",
+        state.net_id, ses.peer_addr
+    );
 }
 
-impl Handler<msg::Message> for MsgHandler {
-    type Result = ();
-
-    fn handle(&mut self, msg: msg::Message, _: &mut Self::Context) {
-        let msg::Message(ses_id, payload) = msg;
-        info!(
-            "[net:{}] Received message from {} with: {:?}",
-            self.net_id, ses_id, payload
-        );
-    }
+fn message(state: &mut NetInfo, id: SessionId, payload: Payload) {
+    info!(
+        "[net:{}] Received message from {} with: {:?}",
+        state.net_id, id, payload
+    );
 }
 
 fn main() {
@@ -104,27 +85,25 @@ fn main() {
         addr.do_send(signal::Subscribe(sig_addr.recipient()));
     }
     {
-        let handler = MsgHandler { net_id: 0 }.start();
-        let mut net = Network::new(&handler);
-        net.subscribe_connect(&handler);
-        net.subscribe_disconnect(&handler);
-        let addr = net.start();
-        addr.do_send(NetCmd::Listen("127.0.0.1:7777".parse().unwrap()));
+        let net = Network::new(NetInfo { net_id: 0 }, message)
+            .on_connect(connected)
+            .on_disconnect(disconnected)
+            .start();
+        net.do_send(NetCmd::Listen("127.0.0.1:7777".parse().unwrap()));
         info!("[net:{}] Accepting connections on 127.0.0.1:7777", 0);
     }
     {
-        let handler = MsgHandler { net_id: 1 }.start();
-        let mut net = Network::new(&handler);
-        net.subscribe_connect(&handler);
-        net.subscribe_disconnect(&handler);
-        let addr = net.start();
+        let net = Network::new(NetInfo { net_id: 1 }, message)
+            .on_connect(connected)
+            .on_disconnect(disconnected)
+            .start();
         let node_addr = "127.0.0.1:7777".parse().unwrap();
-        addr.do_send(NetCmd::Connect(node_addr));
+        net.do_send(NetCmd::Connect(node_addr));
 
         DisconnectTimer {
             dur: Duration::from_secs(5),
             node_addr,
-            addr,
+            addr: net,
         }
         .start();
     }
