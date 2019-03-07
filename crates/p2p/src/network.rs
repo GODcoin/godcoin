@@ -149,8 +149,8 @@ impl<S: 'static> Handler<SessionMsg> for Network<S> {
 }
 
 pub mod cmd {
-    use std::net::SocketAddr;
     use super::*;
+    use std::net::SocketAddr;
 
     #[derive(Message)]
     pub struct Listen(pub SocketAddr);

@@ -1,13 +1,13 @@
 use actix::actors::signal;
 use actix::prelude::*;
 use bytes::BytesMut;
-use godcoin_p2p::{session::*, cmd, Network, Payload};
+use godcoin_p2p::{cmd, session::*, Network, Payload};
 use log::{error, info};
 use std::{
-    collections::HashSet,
-    time::{Duration, Instant},
     cell::RefCell,
-    rc::Rc
+    collections::HashSet,
+    rc::Rc,
+    time::{Duration, Instant},
 };
 use tokio::{prelude::*, timer::Delay};
 
@@ -41,7 +41,7 @@ impl NetState {
             net_id,
             messages: HashSet::new(),
             msg_counter,
-            msg_threshold
+            msg_threshold,
         }
     }
 }
@@ -131,6 +131,7 @@ fn main() {
                     id: BytesMut::from(vec![1, 2, 3]),
                     msg: BytesMut::from(vec![4, 5, 6]),
                 };
+                println!();
                 info!("[net:2] Broadcasting message: {:?}", &payload);
                 nets[2].do_send(cmd::Broadcast(payload));
                 Ok(())
