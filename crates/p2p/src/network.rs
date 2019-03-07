@@ -11,6 +11,7 @@ pub enum NetCmd {
     Listen(SocketAddr),
     Connect(SocketAddr),
     Disconnect(SessionId),
+    Broadcast(Payload)
 }
 
 impl Message for NetCmd {
@@ -62,10 +63,12 @@ impl<S: 'static> Network<S> {
         self
     }
 
-    fn broadcast(&self, msg: &Payload, skip: SessionId) {
+    fn broadcast(&self, msg: &Payload, skip_id: Option<SessionId>) {
         self.sessions
             .values()
-            .filter(|ses| ses.id != skip)
+            .filter(|ses| {
+                skip_id.map_or(true, |skip_id| ses.id != skip_id)
+            })
             .for_each(|ses| {
                 ses.address.do_send(msg.clone());
             });
@@ -108,6 +111,9 @@ impl<S: 'static> Handler<NetCmd> for Network<S> {
                     ses.address.do_send(session::Disconnect);
                 }
             }
+            NetCmd::Broadcast(payload) => {
+                self.broadcast(&payload, None);
+            }
         }
     }
 }
@@ -135,9 +141,8 @@ impl<S: 'static> Handler<SessionMsg> for Network<S> {
                 }
             }
             SessionMsg::Message(ses_id, payload) => {
-                // TODO: ID caching to prevent broadcast loops
                 if (self.handlers.message)(&mut self.state, ses_id, &payload) {
-                    self.broadcast(&payload, ses_id);
+                    self.broadcast(&payload, Some(ses_id));
                 }
             }
         }

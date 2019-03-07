@@ -1,8 +1,10 @@
 use actix::actors::signal;
 use actix::prelude::*;
 use godcoin_p2p::{session::*, NetCmd, Network, Payload};
-use log::info;
-use std::{net::SocketAddr, time::Duration};
+use tokio::{prelude::*, timer::Delay};
+use log::{error, info};
+use bytes::BytesMut;
+use std::time::{Instant, Duration};
 
 struct Signals;
 
@@ -18,22 +20,6 @@ impl Handler<signal::Signal> for Signals {
             info!("SIGINT received, exiting");
             System::current().stop();
         }
-    }
-}
-
-struct DisconnectTimer<S: 'static> {
-    dur: Duration,
-    node_addr: SocketAddr,
-    addr: Addr<Network<S>>,
-}
-
-impl<S: 'static> Actor for DisconnectTimer<S> {
-    type Context = Context<Self>;
-
-    fn started(&mut self, ctx: &mut Context<Self>) {
-        ctx.run_later(self.dur, |act, _| {
-            act.addr.do_send(NetCmd::Disconnect(act.node_addr));
-        });
     }
 }
 
@@ -70,6 +56,7 @@ fn message(state: &mut NetInfo, id: SessionId, payload: &Payload) -> bool {
         "[net:{}] Received message from {} with: {:?}",
         state.net_id, id, payload
     );
+    // TODO: ID caching to prevent broadcast loops
     true
 }
 
@@ -87,31 +74,36 @@ fn main() {
     }
 
     let nets = {
-        let net_count = 2;
+        let net_count = 3;
+        let port = 7777;
         let mut nets = Vec::with_capacity(net_count);
         for net_id in 0..net_count {
             let net = Network::new(NetInfo { net_id }, message)
                 .on_connect(connected)
                 .on_disconnect(disconnected)
                 .start();
+            net.do_send(NetCmd::Listen(format!("127.0.0.1:{}", port + net_id).parse().unwrap()));
+            info!("[net:{}] Accepting connections on 127.0.0.1:7777", net_id);
             nets.push(net);
         }
         nets
     };
 
-    nets[0].do_send(NetCmd::Listen("127.0.0.1:7777".parse().unwrap()));
-    info!("[net:0] Accepting connections on 127.0.0.1:7777");
+    nets[1].do_send(NetCmd::Connect("127.0.0.1:7777".parse().unwrap()));
+    nets[2].do_send(NetCmd::Connect("127.0.0.1:7778".parse().unwrap()));
 
-    let node_addr = "127.0.0.1:7777".parse().unwrap();
-    nets[1].do_send(NetCmd::Connect(node_addr));
-    {
-        let timer = DisconnectTimer {
-            dur: Duration::from_secs(5),
-            node_addr,
-            addr: nets[1].clone(),
+    let deadline = Instant::now() + Duration::from_secs(1);
+    Arbiter::spawn(Delay::new(deadline).and_then(move |_| {
+        let payload = Payload {
+            id: BytesMut::from(vec![1, 2, 3]),
+            msg: BytesMut::from(vec![4, 5, 6])
         };
-        timer.start();
-    }
+        info!("[net:2] Broadcasting message: {:?}", &payload);
+        nets[2].do_send(NetCmd::Broadcast(payload));
+        Ok(())
+    }).map_err(|e| {
+        error!("Timer failed: {:?}", e);
+    }));
 
     sys.run();
 }
