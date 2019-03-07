@@ -12,9 +12,10 @@ struct Handlers<S: 'static> {
     message: Box<Fn(&mut S, SessionId, &Payload) -> bool + 'static>,
 }
 
-pub struct Network<S: 'static> {
+pub struct Network<S: 'static, M: 'static + Metrics = DummyMetrics> {
     state: S,
     handlers: Handlers<S>,
+    metrics: M,
     sessions: HashMap<SessionId, SessionInfo>,
 }
 
@@ -31,11 +32,23 @@ impl<S: 'static> Network<S> {
         Network {
             state,
             handlers,
+            metrics: DummyMetrics::default(),
             sessions: HashMap::with_capacity(32),
         }
     }
+}
 
-    pub fn on_connect<F>(mut self, f: F) -> Network<S>
+impl<S: 'static, M: 'static + Metrics> Network<S, M> {
+    pub fn with_metrics<CM: 'static + Metrics>(self, metrics: CM) -> Network<S, CM> {
+        Network {
+            state: self.state,
+            handlers: self.handlers,
+            metrics,
+            sessions: self.sessions,
+        }
+    }
+
+    pub fn on_connect<F>(mut self, f: F) -> Self
     where
         F: Fn(&mut S, SessionInfo) -> () + 'static,
     {
@@ -43,7 +56,7 @@ impl<S: 'static> Network<S> {
         self
     }
 
-    pub fn on_disconnect<F>(mut self, f: F) -> Network<S>
+    pub fn on_disconnect<F>(mut self, f: F) -> Self
     where
         F: Fn(&mut S, SessionInfo) -> () + 'static,
     {
@@ -51,21 +64,23 @@ impl<S: 'static> Network<S> {
         self
     }
 
-    fn broadcast(&self, msg: &Payload, skip_id: Option<SessionId>) {
-        self.sessions
+    fn broadcast(&mut self, msg: &Payload, skip_id: Option<SessionId>) {
+        for ses in self
+            .sessions
             .values()
             .filter(|ses| skip_id.map_or(true, |skip_id| ses.id != skip_id))
-            .for_each(|ses| {
-                ses.address.do_send(msg.clone());
-            });
+        {
+            self.metrics.on_outbound_message(&msg);
+            ses.address.do_send(msg.clone());
+        }
     }
 }
 
-impl<S: 'static> Actor for Network<S> {
+impl<S: 'static, M: 'static + Metrics> Actor for Network<S, M> {
     type Context = Context<Self>;
 }
 
-impl<S: 'static> Handler<cmd::Listen> for Network<S> {
+impl<S: 'static, M: 'static + Metrics> Handler<cmd::Listen> for Network<S, M> {
     type Result = ();
 
     fn handle(&mut self, msg: cmd::Listen, ctx: &mut Self::Context) {
@@ -80,7 +95,7 @@ impl<S: 'static> Handler<cmd::Listen> for Network<S> {
     }
 }
 
-impl<S: 'static> Handler<cmd::Connect> for Network<S> {
+impl<S: 'static, M: 'static + Metrics> Handler<cmd::Connect> for Network<S, M> {
     type Result = ();
 
     fn handle(&mut self, msg: cmd::Connect, ctx: &mut Self::Context) {
@@ -99,7 +114,7 @@ impl<S: 'static> Handler<cmd::Connect> for Network<S> {
     }
 }
 
-impl<S: 'static> Handler<cmd::Disconnect> for Network<S> {
+impl<S: 'static, M: 'static + Metrics> Handler<cmd::Disconnect> for Network<S, M> {
     type Result = ();
 
     fn handle(&mut self, msg: cmd::Disconnect, _: &mut Self::Context) {
@@ -109,7 +124,7 @@ impl<S: 'static> Handler<cmd::Disconnect> for Network<S> {
     }
 }
 
-impl<S: 'static> Handler<cmd::Broadcast> for Network<S> {
+impl<S: 'static, M: 'static + Metrics> Handler<cmd::Broadcast> for Network<S, M> {
     type Result = ();
 
     fn handle(&mut self, msg: cmd::Broadcast, _: &mut Self::Context) {
@@ -117,7 +132,18 @@ impl<S: 'static> Handler<cmd::Broadcast> for Network<S> {
     }
 }
 
-impl<S: 'static> Handler<SessionMsg> for Network<S> {
+impl<S: 'static, M: 'static + Metrics> Handler<cmd::Metrics<M>> for Network<S, M>
+where
+    M: actix::dev::MessageResponse<Network<S, M>, cmd::Metrics<M>>,
+{
+    type Result = M;
+
+    fn handle(&mut self, _: cmd::Metrics<M>, _: &mut Self::Context) -> Self::Result {
+        self.metrics.clone()
+    }
+}
+
+impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Network<S, M> {
     type Result = ();
 
     fn handle(&mut self, msg: SessionMsg, _: &mut Self::Context) {
@@ -140,6 +166,7 @@ impl<S: 'static> Handler<SessionMsg> for Network<S> {
                 }
             }
             SessionMsg::Message(ses_id, payload) => {
+                self.metrics.on_inbound_message(&payload);
                 if (self.handlers.message)(&mut self.state, ses_id, &payload) {
                     self.broadcast(&payload, Some(ses_id));
                 }
@@ -163,4 +190,10 @@ pub mod cmd {
 
     #[derive(Message)]
     pub struct Broadcast(pub Payload);
+
+    #[derive(Default, Message)]
+    #[rtype(result = "M")]
+    pub struct Metrics<M: 'static + crate::Metrics> {
+        _metrics: std::marker::PhantomData<M>,
+    }
 }

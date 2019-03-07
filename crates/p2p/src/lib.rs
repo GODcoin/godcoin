@@ -1,3 +1,4 @@
+pub mod metrics;
 pub mod network;
 pub mod session;
 
@@ -5,6 +6,7 @@ mod codec;
 mod server;
 
 pub use codec::Payload;
+pub use metrics::*;
 pub use network::{cmd, Network};
 pub use session::{SessionId, SessionInfo};
 

@@ -1,7 +1,8 @@
 use actix::actors::signal;
 use actix::prelude::*;
 use bytes::BytesMut;
-use godcoin_p2p::{cmd, session::*, Network, Payload};
+use futures::future::join_all;
+use godcoin_p2p::*;
 use log::{error, info};
 use std::{
     cell::RefCell,
@@ -48,13 +49,13 @@ impl NetState {
 
 fn connected(state: &mut NetState, ses: SessionInfo) {
     match ses.conn_type {
-        ConnectionType::Inbound => {
+        session::ConnectionType::Inbound => {
             info!(
                 "[net:{}] Accepted connection -> {}",
                 state.net_id, ses.peer_addr
             );
         }
-        ConnectionType::Outbound => {
+        session::ConnectionType::Outbound => {
             info!(
                 "[net:{}] Connected to node -> {}",
                 state.net_id, ses.peer_addr
@@ -78,7 +79,7 @@ fn message(state: &mut NetState, id: SessionId, payload: &Payload) -> bool {
     let broadcast = state.messages.contains(&payload.id);
     *state.msg_counter.borrow_mut() += 1;
     if *state.msg_counter.borrow() == state.msg_threshold {
-        info!("Threshold reached => evicting cached messages");
+        info!("Threshold reached -> evicting cached messages");
         state.messages.clear();
     }
     broadcast
@@ -107,15 +108,17 @@ fn main() {
         for net_id in 0..net_count {
             let msg_counter = Rc::clone(&msg_counter);
             let net = Network::new(NetState::new(net_id, msg_counter, threshold), message)
+                .with_metrics(BasicMetrics::default())
                 .on_connect(connected)
                 .on_disconnect(disconnected)
                 .start();
 
             let port = port + net_id;
-            net.do_send(cmd::Listen(
-                format!("127.0.0.1:{}", port).parse().unwrap(),
-            ));
-            info!("[net:{}] Accepting connections on 127.0.0.1:{}", net_id, port);
+            net.do_send(cmd::Listen(format!("127.0.0.1:{}", port).parse().unwrap()));
+            info!(
+                "[net:{}] Accepting connections on 127.0.0.1:{}",
+                net_id, port
+            );
             nets.push(net);
         }
         nets
@@ -128,14 +131,46 @@ fn main() {
     let deadline = Instant::now() + Duration::from_secs(1);
     Arbiter::spawn(
         Delay::new(deadline)
+            .and_then({
+                let nets = nets.clone();
+                move |_| {
+                    let payload = Payload {
+                        id: BytesMut::from(vec![1, 2, 3]),
+                        msg: BytesMut::from(vec![4, 5, 6]),
+                    };
+                    println!();
+                    info!("[net:2] Broadcasting message: {:?}", &payload);
+                    nets[2].do_send(cmd::Broadcast(payload));
+                    Ok(())
+                }
+            })
+            .map_err(|e| {
+                error!("Timer failed: {:?}", e);
+            }),
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    Arbiter::spawn(
+        Delay::new(deadline)
             .and_then(move |_| {
-                let payload = Payload {
-                    id: BytesMut::from(vec![1, 2, 3]),
-                    msg: BytesMut::from(vec![4, 5, 6]),
-                };
                 println!();
-                info!("[net:2] Broadcasting message: {:?}", &payload);
-                nets[2].do_send(cmd::Broadcast(payload));
+                let futs = nets
+                    .iter()
+                    .map(|net| Box::new(net.clone().send(cmd::Metrics::default())))
+                    .collect::<Vec<Box<_>>>();
+
+                Arbiter::spawn(
+                    join_all(futs)
+                        .and_then(|res| {
+                            for (net_id, metrics) in res.iter().enumerate() {
+                                info!("[net:{}] {:?}", net_id, metrics);
+                            }
+                            Ok(())
+                        })
+                        .map_err(|e| {
+                            println!("ERROR: {:?}", e);
+                        }),
+                );
                 Ok(())
             })
             .map_err(|e| {

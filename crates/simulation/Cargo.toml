@@ -8,6 +8,7 @@ edition = "2018"
 bytes = "0.4.11"
 crossbeam-channel = "0.3.8"
 env_logger = "0.6.0"
+futures = "0.1.25"
 godcoin-p2p = { path = "../p2p" }
 log = "0.4.6"
 tokio = "0.1.15"
