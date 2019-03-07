@@ -6,6 +6,8 @@ use log::{error, info};
 use std::{
     collections::HashSet,
     time::{Duration, Instant},
+    cell::RefCell,
+    rc::Rc
 };
 use tokio::{prelude::*, timer::Delay};
 
@@ -29,13 +31,17 @@ impl Handler<signal::Signal> for Signals {
 struct NetState {
     net_id: usize,
     messages: HashSet<BytesMut>,
+    msg_counter: Rc<RefCell<usize>>,
+    msg_threshold: usize,
 }
 
 impl NetState {
-    pub fn new(net_id: usize) -> Self {
+    pub fn new(net_id: usize, msg_counter: Rc<RefCell<usize>>, msg_threshold: usize) -> Self {
         NetState {
             net_id,
             messages: HashSet::new(),
+            msg_counter,
+            msg_threshold
         }
     }
 }
@@ -69,8 +75,13 @@ fn message(state: &mut NetState, id: SessionId, payload: &Payload) -> bool {
         "[net:{}] Received message from {} with: {:?}",
         state.net_id, id, payload
     );
-    // TODO: evict messages
-    state.messages.contains(&payload.id)
+    let broadcast = state.messages.contains(&payload.id);
+    *state.msg_counter.borrow_mut() += 1;
+    if *state.msg_counter.borrow() == state.msg_threshold {
+        info!("Threshold reached => evicting cached messages");
+        state.messages.clear();
+    }
+    broadcast
 }
 
 fn main() {
@@ -90,8 +101,12 @@ fn main() {
         let net_count = 3;
         let port = 7777;
         let mut nets = Vec::with_capacity(net_count);
+        let msg_counter = Rc::new(RefCell::new(0));
+        // The threshold is always one less to exclude the current network from being counted
+        let threshold = net_count - 1;
         for net_id in 0..net_count {
-            let net = Network::new(NetState::new(net_id), message)
+            let msg_counter = Rc::clone(&msg_counter);
+            let net = Network::new(NetState::new(net_id, msg_counter, threshold), message)
                 .on_connect(connected)
                 .on_disconnect(disconnected)
                 .start();
