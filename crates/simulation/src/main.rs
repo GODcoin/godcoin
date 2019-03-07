@@ -110,10 +110,12 @@ fn main() {
                 .on_connect(connected)
                 .on_disconnect(disconnected)
                 .start();
+
+            let port = port + net_id;
             net.do_send(cmd::Listen(
-                format!("127.0.0.1:{}", port + net_id).parse().unwrap(),
+                format!("127.0.0.1:{}", port).parse().unwrap(),
             ));
-            info!("[net:{}] Accepting connections on 127.0.0.1:7777", net_id);
+            info!("[net:{}] Accepting connections on 127.0.0.1:{}", net_id, port);
             nets.push(net);
         }
         nets
