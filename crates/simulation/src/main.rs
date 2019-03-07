@@ -23,11 +23,11 @@ impl Handler<signal::Signal> for Signals {
     }
 }
 
-struct NetInfo {
+struct NetState {
     net_id: usize,
 }
 
-fn connected(state: &mut NetInfo, ses: SessionInfo) {
+fn connected(state: &mut NetState, ses: SessionInfo) {
     match ses.conn_type {
         ConnectionType::Inbound => {
             info!(
@@ -44,14 +44,14 @@ fn connected(state: &mut NetInfo, ses: SessionInfo) {
     }
 }
 
-fn disconnected(state: &mut NetInfo, ses: SessionInfo) {
+fn disconnected(state: &mut NetState, ses: SessionInfo) {
     info!(
         "[net:{}] Connection disconnected -> {}",
         state.net_id, ses.peer_addr
     );
 }
 
-fn message(state: &mut NetInfo, id: SessionId, payload: &Payload) -> bool {
+fn message(state: &mut NetState, id: SessionId, payload: &Payload) -> bool {
     info!(
         "[net:{}] Received message from {} with: {:?}",
         state.net_id, id, payload
@@ -78,7 +78,7 @@ fn main() {
         let port = 7777;
         let mut nets = Vec::with_capacity(net_count);
         for net_id in 0..net_count {
-            let net = Network::new(NetInfo { net_id }, message)
+            let net = Network::new(NetState { net_id }, message)
                 .on_connect(connected)
                 .on_disconnect(disconnected)
                 .start();
