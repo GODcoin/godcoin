@@ -8,14 +8,10 @@ const MAX_MSG_LEN: u32 = 5_242_880;
 // 512 bits should be way more than enough
 const MAX_ID_LEN: u8 = 64;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Message)]
 pub struct Payload {
     pub id: BytesMut,
     pub msg: BytesMut,
-}
-
-impl Message for Payload {
-    type Result = ();
 }
 
 #[derive(Default, Debug)]
