@@ -1,7 +1,7 @@
 use actix::actors::signal;
 use actix::prelude::*;
 use bytes::BytesMut;
-use godcoin_p2p::{session::*, NetCmd, Network, Payload};
+use godcoin_p2p::{session::*, cmd, Network, Payload};
 use log::{error, info};
 use std::{
     collections::HashSet,
@@ -110,7 +110,7 @@ fn main() {
                 .on_connect(connected)
                 .on_disconnect(disconnected)
                 .start();
-            net.do_send(NetCmd::Listen(
+            net.do_send(cmd::Listen(
                 format!("127.0.0.1:{}", port + net_id).parse().unwrap(),
             ));
             info!("[net:{}] Accepting connections on 127.0.0.1:7777", net_id);
@@ -119,9 +119,9 @@ fn main() {
         nets
     };
 
-    nets[1].do_send(NetCmd::Connect("127.0.0.1:7777".parse().unwrap()));
-    nets[2].do_send(NetCmd::Connect("127.0.0.1:7777".parse().unwrap()));
-    nets[2].do_send(NetCmd::Connect("127.0.0.1:7778".parse().unwrap()));
+    nets[1].do_send(cmd::Connect("127.0.0.1:7777".parse().unwrap()));
+    nets[2].do_send(cmd::Connect("127.0.0.1:7777".parse().unwrap()));
+    nets[2].do_send(cmd::Connect("127.0.0.1:7778".parse().unwrap()));
 
     let deadline = Instant::now() + Duration::from_secs(1);
     Arbiter::spawn(
@@ -132,7 +132,7 @@ fn main() {
                     msg: BytesMut::from(vec![4, 5, 6]),
                 };
                 info!("[net:2] Broadcasting message: {:?}", &payload);
-                nets[2].do_send(NetCmd::Broadcast(payload));
+                nets[2].do_send(cmd::Broadcast(payload));
                 Ok(())
             })
             .map_err(|e| {
