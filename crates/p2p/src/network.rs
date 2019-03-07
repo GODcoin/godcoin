@@ -11,7 +11,7 @@ pub enum NetCmd {
     Listen(SocketAddr),
     Connect(SocketAddr),
     Disconnect(SessionId),
-    Broadcast(Payload)
+    Broadcast(Payload),
 }
 
 impl Message for NetCmd {
@@ -66,9 +66,7 @@ impl<S: 'static> Network<S> {
     fn broadcast(&self, msg: &Payload, skip_id: Option<SessionId>) {
         self.sessions
             .values()
-            .filter(|ses| {
-                skip_id.map_or(true, |skip_id| ses.id != skip_id)
-            })
+            .filter(|ses| skip_id.map_or(true, |skip_id| ses.id != skip_id))
             .for_each(|ses| {
                 ses.address.do_send(msg.clone());
             });
