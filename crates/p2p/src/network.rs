@@ -126,7 +126,7 @@ impl<S: 'static> Handler<SessionMsg> for Network<S> {
             SessionMsg::Connected(ses) => {
                 let id = ses.id;
                 let prev = self.sessions.insert(id, ses.clone());
-                assert!(prev.is_none());
+                assert!(prev.is_none(), "session id already exists in network");
                 if let Some(f) = &self.handlers.connected {
                     f(&mut self.state, ses);
                 }
