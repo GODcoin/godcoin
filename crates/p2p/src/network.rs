@@ -16,7 +16,7 @@ pub struct Network<S: 'static, M: 'static + Metrics = DummyMetrics> {
     state: S,
     handlers: Handlers<S>,
     metrics: M,
-    sessions: HashMap<SessionId, SessionInfo>,
+    sessions: HashMap<SessionId, (SessionInfo, Addr<Session>)>,
 }
 
 impl<S: 'static> Network<S> {
@@ -68,10 +68,10 @@ impl<S: 'static, M: 'static + Metrics> Network<S, M> {
         for ses in self
             .sessions
             .values()
-            .filter(|ses| skip_id.map_or(true, |skip_id| ses.id != skip_id))
+            .filter(|ses| skip_id.map_or(true, |skip_id| ses.0.id != skip_id))
         {
             self.metrics.on_outbound_message(&msg);
-            ses.address.do_send(msg.clone());
+            ses.1.do_send(msg.clone());
         }
     }
 }
@@ -119,7 +119,7 @@ impl<S: 'static, M: 'static + Metrics> Handler<cmd::Disconnect> for Network<S, M
 
     fn handle(&mut self, msg: cmd::Disconnect, _: &mut Self::Context) {
         if let Some(ses) = self.sessions.get(&msg.0) {
-            ses.address.do_send(session::Disconnect);
+            ses.1.do_send(session::cmd::Disconnect);
         }
     }
 }
@@ -148,9 +148,9 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Network<S, M> {
 
     fn handle(&mut self, msg: SessionMsg, _: &mut Self::Context) {
         match msg {
-            SessionMsg::Connected(ses) => {
+            SessionMsg::Connected(ses, addr) => {
                 let id = ses.id;
-                let prev = self.sessions.insert(id, ses.clone());
+                let prev = self.sessions.insert(id, (ses.clone(), addr));
                 assert!(prev.is_none(), "session id already exists in network");
                 if let Some(f) = &self.handlers.connected {
                     f(&mut self.state, ses);
@@ -162,7 +162,7 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Network<S, M> {
                     .remove(&addr)
                     .unwrap_or_else(|| panic!("Expected disconnected peer to exist: {}", addr));
                 if let Some(f) = &self.handlers.disconnected {
-                    f(&mut self.state, ses);
+                    f(&mut self.state, ses.0);
                 }
             }
             SessionMsg::Message(ses_id, payload) => {

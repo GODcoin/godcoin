@@ -7,13 +7,10 @@ pub type SessionId = SocketAddr;
 
 #[derive(Message)]
 pub enum SessionMsg {
-    Connected(SessionInfo),
+    Connected(SessionInfo, Addr<Session>),
     Disconnected(SocketAddr),
     Message(SessionId, Payload),
 }
-
-#[derive(Message)]
-pub struct Disconnect;
 
 #[derive(Clone, Debug)]
 pub enum ConnectionType {
@@ -35,7 +32,6 @@ pub struct SessionInfo {
     pub id: SocketAddr,
     pub conn_type: ConnectionType,
     pub peer_addr: SocketAddr,
-    pub address: Addr<Session>,
 }
 
 impl std::fmt::Debug for SessionInfo {
@@ -68,7 +64,6 @@ impl Session {
                     id: peer_addr,
                     conn_type,
                     peer_addr,
-                    address: ctx.address(),
                 },
             }
         });
@@ -78,9 +73,9 @@ impl Session {
 impl Actor for Session {
     type Context = Context<Self>;
 
-    fn started(&mut self, _: &mut Self::Context) {
+    fn started(&mut self, ctx: &mut Self::Context) {
         self.recipient
-            .do_send(SessionMsg::Connected(self.info.clone()))
+            .do_send(SessionMsg::Connected(self.info.clone(), ctx.address()))
             .unwrap();
     }
 
@@ -93,10 +88,10 @@ impl Actor for Session {
 
 impl actix::io::WriteHandler<Error> for Session {}
 
-impl Handler<Disconnect> for Session {
+impl Handler<cmd::Disconnect> for Session {
     type Result = ();
 
-    fn handle(&mut self, _: Disconnect, ctx: &mut Self::Context) {
+    fn handle(&mut self, _: cmd::Disconnect, ctx: &mut Self::Context) {
         ctx.stop();
     }
 }
@@ -122,4 +117,11 @@ impl StreamHandler<Payload, Error> for Session {
         error!("[{}] Frame handling error: {:?}", self.info.id, err);
         Running::Stop
     }
+}
+
+pub mod cmd {
+    use super::*;
+
+    #[derive(Message)]
+    pub struct Disconnect;
 }
