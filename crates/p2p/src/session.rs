@@ -1,7 +1,7 @@
 use crate::*;
 use std::net::SocketAddr;
 use std::{fmt, io::Error};
-use tokio::{codec::FramedRead, io::WriteHalf, net::TcpStream, prelude::*};
+use tokio::{io::WriteHalf, net::TcpStream};
 
 pub type SessionId = SocketAddr;
 
@@ -35,30 +35,9 @@ pub struct SessionInfo {
 }
 
 pub struct Session {
-    recipient: Recipient<SessionMsg>,
-    write: actix::io::FramedWrite<WriteHalf<TcpStream>, Codec>,
-    info: SessionInfo,
-}
-
-impl Session {
-    pub fn init(tx: Recipient<SessionMsg>, conn_type: ConnectionType, stream: TcpStream) {
-        // TODO: perform the handshake
-        let peer_addr = stream.peer_addr().unwrap();
-        debug!("[{}] Accepted {} connection", peer_addr, conn_type);
-        Session::create(move |ctx| {
-            let (r, w) = stream.split();
-            ctx.add_stream(FramedRead::new(r, Codec::new()));
-            Session {
-                recipient: tx,
-                write: actix::io::FramedWrite::new(w, Codec::new(), ctx),
-                info: SessionInfo {
-                    id: peer_addr,
-                    conn_type,
-                    peer_addr,
-                },
-            }
-        });
-    }
+    pub recipient: Recipient<SessionMsg>,
+    pub write: actix::io::FramedWrite<WriteHalf<TcpStream>, Codec>,
+    pub info: SessionInfo,
 }
 
 impl Actor for Session {

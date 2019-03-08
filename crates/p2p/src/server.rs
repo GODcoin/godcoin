@@ -1,9 +1,9 @@
-use crate::*;
+use crate::{network::connect::TcpConnect, *};
 use std::io::Error;
 use tokio::net::TcpStream;
 
 pub struct Server {
-    pub recipient: Recipient<SessionMsg>,
+    pub recipient: Recipient<TcpConnect>,
 }
 
 impl Actor for Server {
@@ -12,8 +12,9 @@ impl Actor for Server {
 
 impl StreamHandler<TcpStream, Error> for Server {
     fn handle(&mut self, s: TcpStream, _: &mut Self::Context) {
-        let recipient = self.recipient.clone();
-        Session::init(recipient, ConnectionType::Inbound, s);
+        self.recipient
+            .do_send(TcpConnect(s, ConnectionType::Inbound))
+            .unwrap();
     }
 
     fn error(&mut self, err: Error, _: &mut Self::Context) -> Running {

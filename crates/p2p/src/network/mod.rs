@@ -3,6 +3,7 @@ use crate::*;
 use std::collections::HashMap;
 
 pub mod cmd;
+pub mod connect;
 
 struct Handlers<S: 'static> {
     connected: Option<Box<Fn(&mut S, SessionInfo) -> () + 'static>>,

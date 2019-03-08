@@ -1,4 +1,4 @@
-use super::*;
+use super::{connect::TcpConnect, *};
 use std::net::SocketAddr;
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -42,16 +42,16 @@ impl<S: 'static, M: 'static + crate::Metrics> Handler<cmd::Connect> for Network<
     type Result = ();
 
     fn handle(&mut self, msg: cmd::Connect, ctx: &mut Self::Context) {
-        let addr = msg.0;
-        let rx = ctx.address().recipient();
+        let peer_addr = msg.0;
+        let addr = ctx.address();
         Arbiter::spawn(
-            TcpStream::connect(&addr)
-                .and_then(|s| {
-                    Session::init(rx, ConnectionType::Outbound, s);
+            TcpStream::connect(&peer_addr)
+                .and_then(move |s| {
+                    addr.do_send(TcpConnect(s, ConnectionType::Outbound));
                     Ok(())
                 })
                 .map_err(move |e| {
-                    warn!("[{}] Failed to connect to peer: {:?}", addr, e);
+                    warn!("[{}] Failed to connect to peer: {:?}", peer_addr, e);
                 }),
         );
     }
