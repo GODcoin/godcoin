@@ -27,20 +27,11 @@ impl fmt::Display for ConnectionType {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SessionInfo {
     pub id: SocketAddr,
     pub conn_type: ConnectionType,
     pub peer_addr: SocketAddr,
-}
-
-impl std::fmt::Debug for SessionInfo {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("SessionInfo")
-            .field("conn_type", &self.conn_type)
-            .field("peer_addr", &self.peer_addr)
-            .finish()
-    }
 }
 
 pub struct Session {
