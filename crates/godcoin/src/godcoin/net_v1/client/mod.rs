@@ -7,10 +7,10 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+use tokio::codec::Framed;
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio::timer::Delay;
-use tokio::codec::Framed;
 
 use crate::fut_util::*;
 

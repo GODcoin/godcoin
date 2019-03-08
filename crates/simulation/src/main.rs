@@ -1,4 +1,3 @@
-use actix::actors::signal;
 use actix::prelude::*;
 use bytes::BytesMut;
 use futures::future::join_all;
@@ -6,84 +5,13 @@ use godcoin_p2p::*;
 use log::{error, info};
 use std::{
     cell::RefCell,
-    collections::HashSet,
     rc::Rc,
     time::{Duration, Instant},
 };
 use tokio::{prelude::*, timer::Delay};
 
-struct Signals;
-
-impl Actor for Signals {
-    type Context = Context<Self>;
-}
-
-impl Handler<signal::Signal> for Signals {
-    type Result = ();
-
-    fn handle(&mut self, msg: signal::Signal, _: &mut Context<Self>) {
-        if let signal::SignalType::Int = msg.0 {
-            info!("SIGINT received, exiting");
-            System::current().stop();
-        }
-    }
-}
-
-struct NetState {
-    net_id: usize,
-    messages: HashSet<BytesMut>,
-    msg_counter: Rc<RefCell<usize>>,
-    msg_threshold: usize,
-}
-
-impl NetState {
-    pub fn new(net_id: usize, msg_counter: Rc<RefCell<usize>>, msg_threshold: usize) -> Self {
-        NetState {
-            net_id,
-            messages: HashSet::new(),
-            msg_counter,
-            msg_threshold,
-        }
-    }
-}
-
-fn connected(state: &mut NetState, ses: SessionInfo) {
-    match ses.conn_type {
-        session::ConnectionType::Inbound => {
-            info!(
-                "[net:{}] Accepted connection -> {}",
-                state.net_id, ses.peer_addr
-            );
-        }
-        session::ConnectionType::Outbound => {
-            info!(
-                "[net:{}] Connected to node -> {}",
-                state.net_id, ses.peer_addr
-            );
-        }
-    }
-}
-
-fn disconnected(state: &mut NetState, ses: SessionInfo) {
-    info!(
-        "[net:{}] Connection disconnected -> {}",
-        state.net_id, ses.peer_addr
-    );
-}
-
-fn message(state: &mut NetState, id: SessionId, payload: &Payload) -> bool {
-    info!(
-        "[net:{}] Received message from {} with: {:?}",
-        state.net_id, id, payload
-    );
-    let broadcast = state.messages.contains(&payload.id);
-    *state.msg_counter.borrow_mut() += 1;
-    if *state.msg_counter.borrow() == state.msg_threshold {
-        info!("Threshold reached -> evicting cached messages");
-        state.messages.clear();
-    }
-    broadcast
-}
+mod handlers;
+mod signals;
 
 fn main() {
     let env = env_logger::Env::new()
@@ -91,12 +19,7 @@ fn main() {
     env_logger::init_from_env(env);
 
     let sys = System::new("simulation");
-
-    {
-        let sig_addr = Signals.start();
-        let addr = signal::ProcessSignals::from_registry();
-        addr.do_send(signal::Subscribe(sig_addr.recipient()));
-    }
+    signals::Signals::init();
 
     let nets = {
         let net_count = 3;
@@ -107,10 +30,11 @@ fn main() {
         let threshold = net_count - 1;
         for net_id in 0..net_count {
             let msg_counter = Rc::clone(&msg_counter);
-            let net = Network::new(NetState::new(net_id, msg_counter, threshold), message)
+            let state = handlers::NetState::new(net_id, msg_counter, threshold);
+            let net = Network::new(state, handlers::message)
                 .with_metrics(BasicMetrics::default())
-                .on_connect(connected)
-                .on_disconnect(disconnected)
+                .on_connect(handlers::connected)
+                .on_disconnect(handlers::disconnected)
                 .start();
 
             let port = port + net_id;

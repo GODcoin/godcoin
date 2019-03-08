@@ -9,9 +9,9 @@ use std::sync::{
     Arc,
 };
 
+use tokio::codec::Framed;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
-use tokio::codec::Framed;
 
 use crate::blockchain::Blockchain;
 use crate::fut_util::*;

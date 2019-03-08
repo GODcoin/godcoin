@@ -6,8 +6,8 @@ use futures::{
 use log::debug;
 use parking_lot::Mutex;
 use std::{collections::HashMap, fmt, io, net::SocketAddr, sync::Arc};
-use tokio::net::TcpStream;
 use tokio::codec::Framed;
+use tokio::net::TcpStream;
 
 use super::rpc::*;
 
