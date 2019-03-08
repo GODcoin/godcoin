@@ -7,7 +7,7 @@ use log::debug;
 use parking_lot::Mutex;
 use std::{collections::HashMap, fmt, io, net::SocketAddr, sync::Arc};
 use tokio::net::TcpStream;
-use tokio_codec::Framed;
+use tokio::codec::Framed;
 
 use super::rpc::*;
 

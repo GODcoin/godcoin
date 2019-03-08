@@ -11,7 +11,7 @@ use std::sync::{
 
 use tokio::net::TcpListener;
 use tokio::prelude::*;
-use tokio_codec::Framed;
+use tokio::codec::Framed;
 
 use crate::blockchain::Blockchain;
 use crate::fut_util::*;

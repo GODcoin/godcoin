@@ -10,7 +10,7 @@ use std::sync::{
 use tokio::net::TcpStream;
 use tokio::prelude::*;
 use tokio::timer::Delay;
-use tokio_codec::Framed;
+use tokio::codec::Framed;
 
 use crate::fut_util::*;
 

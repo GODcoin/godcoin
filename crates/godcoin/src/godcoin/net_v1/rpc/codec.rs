@@ -1,6 +1,6 @@
 use bytes::{BufMut, BytesMut};
 use std::io::{Cursor, Error, ErrorKind};
-use tokio_codec::{Decoder, Encoder};
+use tokio::codec::{Decoder, Encoder};
 
 use super::*;
 use crate::blockchain::Properties;
