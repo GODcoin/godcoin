@@ -36,7 +36,7 @@ pub struct SessionInfo {
 
 pub struct Session {
     pub recipient: Recipient<SessionMsg>,
-    pub write: actix::io::FramedWrite<WriteHalf<TcpStream>, Codec>,
+    pub writer: actix::io::FramedWrite<WriteHalf<TcpStream>, Codec>,
     pub info: SessionInfo,
 }
 
@@ -71,7 +71,7 @@ impl Handler<Payload> for Session {
 
     fn handle(&mut self, msg: Payload, _: &mut Self::Context) {
         debug!("[{}] Sent payload: {:?}", self.info.id, &msg);
-        self.write.write(msg);
+        self.writer.write(msg);
     }
 }
 

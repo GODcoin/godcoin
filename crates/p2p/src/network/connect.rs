@@ -19,7 +19,7 @@ impl<S: 'static, M: 'static + Metrics> Handler<TcpConnect> for Network<S, M> {
             ctx.add_stream(FramedRead::new(r, Codec::new()));
             Session {
                 recipient: tx,
-                write: actix::io::FramedWrite::new(w, Codec::new(), ctx),
+                writer: actix::io::FramedWrite::new(w, Codec::new(), ctx),
                 info: SessionInfo {
                     id: peer_addr,
                     conn_type,
