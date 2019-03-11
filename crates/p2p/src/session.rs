@@ -12,6 +12,18 @@ pub enum SessionMsg {
     Message(SessionId, Payload),
 }
 
+impl fmt::Debug for SessionMsg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            SessionMsg::Connected(info, _) => f.debug_tuple("Connected").field(&info).finish(),
+            SessionMsg::Disconnected(addr) => f.debug_tuple("Disconnected").field(&addr).finish(),
+            SessionMsg::Message(id, payload) => {
+                f.debug_tuple("Message").field(&id).field(&payload).finish()
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum ConnectionType {
     Inbound,
