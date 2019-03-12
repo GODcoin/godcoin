@@ -161,9 +161,6 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                 PeerState::Disconnected(_) => {
                     panic!("Received message from disconnected peer: {:?}", self.state);
                 }
-                PeerState::Ready(_, info) => {
-                    self.net_addr.try_send(msg::Message(info.id, msg)).unwrap();
-                }
                 PeerState::Handshaking(ses, peer_addr) => {
                     if !self.is_outbound() {
                         debug!("[{}] Sending inbound handshake", peer_addr);
@@ -181,6 +178,9 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                     self.net_addr
                         .try_send(msg::Connected(info, ctx.address()))
                         .unwrap();
+                }
+                PeerState::Ready(_, info) => {
+                    self.net_addr.try_send(msg::Message(info.id, msg)).unwrap();
                 }
             },
         }
