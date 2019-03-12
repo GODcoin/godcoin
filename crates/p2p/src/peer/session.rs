@@ -3,53 +3,27 @@ use std::net::SocketAddr;
 use std::{fmt, io::Error};
 use tokio::{io::WriteHalf, net::TcpStream};
 
-pub type SessionId = SocketAddr;
-
 #[derive(Message)]
 pub enum SessionMsg {
-    Connected(SessionInfo, Addr<Session>),
-    Disconnected(SocketAddr),
-    Message(SessionId, Payload),
+    Connected(Addr<Session>, SocketAddr),
+    Disconnected,
+    Message(Payload),
 }
 
 impl fmt::Debug for SessionMsg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SessionMsg::Connected(info, _) => f.debug_tuple("Connected").field(&info).finish(),
-            SessionMsg::Disconnected(addr) => f.debug_tuple("Disconnected").field(&addr).finish(),
-            SessionMsg::Message(id, payload) => {
-                f.debug_tuple("Message").field(&id).field(&payload).finish()
-            }
+            SessionMsg::Connected(_, addr) => f.debug_tuple("Connected").field(&addr).finish(),
+            SessionMsg::Disconnected => f.debug_tuple("Disconnected").finish(),
+            SessionMsg::Message(payload) => f.debug_tuple("Message").field(&payload).finish(),
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub enum ConnectionType {
-    Inbound,
-    Outbound,
-}
-
-impl fmt::Display for ConnectionType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ConnectionType::Inbound => f.write_str("inbound"),
-            ConnectionType::Outbound => f.write_str("outbound"),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct SessionInfo {
-    pub id: SocketAddr,
-    pub conn_type: ConnectionType,
-    pub peer_addr: SocketAddr,
 }
 
 pub struct Session {
     pub recipient: Recipient<SessionMsg>,
     pub writer: actix::io::FramedWrite<WriteHalf<TcpStream>, Codec>,
-    pub info: SessionInfo,
+    pub peer_addr: SocketAddr,
 }
 
 impl Actor for Session {
@@ -57,13 +31,13 @@ impl Actor for Session {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         self.recipient
-            .do_send(SessionMsg::Connected(self.info.clone(), ctx.address()))
+            .do_send(SessionMsg::Connected(ctx.address(), self.peer_addr))
             .unwrap();
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
         self.recipient
-            .do_send(SessionMsg::Disconnected(self.info.id))
+            .do_send(SessionMsg::Disconnected)
             .unwrap();
     }
 }
@@ -82,21 +56,21 @@ impl Handler<Payload> for Session {
     type Result = ();
 
     fn handle(&mut self, msg: Payload, _: &mut Self::Context) {
-        debug!("[{}] Sent payload: {:?}", self.info.id, &msg);
+        debug!("[{}] Sent payload: {:?}", self.peer_addr, &msg);
         self.writer.write(msg);
     }
 }
 
 impl StreamHandler<Payload, Error> for Session {
     fn handle(&mut self, msg: Payload, _: &mut Self::Context) {
-        debug!("[{}] Received payload: {:?}", self.info.id, msg);
+        debug!("[{}] Received payload: {:?}", self.peer_addr, msg);
         self.recipient
-            .do_send(SessionMsg::Message(self.info.id, msg))
+            .do_send(SessionMsg::Message(msg))
             .unwrap();
     }
 
     fn error(&mut self, err: Error, _: &mut Self::Context) -> Running {
-        error!("[{}] Frame handling error: {:?}", self.info.id, err);
+        error!("[{}] Frame handling error: {:?}", self.peer_addr, err);
         Running::Stop
     }
 }

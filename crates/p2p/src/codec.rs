@@ -64,7 +64,6 @@ impl Decoder for Codec {
             }
         }
         if self.id_len != 0
-            && self.msg_len != 0
             && buf.len() >= usize::from(self.id_len) + (self.msg_len as usize)
         {
             let id_len = self.id_len;

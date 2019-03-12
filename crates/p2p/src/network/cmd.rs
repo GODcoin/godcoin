@@ -1,4 +1,4 @@
-use super::{connect::TcpConnect, *};
+use super::{connect::*, *};
 use std::net::SocketAddr;
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -12,7 +12,7 @@ pub struct Listen(pub SocketAddr);
 pub struct Connect(pub SocketAddr);
 
 #[derive(Message)]
-pub struct Disconnect(pub SessionId);
+pub struct Disconnect(pub PeerId);
 
 #[derive(Message)]
 pub struct Broadcast(pub Payload);
@@ -62,7 +62,7 @@ impl<S: 'static, M: 'static + crate::Metrics> Handler<cmd::Disconnect> for Netwo
 
     fn handle(&mut self, msg: cmd::Disconnect, _: &mut Self::Context) {
         if let Some(ses) = self.sessions.get(&msg.0) {
-            ses.1.do_send(session::cmd::Disconnect);
+            ses.1.do_send(crate::peer::cmd::Disconnect);
         }
     }
 }

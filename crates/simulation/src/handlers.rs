@@ -1,5 +1,5 @@
 use bytes::BytesMut;
-use godcoin_p2p::{session, Payload, SessionId, SessionInfo};
+use godcoin_p2p::{network, Payload, PeerId, PeerInfo};
 use log::info;
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
@@ -21,15 +21,15 @@ impl NetState {
     }
 }
 
-pub fn connected(state: &mut NetState, ses: SessionInfo) {
+pub fn connected(state: &mut NetState, ses: PeerInfo) {
     match ses.conn_type {
-        session::ConnectionType::Inbound => {
+        network::ConnectionType::Inbound => {
             info!(
                 "[net:{}] Accepted connection -> {}",
                 state.net_id, ses.peer_addr
             );
         }
-        session::ConnectionType::Outbound => {
+        network::ConnectionType::Outbound => {
             info!(
                 "[net:{}] Connected to node -> {}",
                 state.net_id, ses.peer_addr
@@ -38,14 +38,14 @@ pub fn connected(state: &mut NetState, ses: SessionInfo) {
     }
 }
 
-pub fn disconnected(state: &mut NetState, ses: SessionInfo) {
+pub fn disconnected(state: &mut NetState, ses: PeerInfo) {
     info!(
         "[net:{}] Connection disconnected -> {}",
         state.net_id, ses.peer_addr
     );
 }
 
-pub fn message(state: &mut NetState, id: SessionId, payload: &Payload) -> bool {
+pub fn message(state: &mut NetState, id: PeerId, payload: &Payload) -> bool {
     info!(
         "[net:{}] Received message from {} with: {:?}",
         state.net_id, id, payload

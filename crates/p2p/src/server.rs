@@ -1,4 +1,4 @@
-use crate::{network::connect::TcpConnect, *};
+use crate::{network::connect::*, *};
 use std::io::Error;
 use tokio::net::TcpStream;
 
