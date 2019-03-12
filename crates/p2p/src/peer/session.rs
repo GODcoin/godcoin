@@ -36,7 +36,7 @@ impl Actor for Session {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        self.recipient.do_send(SessionMsg::Disconnected).unwrap();
+        let _ = self.recipient.do_send(SessionMsg::Disconnected);
     }
 }
 

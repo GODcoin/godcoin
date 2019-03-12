@@ -33,6 +33,7 @@ fn main() {
             let state = handlers::NetState::new(net_id, msg_counter, threshold);
             let net = Network::new(state, handlers::message)
                 .with_metrics(BasicMetrics::default())
+                .on_connect_req(handlers::connect_req)
                 .on_connect(handlers::connected)
                 .on_disconnect(handlers::disconnected)
                 .start();

@@ -162,22 +162,51 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                     panic!("Received message from disconnected peer: {:?}", self.state);
                 }
                 PeerState::Handshaking(ses, peer_addr) => {
-                    if !self.is_outbound() {
-                        debug!("[{}] Sending inbound handshake", peer_addr);
-                        ses.do_send(Payload {
-                            id: BytesMut::from(vec![0]),
-                            msg: BytesMut::new(),
-                        });
-                    }
+                    let peer_addr = peer_addr.clone();
                     let info = PeerInfo {
-                        id: *peer_addr,
+                        id: peer_addr,
                         outbound_addr: self.outbound_addr,
-                        peer_addr: *peer_addr,
+                        peer_addr: peer_addr,
                     };
-                    self.state = PeerState::Ready(ses.clone(), info.clone());
-                    self.net_addr
-                        .try_send(msg::Connected(info, ctx.address()))
-                        .unwrap();
+                    let ses = ses.clone();
+                    if !self.is_outbound() {
+                        self.net_addr
+                        .send(msg::Handshake(info.clone(), msg))
+                        .into_actor(self)
+                        .map(move |res, act, ctx| {
+                            match res {
+                                msg::HandshakeRequest::Allow => {
+                                    debug!("[{}] Sending inbound handshake", peer_addr);
+                                    ses.do_send(Payload {
+                                        id: BytesMut::from(vec![0]),
+                                        msg: BytesMut::new(),
+                                    });
+                                    act.state = PeerState::Ready(ses, info.clone());
+                                    act.net_addr
+                                        .try_send(msg::Connected(info, ctx.address()))
+                                        .unwrap();
+                                }
+                                msg::HandshakeRequest::Deny(reason) => {
+                                    warn!("[{}] Connection rejected: {}", peer_addr, reason);
+                                    ctx.address().do_send(cmd::Disconnect);
+                                }
+                            }
+                        })
+                        .map_err(move |e, _, ctx| {
+                            error!(
+                                "[{}] Failed to send handshake request to network: {:?}",
+                                peer_addr, e
+                            );
+                            ctx.address().do_send(cmd::Disconnect);
+                        })
+                        .wait(ctx);
+                    } else {
+                        self.state = PeerState::Ready(ses, info.clone());
+                        self.net_addr
+                            .try_send(msg::Connected(info, ctx.address()))
+                            .unwrap();
+                    }
+
                 }
                 PeerState::Ready(_, info) => {
                     self.net_addr.try_send(msg::Message(info.id, msg)).unwrap();
@@ -191,7 +220,25 @@ pub mod msg {
     use super::*;
 
     #[derive(Message, Debug)]
-    pub struct Handshake(pub SocketAddr, pub Payload);
+    #[rtype(HandshakeRequest)]
+    pub struct Handshake(pub PeerInfo, pub Payload);
+
+    pub enum HandshakeRequest {
+        Allow,
+        Deny(String),
+    }
+
+    impl<A, M> actix::dev::MessageResponse<A, M> for HandshakeRequest
+    where
+        A: Actor,
+        M: actix::Message<Result = HandshakeRequest>,
+    {
+        fn handle<R: actix::dev::ResponseChannel<M>>(self, _: &mut A::Context, tx: Option<R>) {
+            if let Some(tx) = tx {
+                tx.send(self);
+            }
+        }
+    }
 
     #[derive(Message)]
     pub struct Connected<S: 'static, M: 'static + Metrics>(pub PeerInfo, pub Addr<Peer<S, M>>);

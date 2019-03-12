@@ -8,7 +8,8 @@ pub mod connect;
 struct Handlers<S: 'static> {
     connected: Option<Box<Fn(&mut S, PeerInfo) -> () + 'static>>,
     disconnected: Option<Box<Fn(&mut S, PeerInfo) -> () + 'static>>,
-    connect_req: Option<Box<Fn(&mut S, &PeerInfo, Payload) -> bool + 'static>>,
+    connect_req:
+        Option<Box<Fn(&mut S, PeerInfo, Payload) -> peer::msg::HandshakeRequest + 'static>>,
     message: Box<Fn(&mut S, PeerId, &Payload) -> bool + 'static>,
 }
 
@@ -52,7 +53,7 @@ impl<S: 'static, M: 'static + Metrics> Network<S, M> {
 
     pub fn on_connect_req<F>(mut self, f: F) -> Self
     where
-        F: Fn(&mut S, &PeerInfo, Payload) -> bool + 'static,
+        F: Fn(&mut S, PeerInfo, Payload) -> peer::msg::HandshakeRequest + 'static,
     {
         self.handlers.connect_req.replace(Box::new(f));
         self
@@ -88,6 +89,18 @@ impl<S: 'static, M: 'static + Metrics> Network<S, M> {
 
 impl<S: 'static, M: 'static + Metrics> Actor for Network<S, M> {
     type Context = Context<Self>;
+}
+
+impl<S: 'static, M: 'static + Metrics> Handler<peer::msg::Handshake> for Network<S, M> {
+    type Result = peer::msg::HandshakeRequest;
+
+    fn handle(&mut self, msg: peer::msg::Handshake, _: &mut Self::Context) -> Self::Result {
+        if let Some(f) = &self.handlers.connect_req {
+            f(&mut self.state, msg.0, msg.1)
+        } else {
+            peer::msg::HandshakeRequest::Allow
+        }
+    }
 }
 
 impl<S: 'static, M: 'static + Metrics> Handler<peer::msg::Connected<S, M>> for Network<S, M> {

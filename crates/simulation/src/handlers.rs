@@ -1,5 +1,5 @@
 use bytes::BytesMut;
-use godcoin_p2p::{Payload, PeerId, PeerInfo};
+use godcoin_p2p::{peer, Payload, PeerId, PeerInfo};
 use log::info;
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
@@ -19,6 +19,11 @@ impl NetState {
             msg_threshold,
         }
     }
+}
+
+pub fn connect_req(state: &mut NetState, peer: PeerInfo, hs: Payload) -> peer::msg::HandshakeRequest {
+    info!("[net:{}] ({}) Received hs request: {:?}", state.net_id, peer.peer_addr, hs);
+    peer::msg::HandshakeRequest::Allow
 }
 
 pub fn connected(state: &mut NetState, peer: PeerInfo) {
