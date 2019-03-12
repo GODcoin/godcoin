@@ -5,8 +5,6 @@ use std::collections::HashMap;
 pub mod cmd;
 pub mod connect;
 
-pub use connect::ConnectionType;
-
 struct Handlers<S: 'static> {
     connected: Option<Box<Fn(&mut S, PeerInfo) -> () + 'static>>,
     disconnected: Option<Box<Fn(&mut S, PeerInfo) -> () + 'static>>,

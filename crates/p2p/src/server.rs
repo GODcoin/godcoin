@@ -12,9 +12,7 @@ impl Actor for Server {
 
 impl StreamHandler<TcpStream, Error> for Server {
     fn handle(&mut self, s: TcpStream, _: &mut Self::Context) {
-        self.recipient
-            .do_send(TcpConnect(s, ConnectionType::Inbound))
-            .unwrap();
+        self.recipient.do_send(TcpConnect(s, None)).unwrap();
     }
 
     fn error(&mut self, err: Error, _: &mut Self::Context) -> Running {

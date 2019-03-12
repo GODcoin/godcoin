@@ -47,7 +47,7 @@ impl<S: 'static, M: 'static + crate::Metrics> Handler<cmd::Connect> for Network<
         Arbiter::spawn(
             TcpStream::connect(&peer_addr)
                 .and_then(move |s| {
-                    addr.do_send(TcpConnect(s, ConnectionType::Outbound));
+                    addr.do_send(TcpConnect(s, Some(peer_addr)));
                     Ok(())
                 })
                 .map_err(move |e| {

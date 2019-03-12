@@ -1,11 +1,8 @@
-use crate::{*, network::connect::ConnectionType};
-use network::connect::TcpConnect;
-use tokio::{codec::FramedRead, prelude::*};
-use std::{
-    net::SocketAddr,
-    fmt,
-};
+use crate::*;
 use bytes::BytesMut;
+use network::connect::TcpConnect;
+use std::{fmt, net::SocketAddr};
+use tokio::{codec::FramedRead, prelude::*};
 
 pub mod session;
 use session::*;
@@ -32,8 +29,15 @@ impl fmt::Debug for PeerState {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PeerInfo {
     pub id: PeerId,
-    pub conn_type: ConnectionType,
+    pub outbound_addr: Option<SocketAddr>,
     pub peer_addr: SocketAddr,
+}
+
+impl PeerInfo {
+    #[inline]
+    pub fn is_outbound(&self) -> bool {
+        self.outbound_addr.is_some()
+    }
 }
 
 impl fmt::Display for PeerInfo {
@@ -44,7 +48,6 @@ impl fmt::Display for PeerInfo {
 
 pub struct Peer<S: 'static, M: 'static + Metrics> {
     net_addr: Addr<Network<S, M>>,
-    conn_type: ConnectionType,
     outbound_addr: Option<SocketAddr>,
     state: PeerState,
 }
@@ -52,8 +55,12 @@ pub struct Peer<S: 'static, M: 'static + Metrics> {
 impl<S: 'static, M: 'static + Metrics> Peer<S, M> {
     pub fn init(conn: TcpConnect, addr: Addr<Network<S, M>>) {
         let stream = conn.0;
-        let conn_type = conn.1;
-        let peer_addr = stream.peer_addr().unwrap();
+        let outbound_addr = conn.1;
+        let (peer_addr, conn_type) = if let Some(addr) = outbound_addr {
+            (addr, "outbound")
+        } else {
+            (stream.peer_addr().unwrap(), "inbound")
+        };
         debug!("[{}] Accepted {} socket connection", peer_addr, conn_type);
         Peer::create(move |ctx| {
             let peer_tx = ctx.address().recipient();
@@ -69,11 +76,15 @@ impl<S: 'static, M: 'static + Metrics> Peer<S, M> {
 
             Peer {
                 net_addr: addr,
-                conn_type,
-                outbound_addr: None,
+                outbound_addr,
                 state: PeerState::Disconnected(None),
             }
         });
+    }
+
+    #[inline]
+    pub fn is_outbound(&self) -> bool {
+        self.outbound_addr.is_some()
     }
 }
 
@@ -89,10 +100,12 @@ impl<S: 'static, M: 'static + Metrics> Handler<Payload> for Peer<S, M> {
             PeerState::Disconnected(info) => {
                 let peer = match info {
                     Some(info) => format!("{}", info),
-                    None => self.outbound_addr.map_or("Unknown".to_owned(), |v| format!("{}", v))
+                    None => self
+                        .outbound_addr
+                        .map_or("Unknown".to_owned(), |v| format!("{}", v)),
                 };
                 warn!("[{}] Attempted to send message to disconnected peer", peer);
-            },
+            }
             PeerState::Handshaking(addr, _) | PeerState::Ready(addr, _) => {
                 addr.do_send(msg);
             }
@@ -107,7 +120,7 @@ impl<S: 'static, M: 'static + Metrics> Handler<cmd::Disconnect> for Peer<S, M> {
         match &self.state {
             PeerState::Disconnected(_) => (),
             PeerState::Handshaking(addr, _) | PeerState::Ready(addr, _) => {
-               addr.do_send(session::cmd::Disconnect);
+                addr.do_send(session::cmd::Disconnect);
             }
         }
         ctx.stop();
@@ -119,59 +132,57 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
 
     fn handle(&mut self, msg: SessionMsg, ctx: &mut Self::Context) {
         match msg {
-            SessionMsg::Connected(ses, addr) => {
-                match &self.state {
-                    PeerState::Disconnected(_) => {
-                        self.state = PeerState::Handshaking(ses.clone(), addr);
-                        if self.conn_type == ConnectionType::Outbound {
-                            debug!("[{}] Sending outbound handshake", addr);
-                            ses.do_send(Payload {
-                                id: BytesMut::from(vec![0]),
-                                msg: BytesMut::new()
-                            });
-                        }
+            SessionMsg::Connected(ses, addr) => match &self.state {
+                PeerState::Disconnected(_) => {
+                    self.state = PeerState::Handshaking(ses.clone(), addr);
+                    if self.is_outbound() {
+                        debug!("[{}] Sending outbound handshake", addr);
+                        ses.do_send(Payload {
+                            id: BytesMut::from(vec![0]),
+                            msg: BytesMut::new(),
+                        });
                     }
-                    _ => panic!("Peer state is invalid: {:?}", self.state)
+                }
+                _ => panic!("Peer state is invalid: {:?}", self.state),
+            },
+            SessionMsg::Disconnected => match &self.state {
+                PeerState::Disconnected(_) => panic!("Peer state is invalid: {:?}", self.state),
+                PeerState::Handshaking(_, _) => {
+                    self.state = PeerState::Disconnected(None);
+                }
+                PeerState::Ready(_, info) => {
+                    self.net_addr
+                        .try_send(msg::Disconnected(info.clone()))
+                        .unwrap();
+                    self.state = PeerState::Disconnected(Some(info.clone()));
                 }
             },
-            SessionMsg::Disconnected => {
-                match &self.state {
-                    PeerState::Disconnected(_) => panic!("Peer state is invalid: {:?}", self.state),
-                    PeerState::Handshaking(_, _) => {
-                        self.state = PeerState::Disconnected(None);
-                    },
-                    PeerState::Ready(_, info) => {
-                        self.net_addr.try_send(msg::Disconnected(info.clone())).unwrap();
-                        self.state = PeerState::Disconnected(Some(info.clone()));
+            SessionMsg::Message(msg) => match &self.state {
+                PeerState::Disconnected(_) => {
+                    panic!("Received message from disconnected peer: {:?}", self.state);
+                }
+                PeerState::Ready(_, info) => {
+                    self.net_addr.try_send(msg::Message(info.id, msg)).unwrap();
+                }
+                PeerState::Handshaking(ses, peer_addr) => {
+                    if !self.is_outbound() {
+                        debug!("[{}] Sending inbound handshake", peer_addr);
+                        ses.do_send(Payload {
+                            id: BytesMut::from(vec![0]),
+                            msg: BytesMut::new(),
+                        });
                     }
+                    let info = PeerInfo {
+                        id: *peer_addr,
+                        outbound_addr: self.outbound_addr,
+                        peer_addr: *peer_addr,
+                    };
+                    self.state = PeerState::Ready(ses.clone(), info.clone());
+                    self.net_addr
+                        .try_send(msg::Connected(info, ctx.address()))
+                        .unwrap();
                 }
             },
-            SessionMsg::Message(msg) => {
-                match &self.state {
-                    PeerState::Disconnected(_) => {
-                        panic!("Received message from disconnected peer: {:?}", self.state);
-                    },
-                    PeerState::Ready(_, info) => {
-                        self.net_addr.try_send(msg::Message(info.id, msg)).unwrap();
-                    },
-                    PeerState::Handshaking(ses, peer_addr) => {
-                        if self.conn_type == ConnectionType::Inbound {
-                            debug!("[{}] Sending inbound handshake", peer_addr);
-                            ses.do_send(Payload {
-                                id: BytesMut::from(vec![0]),
-                                msg: BytesMut::new()
-                            });
-                        }
-                        let info = PeerInfo {
-                            id: *peer_addr,
-                            conn_type: self.conn_type,
-                            peer_addr: *peer_addr,
-                        };
-                        self.state = PeerState::Ready(ses.clone(), info.clone());
-                        self.net_addr.try_send(msg::Connected(info, ctx.address())).unwrap();
-                    }
-                }
-            }
         }
     }
 }

@@ -36,9 +36,7 @@ impl Actor for Session {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        self.recipient
-            .do_send(SessionMsg::Disconnected)
-            .unwrap();
+        self.recipient.do_send(SessionMsg::Disconnected).unwrap();
     }
 }
 
@@ -64,9 +62,7 @@ impl Handler<Payload> for Session {
 impl StreamHandler<Payload, Error> for Session {
     fn handle(&mut self, msg: Payload, _: &mut Self::Context) {
         debug!("[{}] Received payload: {:?}", self.peer_addr, msg);
-        self.recipient
-            .do_send(SessionMsg::Message(msg))
-            .unwrap();
+        self.recipient.do_send(SessionMsg::Message(msg)).unwrap();
     }
 
     fn error(&mut self, err: Error, _: &mut Self::Context) -> Running {
