@@ -124,8 +124,9 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                     PeerState::Disconnected(_) => {
                         self.state = PeerState::Handshaking(ses.clone(), addr);
                         if self.conn_type == ConnectionType::Outbound {
+                            debug!("[{}] Sending outbound handshake", addr);
                             ses.do_send(Payload {
-                                id: BytesMut::from(vec![0, 0, 0, 0]),
+                                id: BytesMut::from(vec![0]),
                                 msg: BytesMut::new()
                             });
                         }
@@ -154,17 +155,18 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                         self.net_addr.try_send(msg::Message(info.id, msg)).unwrap();
                     },
                     PeerState::Handshaking(ses, peer_addr) => {
+                        if self.conn_type == ConnectionType::Inbound {
+                            debug!("[{}] Sending inbound handshake", peer_addr);
+                            ses.do_send(Payload {
+                                id: BytesMut::from(vec![0]),
+                                msg: BytesMut::new()
+                            });
+                        }
                         let info = PeerInfo {
                             id: *peer_addr,
                             conn_type: self.conn_type,
                             peer_addr: *peer_addr,
                         };
-                        if self.conn_type == ConnectionType::Inbound {
-                            ses.clone().do_send(Payload {
-                                id: BytesMut::from(vec![1, 1, 1, 1]),
-                                msg: BytesMut::new()
-                            });
-                        }
                         self.state = PeerState::Ready(ses.clone(), info.clone());
                         self.net_addr.try_send(msg::Connected(info, ctx.address())).unwrap();
                     }
