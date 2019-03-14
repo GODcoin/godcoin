@@ -21,8 +21,15 @@ impl NetState {
     }
 }
 
-pub fn connect_req(state: &mut NetState, peer: PeerInfo, hs: Payload) -> peer::msg::HandshakeRequest {
-    info!("[net:{}] ({}) Received hs request: {:?}", state.net_id, peer.peer_addr, hs);
+pub fn connect_req(
+    state: &mut NetState,
+    peer: PeerInfo,
+    hs: Payload,
+) -> peer::msg::HandshakeRequest {
+    info!(
+        "[net:{}] ({}) Received hs request: {:?}",
+        state.net_id, peer.peer_addr, hs
+    );
     peer::msg::HandshakeRequest::Allow
 }
 

@@ -162,19 +162,18 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                     panic!("Received message from disconnected peer: {:?}", self.state);
                 }
                 PeerState::Handshaking(ses, peer_addr) => {
-                    let peer_addr = peer_addr.clone();
+                    let peer_addr = *peer_addr;
                     let info = PeerInfo {
                         id: peer_addr,
                         outbound_addr: self.outbound_addr,
-                        peer_addr: peer_addr,
+                        peer_addr,
                     };
                     let ses = ses.clone();
                     if !self.is_outbound() {
                         self.net_addr
-                        .send(msg::Handshake(info.clone(), msg))
-                        .into_actor(self)
-                        .map(move |res, act, ctx| {
-                            match res {
+                            .send(msg::Handshake(info.clone(), msg))
+                            .into_actor(self)
+                            .map(move |res, act, ctx| match res {
                                 msg::HandshakeRequest::Allow => {
                                     debug!("[{}] Sending inbound handshake", peer_addr);
                                     ses.do_send(Payload {
@@ -190,23 +189,21 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                                     warn!("[{}] Connection rejected: {}", peer_addr, reason);
                                     ctx.address().do_send(cmd::Disconnect);
                                 }
-                            }
-                        })
-                        .map_err(move |e, _, ctx| {
-                            error!(
-                                "[{}] Failed to send handshake request to network: {:?}",
-                                peer_addr, e
-                            );
-                            ctx.address().do_send(cmd::Disconnect);
-                        })
-                        .wait(ctx);
+                            })
+                            .map_err(move |e, _, ctx| {
+                                error!(
+                                    "[{}] Failed to send handshake request to network: {:?}",
+                                    peer_addr, e
+                                );
+                                ctx.address().do_send(cmd::Disconnect);
+                            })
+                            .wait(ctx);
                     } else {
                         self.state = PeerState::Ready(ses, info.clone());
                         self.net_addr
                             .try_send(msg::Connected(info, ctx.address()))
                             .unwrap();
                     }
-
                 }
                 PeerState::Ready(_, info) => {
                     self.net_addr.try_send(msg::Message(info.id, msg)).unwrap();
