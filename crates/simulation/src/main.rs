@@ -14,6 +14,8 @@ mod handlers;
 mod signals;
 
 fn main() {
+    godcoin_p2p::init();
+
     let env = env_logger::Env::new()
         .filter_or(env_logger::DEFAULT_FILTER_ENV, "godcoin_simulation=debug");
     env_logger::init_from_env(env);
