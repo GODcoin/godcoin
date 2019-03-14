@@ -141,6 +141,18 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_empty_msg_frame() {
+        let mut codec = Codec::new();
+        let mut bytes = BytesMut::from(vec![
+            4, // ID len
+            0, 0, 0, 0, // Msg len
+            0, 1, 2, 3, // ID
+        ]);
+
+        assert_decode!(codec, bytes, vec![0, 1, 2, 3], vec![]);
+    }
+
+    #[test]
     fn test_decode_full_frame() {
         let mut codec = Codec::new();
         let mut bytes = BytesMut::from(vec![
