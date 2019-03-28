@@ -3,8 +3,12 @@ use super::*;
 struct BuilderHandlers<S: 'static, M: 'static + Metrics> {
     connected: Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo) -> () + 'static>>,
     disconnected: Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo) -> () + 'static>>,
-    connect_req:
-        Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo, Payload) -> peer::msg::HandshakeRequest + 'static>>,
+    connect_req: Option<
+        Box<
+            Fn(&Addr<Network<S, M>>, &mut S, PeerInfo, Payload) -> peer::msg::HandshakeRequest
+                + 'static,
+        >,
+    >,
     message: Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerId, &Payload) -> bool + 'static>>,
 }
 
@@ -14,7 +18,7 @@ impl<S: 'static, M: 'static + Metrics> Default for BuilderHandlers<S, M> {
             connected: None,
             disconnected: None,
             connect_req: None,
-            message: None
+            message: None,
         }
     }
 }
@@ -41,7 +45,10 @@ impl<S: 'static, M: 'static + Metrics> Builder<S, M> {
             connected: self.handlers.connected,
             disconnected: self.handlers.disconnected,
             connect_req: self.handlers.connect_req,
-            message: self.handlers.message.expect("expected message handler to init network")
+            message: self
+                .handlers
+                .message
+                .expect("expected message handler to init network"),
         };
         Network::start(self.state, self.metrics, handlers)
     }
@@ -64,7 +71,8 @@ impl<S: 'static, M: 'static + Metrics> Builder<S, M> {
 
     pub fn on_connect_req<F>(mut self, f: F) -> Self
     where
-        F: Fn(&Addr<Network<S, M>>, &mut S, PeerInfo, Payload) -> peer::msg::HandshakeRequest + 'static,
+        F: Fn(&Addr<Network<S, M>>, &mut S, PeerInfo, Payload) -> peer::msg::HandshakeRequest
+            + 'static,
     {
         self.handlers.connect_req.replace(Box::new(f));
         self

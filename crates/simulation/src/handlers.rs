@@ -1,8 +1,8 @@
+use actix::prelude::*;
 use bytes::BytesMut;
-use godcoin_p2p::{peer, Payload, PeerId, PeerInfo, Network, BasicMetrics};
+use godcoin_p2p::{peer, BasicMetrics, Network, Payload, PeerId, PeerInfo};
 use log::info;
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
-use actix::prelude::*;
 
 type NetAddr = Addr<Network<NetState, BasicMetrics>>;
 

@@ -190,7 +190,7 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                                 }
                                 msg::HandshakeRequest::Deny(reason) => {
                                     warn!("[{}] Connection rejected: {}", peer_addr, reason);
-                                    ctx.address().do_send(cmd::Disconnect(reason));
+                                    ctx.notify(cmd::Disconnect(reason));
                                 }
                             })
                             .map_err(move |e, _, ctx| {
@@ -198,7 +198,7 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                                     "[{}] Failed to send handshake request to network: {:?}",
                                     peer_addr, e
                                 );
-                                ctx.address().do_send(cmd::Disconnect("Handshake failed".to_owned()));
+                                ctx.notify(cmd::Disconnect("Handshake failed".to_owned()));
                             })
                             .wait(ctx);
                     } else {

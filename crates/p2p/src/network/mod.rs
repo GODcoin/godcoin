@@ -2,17 +2,21 @@ use super::server::Server;
 use crate::*;
 use std::collections::HashMap;
 
+pub mod builder;
 pub mod cmd;
 pub mod connect;
-pub mod builder;
 
 pub use builder::Builder;
 
 pub struct Handlers<S: 'static, M: 'static + Metrics> {
     connected: Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo) -> () + 'static>>,
     disconnected: Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo) -> () + 'static>>,
-    connect_req:
-        Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo, Payload) -> peer::msg::HandshakeRequest + 'static>>,
+    connect_req: Option<
+        Box<
+            Fn(&Addr<Network<S, M>>, &mut S, PeerInfo, Payload) -> peer::msg::HandshakeRequest
+                + 'static,
+        >,
+    >,
     message: Box<Fn(&Addr<Network<S, M>>, &mut S, PeerId, &Payload) -> bool + 'static>,
 }
 
@@ -26,14 +30,12 @@ pub struct Network<S: 'static, M: 'static + Metrics = DummyMetrics> {
 
 impl<S: 'static, M: 'static + Metrics> Network<S, M> {
     pub fn start(state: S, metrics: M, handlers: Handlers<S, M>) -> Addr<Network<S, M>> {
-        Network::create(|ctx| {
-            Network {
-                addr: ctx.address(),
-                state,
-                handlers,
-                metrics,
-                sessions: HashMap::with_capacity(32),
-            }
+        Network::create(|ctx| Network {
+            addr: ctx.address(),
+            state,
+            handlers,
+            metrics,
+            sessions: HashMap::with_capacity(32),
         })
     }
 
