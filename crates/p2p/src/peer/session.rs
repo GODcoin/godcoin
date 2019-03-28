@@ -6,7 +6,7 @@ use tokio::{io::WriteHalf, net::TcpStream};
 #[derive(Message)]
 pub enum SessionMsg {
     Connected(Addr<Session>, SocketAddr),
-    Disconnected,
+    Disconnected(String),
     Message(Payload),
 }
 
@@ -14,8 +14,10 @@ impl fmt::Debug for SessionMsg {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             SessionMsg::Connected(_, addr) => f.debug_tuple("Connected").field(&addr).finish(),
-            SessionMsg::Disconnected => f.debug_tuple("Disconnected").finish(),
-            SessionMsg::Message(payload) => f.debug_tuple("Message").field(&payload).finish(),
+            SessionMsg::Disconnected(reason) => {
+                f.debug_tuple("Disconnected").field(&reason).finish()
+            }
+            SessionMsg::Message(msg) => f.debug_tuple("Message").field(&msg).finish(),
         }
     }
 }
@@ -24,6 +26,7 @@ pub struct Session {
     pub recipient: Recipient<SessionMsg>,
     pub writer: actix::io::FramedWrite<WriteHalf<TcpStream>, Codec>,
     pub peer_addr: SocketAddr,
+    pub disconnect_reason: String,
 }
 
 impl Actor for Session {
@@ -36,7 +39,8 @@ impl Actor for Session {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        let _ = self.recipient.do_send(SessionMsg::Disconnected);
+        let dc_reason = self.disconnect_reason.clone();
+        let _ = self.recipient.do_send(SessionMsg::Disconnected(dc_reason));
     }
 }
 
@@ -55,14 +59,22 @@ impl Handler<Payload> for Session {
 
     fn handle(&mut self, msg: Payload, _: &mut Self::Context) {
         debug!("[{}] Sent payload: {:?}", self.peer_addr, &msg);
-        self.writer.write(msg);
+        self.writer.write(ProtocolMsg::Payload(msg));
     }
 }
 
-impl StreamHandler<Payload, Error> for Session {
-    fn handle(&mut self, msg: Payload, _: &mut Self::Context) {
+impl StreamHandler<ProtocolMsg, Error> for Session {
+    fn handle(&mut self, msg: ProtocolMsg, ctx: &mut Self::Context) {
         debug!("[{}] Received payload: {:?}", self.peer_addr, msg);
-        self.recipient.do_send(SessionMsg::Message(msg)).unwrap();
+        match msg {
+            ProtocolMsg::Payload(msg) => {
+                self.recipient.do_send(SessionMsg::Message(msg)).unwrap();
+            }
+            ProtocolMsg::Disconnect(reason) => {
+                self.disconnect_reason = reason;
+                ctx.stop();
+            }
+        }
     }
 
     fn error(&mut self, err: Error, _: &mut Self::Context) -> Running {
@@ -75,5 +87,5 @@ pub mod cmd {
     use super::*;
 
     #[derive(Message)]
-    pub struct Disconnect;
+    pub struct Disconnect(pub String);
 }

@@ -71,6 +71,7 @@ impl<S: 'static, M: 'static + Metrics> Peer<S, M> {
                     recipient: peer_tx,
                     writer: actix::io::FramedWrite::new(w, Codec::new(), ctx),
                     peer_addr,
+                    disconnect_reason: String::from("Unknown reason"),
                 }
             });
 
@@ -116,11 +117,11 @@ impl<S: 'static, M: 'static + Metrics> Handler<Payload> for Peer<S, M> {
 impl<S: 'static, M: 'static + Metrics> Handler<cmd::Disconnect> for Peer<S, M> {
     type Result = ();
 
-    fn handle(&mut self, _: cmd::Disconnect, ctx: &mut Self::Context) {
+    fn handle(&mut self, dc: cmd::Disconnect, ctx: &mut Self::Context) {
         match &self.state {
             PeerState::Disconnected(_) => (),
             PeerState::Handshaking(addr, _) | PeerState::Ready(addr, _) => {
-                addr.do_send(session::cmd::Disconnect);
+                addr.do_send(session::cmd::Disconnect(dc.0));
             }
         }
         ctx.stop();
@@ -145,8 +146,10 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                 }
                 _ => panic!("Peer state is invalid: {:?}", self.state),
             },
-            SessionMsg::Disconnected => match &self.state {
-                PeerState::Disconnected(_) => panic!("Peer state is invalid: {:?}", self.state),
+            SessionMsg::Disconnected(reason) => match &self.state {
+                PeerState::Disconnected(_) => {
+                    panic!("Peer state is invalid ({}): {:?}", reason, self.state)
+                }
                 PeerState::Handshaking(_, _) => {
                     self.state = PeerState::Disconnected(None);
                 }
@@ -187,7 +190,7 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                                 }
                                 msg::HandshakeRequest::Deny(reason) => {
                                     warn!("[{}] Connection rejected: {}", peer_addr, reason);
-                                    ctx.address().do_send(cmd::Disconnect);
+                                    ctx.address().do_send(cmd::Disconnect(reason));
                                 }
                             })
                             .map_err(move |e, _, ctx| {
@@ -195,7 +198,7 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                                     "[{}] Failed to send handshake request to network: {:?}",
                                     peer_addr, e
                                 );
-                                ctx.address().do_send(cmd::Disconnect);
+                                ctx.address().do_send(cmd::Disconnect("Handshake failed".to_owned()));
                             })
                             .wait(ctx);
                     } else {
@@ -251,5 +254,5 @@ pub mod cmd {
     use super::*;
 
     #[derive(Message)]
-    pub struct Disconnect;
+    pub struct Disconnect(pub String);
 }
