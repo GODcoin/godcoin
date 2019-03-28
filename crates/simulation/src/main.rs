@@ -33,8 +33,8 @@ fn main() {
         for net_id in 0..net_count {
             let msg_counter = Rc::clone(&msg_counter);
             let state = handlers::NetState::new(net_id, msg_counter, threshold);
-            let net = Network::new(state, handlers::message)
-                .with_metrics(BasicMetrics::default())
+            let net = network::Builder::with_metrics(state, BasicMetrics::default())
+                .on_message(handlers::message)
                 .on_connect_req(handlers::connect_req)
                 .on_connect(handlers::connected)
                 .on_disconnect(handlers::disconnected)

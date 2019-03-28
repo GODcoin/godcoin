@@ -1,7 +1,10 @@
 use bytes::BytesMut;
-use godcoin_p2p::{peer, Payload, PeerId, PeerInfo};
+use godcoin_p2p::{peer, Payload, PeerId, PeerInfo, Network, BasicMetrics};
 use log::info;
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use actix::prelude::*;
+
+type NetAddr = Addr<Network<NetState, BasicMetrics>>;
 
 pub struct NetState {
     net_id: usize,
@@ -22,6 +25,7 @@ impl NetState {
 }
 
 pub fn connect_req(
+    _: &NetAddr,
     state: &mut NetState,
     peer: PeerInfo,
     hs: Payload,
@@ -33,7 +37,7 @@ pub fn connect_req(
     peer::msg::HandshakeRequest::Allow
 }
 
-pub fn connected(state: &mut NetState, peer: PeerInfo) {
+pub fn connected(_: &NetAddr, state: &mut NetState, peer: PeerInfo) {
     if peer.is_outbound() {
         info!(
             "[net:{}] Accepted connection -> {}",
@@ -47,14 +51,14 @@ pub fn connected(state: &mut NetState, peer: PeerInfo) {
     }
 }
 
-pub fn disconnected(state: &mut NetState, ses: PeerInfo) {
+pub fn disconnected(_: &NetAddr, state: &mut NetState, ses: PeerInfo) {
     info!(
         "[net:{}] Connection disconnected -> {}",
         state.net_id, ses.peer_addr
     );
 }
 
-pub fn message(state: &mut NetState, id: PeerId, payload: &Payload) -> bool {
+pub fn message(_: &NetAddr, state: &mut NetState, id: PeerId, payload: &Payload) -> bool {
     info!(
         "[net:{}] Received message from {} with: {:?}",
         state.net_id, id, payload
