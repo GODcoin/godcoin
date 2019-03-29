@@ -129,6 +129,7 @@ impl Blockchain {
         for i in min_height..=max_height {
             tx_count += self.get_block(i).unwrap().transactions.len() as u64;
         }
+        tx_count /= NETWORK_FEE_AVG_WINDOW;
         if tx_count > u64::from(u16::max_value()) {
             return None;
         }
