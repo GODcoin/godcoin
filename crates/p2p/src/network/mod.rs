@@ -70,7 +70,7 @@ impl<S: 'static, M: 'static + Metrics> Handler<peer::msg::Handshake> for Network
 impl<S: 'static, M: 'static + Metrics> Handler<peer::msg::Connected<S, M>> for Network<S, M> {
     type Result = ();
 
-    fn handle(&mut self, msg: peer::msg::Connected<S, M>, ctx: &mut Self::Context) {
+    fn handle(&mut self, msg: peer::msg::Connected<S, M>, _: &mut Self::Context) {
         let info = msg.0;
         let prev = self.sessions.insert(info.id, (info.clone(), msg.1));
         assert!(prev.is_none(), "session id already exists in network");
