@@ -1,8 +1,16 @@
 use actix::prelude::*;
 use bytes::BytesMut;
-use godcoin_p2p::{peer, BasicMetrics, Network, Payload, PeerId, PeerInfo};
+use futures::prelude::*;
+use godcoin_p2p::{cmd, peer, BasicMetrics, Network, Payload, PeerId, PeerInfo};
+use log::error;
 use log::info;
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::HashSet,
+    rc::Rc,
+    time::{Duration, Instant},
+};
+use tokio::timer::Delay;
 
 type NetAddr = Addr<Network<NetState, BasicMetrics>>;
 
@@ -37,24 +45,35 @@ pub fn connect_req(
     peer::msg::HandshakeRequest::Allow
 }
 
-pub fn connected(_: &NetAddr, state: &mut NetState, peer: PeerInfo) {
-    if peer.is_outbound() {
-        info!(
-            "[net:{}] Accepted connection -> {}",
-            state.net_id, peer.peer_addr
-        );
+pub fn connected(net: &NetAddr, state: &mut NetState, peer: PeerInfo) {
+    let net_id = state.net_id;
+    if !peer.is_outbound() {
+        info!("[net:{}] Accepted connection -> {}", net_id, peer.peer_addr);
     } else {
-        info!(
-            "[net:{}] Connected to node -> {}",
-            state.net_id, peer.peer_addr
+        let deadline = Instant::now() + Duration::from_secs(3);
+        let addr = peer.outbound_addr.unwrap();
+        let net = net.clone();
+        Arbiter::spawn(
+            Delay::new(deadline)
+                .and_then(move |_| {
+                    info!("[net:{}] Disconnecting from node -> {}", net_id, addr);
+                    net.do_send(cmd::Disconnect(peer.id, "timeout reached".to_owned()));
+                    Ok(())
+                })
+                .map_err(|e| {
+                    error!("Timer failed: {:?}", e);
+                }),
         );
+        info!("[net:{}] Connected to node -> {}", net_id, addr);
     }
 }
 
 pub fn disconnected(_: &NetAddr, state: &mut NetState, ses: PeerInfo) {
     info!(
-        "[net:{}] Connection disconnected -> {}",
-        state.net_id, ses.peer_addr
+        "[net:{}] Connection disconnected (outbound:{}) -> {}",
+        state.net_id,
+        ses.is_outbound(),
+        ses.peer_addr
     );
 }
 
