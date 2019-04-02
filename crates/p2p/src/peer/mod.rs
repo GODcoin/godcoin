@@ -155,7 +155,7 @@ impl<S: 'static, M: 'static + Metrics> Handler<SessionMsg> for Peer<S, M> {
                 }
                 PeerState::Ready(_, info) => {
                     self.net_addr
-                        .try_send(msg::Disconnected(info.clone()))
+                        .try_send(msg::Disconnected(info.clone(), reason))
                         .unwrap();
                     self.state = PeerState::Disconnected(Some(info.clone()));
                 }
@@ -244,7 +244,7 @@ pub mod msg {
     pub struct Connected<S: 'static, M: 'static + Metrics>(pub PeerInfo, pub Addr<Peer<S, M>>);
 
     #[derive(Message)]
-    pub struct Disconnected(pub PeerInfo);
+    pub struct Disconnected(pub PeerInfo, pub String);
 
     #[derive(Message)]
     pub struct Message(pub PeerId, pub Payload);

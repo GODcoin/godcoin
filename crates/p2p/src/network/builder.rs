@@ -2,7 +2,7 @@ use super::*;
 
 struct BuilderHandlers<S: 'static, M: 'static + Metrics> {
     connected: Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo) -> () + 'static>>,
-    disconnected: Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo) -> () + 'static>>,
+    disconnected: Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo, String) -> () + 'static>>,
     connect_req: Option<
         Box<
             Fn(&Addr<Network<S, M>>, &mut S, PeerInfo, Payload) -> peer::msg::HandshakeRequest
@@ -88,7 +88,7 @@ impl<S: 'static, M: 'static + Metrics> Builder<S, M> {
 
     pub fn on_disconnect<F>(mut self, f: F) -> Self
     where
-        F: Fn(&Addr<Network<S, M>>, &mut S, PeerInfo) -> () + 'static,
+        F: Fn(&Addr<Network<S, M>>, &mut S, PeerInfo, String) -> () + 'static,
     {
         self.handlers.disconnected.replace(Box::new(f));
         self

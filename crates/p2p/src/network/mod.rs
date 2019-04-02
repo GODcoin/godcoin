@@ -10,7 +10,7 @@ pub use builder::Builder;
 
 pub struct Handlers<S: 'static, M: 'static + Metrics> {
     connected: Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo) -> () + 'static>>,
-    disconnected: Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo) -> () + 'static>>,
+    disconnected: Option<Box<Fn(&Addr<Network<S, M>>, &mut S, PeerInfo, String) -> () + 'static>>,
     connect_req: Option<
         Box<
             Fn(&Addr<Network<S, M>>, &mut S, PeerInfo, Payload) -> peer::msg::HandshakeRequest
@@ -90,7 +90,7 @@ impl<S: 'static, M: 'static + Metrics> Handler<peer::msg::Disconnected> for Netw
             .remove(&id)
             .unwrap_or_else(|| panic!("Expected disconnected peer to exist: {}", id));
         if let Some(f) = &self.handlers.disconnected {
-            f(&self.addr, &mut self.state, ses.0);
+            f(&self.addr, &mut self.state, ses.0, msg.1);
         }
     }
 }

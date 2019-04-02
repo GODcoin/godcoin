@@ -68,12 +68,13 @@ pub fn connected(net: &NetAddr, state: &mut NetState, peer: PeerInfo) {
     }
 }
 
-pub fn disconnected(_: &NetAddr, state: &mut NetState, ses: PeerInfo) {
+pub fn disconnected(_: &NetAddr, state: &mut NetState, ses: PeerInfo, reason: String) {
     info!(
-        "[net:{}] Connection disconnected (outbound:{}) -> {}",
+        "[net:{}] Connection disconnected (outbound:{}, addr: {}) -> {}",
         state.net_id,
         ses.is_outbound(),
-        ses.peer_addr
+        ses.peer_addr,
+        reason,
     );
 }
 
