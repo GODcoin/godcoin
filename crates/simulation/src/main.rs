@@ -92,6 +92,7 @@ fn main() {
                             for (net_id, metrics) in res.iter().enumerate() {
                                 info!("[net:{}] {:?}", net_id, metrics);
                             }
+                            println!();
                             Ok(())
                         })
                         .map_err(|e| {
