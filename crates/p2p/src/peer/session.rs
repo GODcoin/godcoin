@@ -49,7 +49,16 @@ impl actix::io::WriteHandler<Error> for Session {}
 impl Handler<cmd::Disconnect> for Session {
     type Result = ();
 
-    fn handle(&mut self, _: cmd::Disconnect, ctx: &mut Self::Context) {
+    fn handle(&mut self, msg: cmd::Disconnect, ctx: &mut Self::Context) {
+        self.writer.write(ProtocolMsg::Disconnect(msg.0));
+        ctx.notify(cmd::Terminate);
+    }
+}
+
+impl Handler<cmd::Terminate> for Session {
+    type Result = ();
+
+    fn handle(&mut self, _: cmd::Terminate, ctx: &mut Self::Context) {
         ctx.stop();
     }
 }
@@ -88,4 +97,7 @@ pub mod cmd {
 
     #[derive(Message)]
     pub struct Disconnect(pub String);
+
+    #[derive(Message)]
+    pub struct Terminate;
 }
