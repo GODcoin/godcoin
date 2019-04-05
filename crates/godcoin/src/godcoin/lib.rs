@@ -15,7 +15,6 @@ pub use self::tx::*;
 
 pub mod blockchain;
 pub mod constants;
-pub mod net_v1;
 pub mod producer;
 pub mod script;
 

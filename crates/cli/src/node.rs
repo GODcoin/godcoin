@@ -1,6 +1,5 @@
-use godcoin::{net_v1::PeerPool, producer::Minter, *};
+use godcoin::{producer::Minter, *};
 use log::info;
-use std::borrow::Cow;
 use std::sync::Arc;
 
 pub struct Node<'a> {
@@ -53,18 +52,6 @@ impl<'a> Node<'a> {
         };
 
         {
-            let peers = if let Some(peers) = &self.peers {
-                Cow::Borrowed(peers)
-            } else {
-                Cow::Owned(vec![])
-            };
-            let pool = PeerPool::new(&peers);
-            pool.start(&blockchain, &minter);
-
-            // TODO synchronize blocks with peers
-        }
-
-        {
             let create_genesis = blockchain.get_block(0).is_none();
             if create_genesis && self.minter_key.is_some() {
                 if let Some(ref key) = self.minter_key {
@@ -75,13 +62,6 @@ impl<'a> Node<'a> {
 
         if let Some(minter) = minter.as_ref() {
             minter.clone().start_timer();
-        }
-
-        if let Some(bind) = self.bind_address {
-            let addr = bind
-                .parse()
-                .unwrap_or_else(|_| panic!("Failed to parse address: {:?}", bind));
-            net_v1::server::start(addr, blockchain, minter);
         }
     }
 }
