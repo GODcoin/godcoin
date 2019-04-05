@@ -18,8 +18,6 @@ pub mod constants;
 pub mod producer;
 pub mod script;
 
-pub mod fut_util;
-
 pub fn init() -> Result<(), ()> {
     sodiumoxide::init()
 }
