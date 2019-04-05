@@ -2,6 +2,4 @@
 members = [
     "crates/godcoin",
     "crates/cli",
-    "crates/p2p",
-    "crates/simulation"
 ]
