@@ -1,0 +1,16 @@
+[package]
+name = "godcoin-server"
+version = "0.0.1"
+authors = ["Samuel Grenier <samrg472@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+actix = "0.7.9"
+dirs = "1.0.5"
+env_logger = "0.6.1"
+godcoin = { path = "../godcoin" }
+log = "0.4.6"
+
+[dependencies.actix-web]
+version = "0.7.9"
+default-features = false
