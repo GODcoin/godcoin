@@ -13,8 +13,7 @@ pub use self::block::*;
 pub use self::index::Indexer;
 pub use self::store::BlockStore;
 
-use crate::asset::{self, Asset, AssetSymbol, Balance, EMPTY_GOLD};
-use crate::constants;
+use crate::asset::{self, Asset, Balance};
 use crate::crypto::*;
 use crate::script::*;
 use crate::tx::*;
@@ -56,8 +55,8 @@ impl Blockchain {
     }
 
     #[inline(always)]
-    pub fn get_bond(&self, minter: &PublicKey) -> Option<BondTx> {
-        self.indexer.get_bond(minter)
+    pub fn get_owner(&self) -> OwnerTx {
+        self.indexer.get_owner().expect("Failed to retrieve owner from index")
     }
 
     #[inline(always)]
@@ -94,8 +93,8 @@ impl Blockchain {
             let block = self.get_block(i).unwrap();
             for tx in &block.transactions {
                 let has_match = match tx {
+                    TxVariant::OwnerTx(_) => false,
                     TxVariant::RewardTx(_) => false,
-                    TxVariant::BondTx(tx) => &tx.staker == hash,
                     TxVariant::TransferTx(tx) => &tx.from == hash,
                 };
                 if has_match {
@@ -149,18 +148,12 @@ impl Blockchain {
         let mut bal = self.indexer.get_balance(hash).unwrap_or_default();
         for tx in txs {
             match tx {
+                TxVariant::OwnerTx(_) => {}
                 TxVariant::RewardTx(tx) => {
                     if &tx.to == hash {
                         for reward in &tx.rewards {
                             bal.add(&reward)?;
                         }
-                    }
-                }
-                TxVariant::BondTx(tx) => {
-                    if &tx.staker == hash {
-                        bal.sub(&tx.fee)?;
-                        bal.sub(&tx.bond_fee)?;
-                        bal.sub(&tx.stake_amt)?;
                     }
                 }
                 TxVariant::TransferTx(tx) => {
@@ -196,10 +189,11 @@ impl Blockchain {
             return Err("invalid previous hash".to_owned());
         }
 
-        if self.indexer.get_bond(&block.sig_pair.pub_key).is_none() {
-            return Err("bond not found".to_owned());
-        } else if !block.sig_pair.verify(block.calc_hash().as_ref()) {
-            return Err("invalid bond signature".to_owned());
+        let owner = self.get_owner();
+        if !block.sig_pair.verify(block.calc_hash().as_ref()) {
+            return Err("invalid block signature".to_owned());
+        } else if block.sig_pair.pub_key != owner.minter {
+            return Err("invalid owner signature".to_owned());
         }
 
         let len = block.transactions.len();
@@ -233,47 +227,26 @@ impl Blockchain {
 
         check_amt!(tx.fee, "fee");
         match tx {
+            TxVariant::OwnerTx(tx) => {
+                let pairs = &tx.signature_pairs;
+                if pairs.len() != 2 {
+                    return Err("not enough signatures to change ownership".to_owned());
+                }
+                let owner = self.get_owner();
+                if !(pairs[0].pub_key == owner.minter && pairs[1].pub_key == tx.wallet) {
+                    return Err("signatures don't match previous ownership".to_owned())
+                }
+                let mut buf = Vec::with_capacity(4096);
+                tx.encode(&mut buf);
+                for sig_pair in &tx.signature_pairs {
+                    if !sig_pair.verify(&buf) {
+                        return Err("signature validation failed".to_owned())
+                    }
+                }
+            }
             TxVariant::RewardTx(tx) => {
                 if !tx.signature_pairs.is_empty() {
                     return Err("reward transaction must not be signed".to_owned());
-                }
-            }
-            TxVariant::BondTx(tx) => {
-                if !(tx.bond_fee.symbol == AssetSymbol::GOLD
-                    && tx.stake_amt.symbol == AssetSymbol::GOLD
-                    && tx.fee.symbol == AssetSymbol::GOLD)
-                {
-                    return Err("fees and stake amount must be in gold".to_owned());
-                }
-                check_amt!(&tx.bond_fee, "bond_fee");
-                check_amt!(&tx.stake_amt, "stake_amt");
-
-                if tx.bond_fee.lt(&constants::BOND_FEE).unwrap() {
-                    return Err("bond_fee is too small".to_owned());
-                }
-
-                let mut bal = self
-                    .get_balance_with_txs(&tx.staker, additional_txs)
-                    .ok_or_else(|| "failed to get balance")?;
-                bal.sub(&tx.fee)
-                    .ok_or("failed to subtract fee")?
-                    .sub(&tx.bond_fee)
-                    .ok_or("failed to subtract bond_fee")?
-                    .sub(&tx.stake_amt)
-                    .ok_or("failed to subtract stake_amt")?;
-                check_suf_bal!(bal.gold);
-
-                let pairs = &tx.signature_pairs;
-                if pairs.len() != 2 {
-                    return Err("must be signed by minter and staker".to_owned());
-                }
-
-                let staker: ScriptHash = (&pairs[1].pub_key).into();
-                if !(pairs[0].pub_key == tx.minter && staker == tx.staker) {
-                    return Err("sigpair minter and staker mismatch".to_owned());
-                }
-                if !tx.verify_all() {
-                    return Err("signature verification failed".to_owned());
                 }
             }
             TxVariant::TransferTx(transfer) => {
@@ -307,6 +280,9 @@ impl Blockchain {
 
     fn index_tx(&self, tx: &TxVariant) {
         match tx {
+            TxVariant::OwnerTx(tx) => {
+                self.indexer.set_owner(tx);
+            }
             TxVariant::RewardTx(tx) => {
                 let mut bal = self.get_balance(&tx.to);
                 let mut supply = self.indexer.get_token_supply();
@@ -315,21 +291,6 @@ impl Blockchain {
                     supply.add(r).unwrap();
                 }
                 self.indexer.set_balance(&tx.to, &bal);
-                self.indexer.set_token_supply(&supply);
-            }
-            TxVariant::BondTx(tx) => {
-                let mut bal = self.get_balance(&tx.staker);
-                bal.sub(&tx.fee)
-                    .unwrap()
-                    .sub(&tx.bond_fee)
-                    .unwrap()
-                    .sub(&tx.stake_amt)
-                    .unwrap();
-                self.indexer.set_balance(&tx.staker, &bal);
-                self.indexer.set_bond(tx);
-
-                let mut supply = self.indexer.get_token_supply();
-                supply.sub(&tx.bond_fee).unwrap();
                 self.indexer.set_token_supply(&supply);
             }
             TxVariant::TransferTx(tx) => {
@@ -363,17 +324,15 @@ impl Blockchain {
             .unwrap()
             .as_secs() as u32;
 
-        let bond_tx = BondTx {
+        let owner_tx = OwnerTx {
             base: Tx {
-                tx_type: TxType::BOND,
+                tx_type: TxType::OWNER,
                 fee: Asset::from_str("0 GOLD").unwrap(),
                 timestamp,
                 signature_pairs: Vec::new(),
             },
             minter: minter_key.0.clone(),
-            staker: staker_key.0.clone().into(),
-            bond_fee: EMPTY_GOLD,
-            stake_amt: Asset::from_str("1 GOLD").unwrap(),
+            wallet: staker_key.0.clone().into(),
         };
 
         let transactions = {
@@ -388,7 +347,7 @@ impl Blockchain {
                 to: staker_key.0.into(),
                 rewards: vec![Asset::from_str("1 GOLD").unwrap()],
             }));
-            vec.push(TxVariant::BondTx(bond_tx.clone()));
+            vec.push(TxVariant::OwnerTx(owner_tx.clone()));
             vec
         };
 
@@ -402,6 +361,6 @@ impl Blockchain {
         .sign(&minter_key);
 
         self.store.lock().insert_genesis(block);
-        self.indexer.set_bond(&bond_tx);
+        self.indexer.set_owner(&owner_tx);
     }
 }

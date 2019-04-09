@@ -4,14 +4,14 @@ use std::mem;
 use std::path::Path;
 
 use crate::asset::Balance;
-use crate::crypto::{PublicKey, ScriptHash};
+use crate::crypto::ScriptHash;
 use crate::serializer::*;
-use crate::tx::{BondTx, TxVariant};
+use crate::tx::{OwnerTx, TxVariant};
 
 const CF_BLOCK_BYTE_POS: &str = "block_byte_pos";
 const CF_ADDR_BAL: &str = "address_balance";
-const CF_BOND: &str = "bond";
 
+const KEY_NET_OWNER: &[u8] = b"network_owner";
 const KEY_CHAIN_HEIGHT: &[u8] = b"chain_height";
 const KEY_TOKEN_SUPPLY: &[u8] = b"token_supply";
 
@@ -28,7 +28,6 @@ impl Indexer {
         let col_families = vec![
             ColumnFamilyDescriptor::new(CF_BLOCK_BYTE_POS, Options::default()),
             ColumnFamilyDescriptor::new(CF_ADDR_BAL, Options::default()),
-            ColumnFamilyDescriptor::new(CF_BOND, Options::default()),
         ];
         let db = DB::open_cf_descriptors(&db_opts, path, col_families).unwrap();
         Indexer { db }
@@ -71,27 +70,24 @@ impl Indexer {
         self.db.put(KEY_CHAIN_HEIGHT, &val).unwrap();
     }
 
-    pub fn get_bond(&self, minter: &PublicKey) -> Option<BondTx> {
-        let cf = self.db.cf_handle(CF_BOND).unwrap();
-        let tx_buf = self.db.get_cf(cf, minter.as_ref()).unwrap()?;
+    pub fn get_owner(&self) -> Option<OwnerTx> {
+        let tx_buf = self.db.get(KEY_NET_OWNER).unwrap()?;
         let cur = &mut Cursor::<&[u8]>::new(&tx_buf);
         let tx = TxVariant::decode_with_sigs(cur).unwrap();
         match tx {
-            TxVariant::BondTx(bond) => Some(bond),
-            _ => panic!("expected bond transaction"),
+            TxVariant::OwnerTx(owner) => Some(owner),
+            _ => panic!("expected owner transaction"),
         }
     }
 
-    pub fn set_bond(&self, bond: &BondTx) {
-        let cf = self.db.cf_handle(CF_BOND).unwrap();
-        let key = bond.minter.as_ref();
+    pub fn set_owner(&self, owner: &OwnerTx) {
         let val = {
             let mut vec = Vec::with_capacity(2048);
-            TxVariant::BondTx(bond.clone()).encode_with_sigs(&mut vec);
+            TxVariant::OwnerTx(owner.clone()).encode_with_sigs(&mut vec);
             vec
         };
 
-        self.db.put_cf(cf, key, &val).unwrap();
+        self.db.put(KEY_NET_OWNER, &val).unwrap();
     }
 
     pub fn get_balance(&self, hash: &ScriptHash) -> Option<Balance> {

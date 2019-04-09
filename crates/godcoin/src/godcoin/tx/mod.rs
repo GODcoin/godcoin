@@ -30,7 +30,7 @@ pub trait SignTx {
 #[derive(Debug, Clone)]
 pub enum TxVariant {
     RewardTx(RewardTx),
-    BondTx(BondTx),
+    OwnerTx(OwnerTx),
     TransferTx(TransferTx),
 }
 
@@ -38,7 +38,7 @@ impl TxVariant {
     pub fn encode(&self, v: &mut Vec<u8>) {
         match self {
             TxVariant::RewardTx(tx) => tx.encode(v),
-            TxVariant::BondTx(tx) => tx.encode(v),
+            TxVariant::OwnerTx(tx) => tx.encode(v),
             TxVariant::TransferTx(tx) => tx.encode(v),
         };
     }
@@ -56,7 +56,7 @@ impl TxVariant {
 
         match self {
             TxVariant::RewardTx(tx) => encode_sigs!(tx, v),
-            TxVariant::BondTx(tx) => encode_sigs!(tx, v),
+            TxVariant::OwnerTx(tx) => encode_sigs!(tx, v),
             TxVariant::TransferTx(tx) => encode_sigs!(tx, v),
         };
     }
@@ -73,8 +73,8 @@ impl TxVariant {
         let mut base = Tx::decode_base(cur)?;
         base.signature_pairs = sigs;
         match base.tx_type {
+            TxType::OWNER => Some(TxVariant::OwnerTx(OwnerTx::decode(cur, base)?)),
             TxType::REWARD => Some(TxVariant::RewardTx(RewardTx::decode(cur, base)?)),
-            TxType::BOND => Some(TxVariant::BondTx(BondTx::decode(cur, base)?)),
             TxType::TRANSFER => Some(TxVariant::TransferTx(TransferTx::decode(cur, base)?)),
         }
     }
@@ -85,8 +85,8 @@ impl std::ops::Deref for TxVariant {
 
     fn deref(&self) -> &Self::Target {
         match self {
+            TxVariant::OwnerTx(tx) => &tx.base,
             TxVariant::RewardTx(tx) => &tx.base,
-            TxVariant::BondTx(tx) => &tx.base,
             TxVariant::TransferTx(tx) => &tx.base,
         }
     }
@@ -121,8 +121,8 @@ impl Tx {
 
     fn decode_base(cur: &mut Cursor<&[u8]>) -> Option<Tx> {
         let tx_type = match cur.take_u8().ok()? {
+            t if t == TxType::OWNER as u8 => TxType::OWNER,
             t if t == TxType::REWARD as u8 => TxType::REWARD,
-            t if t == TxType::BOND as u8 => TxType::BOND,
             t if t == TxType::TRANSFER as u8 => TxType::TRANSFER,
             _ => return None,
         };
@@ -177,37 +177,29 @@ impl DecodeTx<RewardTx> for RewardTx {
 }
 
 #[derive(Debug, Clone)]
-pub struct BondTx {
+pub struct OwnerTx {
     pub base: Tx,
     pub minter: PublicKey,  // Key that signs blocks
-    pub staker: ScriptHash, // Hot wallet that receives rewards and stakes its balance
-    pub stake_amt: Asset,
-    pub bond_fee: Asset,
+    pub wallet: PublicKey, // Hot wallet that receives rewards and stakes its balance
 }
 
-impl EncodeTx for BondTx {
+impl EncodeTx for OwnerTx {
     fn encode(&self, v: &mut Vec<u8>) {
         self.encode_base(v);
         v.push_pub_key(&self.minter);
-        v.push_script_hash(&self.staker);
-        v.push_asset(&self.stake_amt);
-        v.push_asset(&self.bond_fee);
+        v.push_pub_key(&self.wallet);
     }
 }
 
-impl DecodeTx<BondTx> for BondTx {
-    fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<BondTx> {
-        assert_eq!(tx.tx_type, TxType::BOND);
+impl DecodeTx<OwnerTx> for OwnerTx {
+    fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<OwnerTx> {
+        assert_eq!(tx.tx_type, TxType::OWNER);
         let minter = cur.take_pub_key().ok()?;
-        let staker = cur.take_script_hash().ok()?;
-        let stake_amt = cur.take_asset().ok()?;
-        let bond_fee = cur.take_asset().ok()?;
-        Some(BondTx {
+        let wallet = cur.take_pub_key().ok()?;
+        Some(OwnerTx {
             base: tx,
             minter,
-            staker,
-            stake_amt,
-            bond_fee,
+            wallet,
         })
     }
 }
@@ -253,10 +245,10 @@ impl DecodeTx<TransferTx> for TransferTx {
 }
 
 tx_deref!(RewardTx);
-tx_deref!(BondTx);
+tx_deref!(OwnerTx);
 tx_deref!(TransferTx);
 
-tx_sign!(BondTx);
+tx_sign!(OwnerTx);
 tx_sign!(TransferTx);
 
 #[cfg(test)]
@@ -324,34 +316,30 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_bond() {
+    fn test_encode_owner() {
         let minter = crypto::KeyPair::gen_keypair();
-        let staker = crypto::KeyPair::gen_keypair();
-        let bond_tx = BondTx {
+        let wallet = crypto::KeyPair::gen_keypair();
+        let owner_tx = OwnerTx {
             base: Tx {
-                tx_type: TxType::BOND,
+                tx_type: TxType::OWNER,
                 timestamp: 1230,
                 fee: get_asset("123 GOLD"),
                 signature_pairs: vec![],
             },
             minter: minter.0,
-            staker: staker.0.into(),
-            stake_amt: get_asset("1.0456 GOLD"),
-            bond_fee: get_asset("1.00000000 GOLD"),
+            wallet: wallet.0.into(),
         };
 
         let mut v = vec![];
-        bond_tx.encode(&mut v);
+        owner_tx.encode(&mut v);
 
         let mut c = Cursor::<&[u8]>::new(&v);
         let base = Tx::decode_base(&mut c).unwrap();
-        let dec = BondTx::decode(&mut c, base).unwrap();
+        let dec = OwnerTx::decode(&mut c, base).unwrap();
 
-        cmp_base_tx!(dec, TxType::BOND, 1230, "123 GOLD");
-        assert_eq!(bond_tx.minter, dec.minter);
-        assert_eq!(bond_tx.staker, dec.staker);
-        assert_eq!(bond_tx.stake_amt.to_string(), dec.stake_amt.to_string());
-        assert_eq!(bond_tx.bond_fee.to_string(), dec.bond_fee.to_string());
+        cmp_base_tx!(dec, TxType::OWNER, 1230, "123 GOLD");
+        assert_eq!(owner_tx.minter, dec.minter);
+        assert_eq!(owner_tx.wallet, dec.wallet);
     }
 
     #[test]

@@ -36,12 +36,6 @@ pub const SILVER_FEE_NET_MULT: Asset = Asset {
     symbol: AssetSymbol::SILVER,
 };
 
-pub const BOND_FEE: Asset = Asset {
-    amount: 500_000_000,
-    decimals: MAX_PRECISION,
-    symbol: AssetSymbol::GOLD,
-};
-
 pub const NETWORK_FEE_AVG_WINDOW: u64 = 10;
 pub const FEE_RESET_WINDOW: usize = 4;
 
@@ -61,7 +55,5 @@ mod tests {
 
         assert_eq!(GOLD_FEE_NET_MULT.to_string(), "1.00200000 GOLD");
         assert_eq!(SILVER_FEE_NET_MULT.to_string(), "1.00200000 SILVER");
-
-        assert_eq!(BOND_FEE.to_string(), "5.00000000 GOLD");
     }
 }
