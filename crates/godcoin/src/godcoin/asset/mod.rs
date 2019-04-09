@@ -16,7 +16,7 @@ pub mod error;
 pub use self::error::*;
 
 pub const MAX_STR_LEN: usize = 32;
-pub const MAX_PRECISION: u8 = 8;
+pub const MAX_PRECISION: u8 = 4;
 
 pub const EMPTY_GOLD: Asset = Asset {
     amount: 0,
@@ -317,10 +317,10 @@ mod tests {
         let c = |asset: Asset, s: &str| {
             assert_eq!(asset.to_string(), s);
         };
-        c(get_asset("1.00001 GOLD"), "1.00001 GOLD");
-        c(get_asset("0.00001 GOLD"), "0.00001 GOLD");
-        c(get_asset("-0.00001 GOLD"), "-0.00001 GOLD");
-        c(get_asset(".00001 GOLD"), "0.00001 GOLD");
+        c(get_asset("1.0001 GOLD"), "1.0001 GOLD");
+        c(get_asset("0.0001 GOLD"), "0.0001 GOLD");
+        c(get_asset("-0.0001 GOLD"), "-0.0001 GOLD");
+        c(get_asset(".0001 GOLD"), "0.0001 GOLD");
         c(get_asset(".1 GOLD"), "0.1 GOLD");
         c(get_asset("1.0 GOLD"), "1.0 GOLD");
     }
@@ -379,31 +379,31 @@ mod tests {
         c(&a.add(&get_asset("2.0 GOLD")).unwrap(), "125.456 GOLD");
         c(&a.add(&get_asset("-2.0 GOLD")).unwrap(), "121.456 GOLD");
         c(
-            &a.add(&get_asset(".00000001 GOLD")).unwrap(),
-            "123.45600001 GOLD",
+            &a.add(&get_asset(".0001 GOLD")).unwrap(),
+            "123.4561 GOLD",
         );
         c(&a.sub(&get_asset("2.0 GOLD")).unwrap(), "121.456 GOLD");
         c(&a.sub(&get_asset("-2.0 GOLD")).unwrap(), "125.456 GOLD");
         c(
-            &a.mul(&get_asset("100000.11111111 GOLD"), 8).unwrap(),
-            "12345613.71733319 GOLD",
+            &a.mul(&get_asset("100000.1111 GOLD"), 4).unwrap(),
+            "12345613.7159 GOLD",
         );
         c(
-            &a.mul(&get_asset("-100000.11111111 GOLD"), 8).unwrap(),
-            "-12345613.71733319 GOLD",
+            &a.mul(&get_asset("-100000.1111 GOLD"), 4).unwrap(),
+            "-12345613.7159 GOLD",
         );
         c(&a.div(&get_asset("23 GOLD"), 3).unwrap(), "5.367 GOLD");
         c(
-            &a.div(&get_asset("-23 GOLD"), 8).unwrap(),
-            "-5.36765217 GOLD",
+            &a.div(&get_asset("-23 GOLD"), 4).unwrap(),
+            "-5.3676 GOLD",
         );
-        c(&a.pow(2, 8).unwrap(), "15241.38393600 GOLD");
-        c(&a.pow(3, 8).unwrap(), "1881640.29520281 GOLD");
+        c(&a.pow(2, 4).unwrap(), "15241.3839 GOLD");
+        c(&a.pow(3, 4).unwrap(), "1881640.2952 GOLD");
         c(&a, "123.456 GOLD");
 
         c(
-            &get_asset("1.0002 GOLD").pow(1000, 8).unwrap(),
-            "1.22137833 GOLD",
+            &get_asset("1.0002 GOLD").pow(1000, 4).unwrap(),
+            "1.2213 GOLD",
         );
         c(
             &get_asset("10 GOLD").div(&get_asset("2 GOLD"), 0).unwrap(),
