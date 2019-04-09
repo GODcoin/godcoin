@@ -15,7 +15,6 @@ pub use self::tx::*;
 
 pub mod blockchain;
 pub mod constants;
-pub mod producer;
 pub mod script;
 
 pub fn init() -> Result<(), ()> {
