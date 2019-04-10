@@ -319,7 +319,7 @@ impl Blockchain {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_millis() as u64;
 
         let owner_tx = OwnerTx {
             base: Tx {
