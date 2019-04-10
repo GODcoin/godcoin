@@ -107,7 +107,7 @@ impl<'a> Into<Cow<'a, TxVariant>> for &'a TxVariant {
 #[derive(Debug, Clone)]
 pub struct Tx {
     pub tx_type: TxType,
-    pub timestamp: u32,
+    pub timestamp: u64,
     pub fee: Asset,
     pub signature_pairs: Vec<SigPair>,
 }
@@ -115,7 +115,7 @@ pub struct Tx {
 impl Tx {
     fn encode_base(&self, v: &mut Vec<u8>) {
         v.push(self.tx_type as u8);
-        v.push_u32(self.timestamp);
+        v.push_u64(self.timestamp);
         v.push_asset(&self.fee);
     }
 
@@ -126,7 +126,7 @@ impl Tx {
             t if t == TxType::TRANSFER as u8 => TxType::TRANSFER,
             _ => return None,
         };
-        let timestamp = cur.take_u32().ok()?;
+        let timestamp = cur.take_u64().ok()?;
         let fee = cur.take_asset().ok()?;
 
         Some(Tx {

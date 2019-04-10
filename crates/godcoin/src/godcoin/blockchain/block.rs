@@ -12,7 +12,7 @@ use crate::tx::*;
 pub struct Block {
     pub previous_hash: Digest,
     pub height: u64,
-    pub timestamp: u32,
+    pub timestamp: u64,
     pub tx_merkle_root: Digest,
     pub transactions: Vec<TxVariant>,
 }
@@ -38,7 +38,7 @@ impl Block {
     pub fn decode_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
         let previous_hash = Digest::from_slice(&cur.take_bytes().ok()?)?;
         let height = cur.take_u64().ok()?;
-        let timestamp = cur.take_u32().ok()?;
+        let timestamp = cur.take_u64().ok()?;
         let tx_merkle_root = Digest::from_slice(&cur.take_bytes().ok()?)?;
 
         let len = cur.take_u32().ok()?;
@@ -59,7 +59,7 @@ impl Block {
     fn encode(&self, vec: &mut Vec<u8>) {
         vec.push_bytes(self.previous_hash.as_ref());
         vec.push_u64(self.height);
-        vec.push_u32(self.timestamp);
+        vec.push_u64(self.timestamp);
         vec.push_bytes(self.tx_merkle_root.as_ref());
     }
 
@@ -110,7 +110,7 @@ impl SignedBlock {
         Block {
             previous_hash,
             height: self.height + 1,
-            timestamp: timestamp as u32,
+            timestamp,
             tx_merkle_root,
             transactions: txs,
         }

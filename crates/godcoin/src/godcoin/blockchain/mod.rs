@@ -319,7 +319,7 @@ impl Blockchain {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs() as u32;
+            .as_secs();
 
         let owner_tx = OwnerTx {
             base: Tx {
@@ -336,7 +336,7 @@ impl Blockchain {
             height: 0,
             previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
             tx_merkle_root: Digest::from_slice(&[0u8; 32]).unwrap(),
-            timestamp: timestamp as u32,
+            timestamp,
             transactions: vec![TxVariant::OwnerTx(owner_tx.clone())],
         })
         .sign(&minter_key);
