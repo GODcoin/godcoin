@@ -330,28 +330,12 @@ impl Blockchain {
             wallet: wallet_key.0.clone().into(),
         };
 
-        let transactions = {
-            let mut vec = Vec::with_capacity(2);
-            vec.push(TxVariant::RewardTx(RewardTx {
-                base: Tx {
-                    tx_type: TxType::REWARD,
-                    fee: Asset::from_str("0 GOLD").unwrap(),
-                    timestamp,
-                    signature_pairs: Vec::new(),
-                },
-                to: wallet_key.0.into(),
-                rewards: vec![Asset::from_str("1 GOLD").unwrap()],
-            }));
-            vec.push(TxVariant::OwnerTx(owner_tx.clone()));
-            vec
-        };
-
         let block = (Block {
             height: 0,
             previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
             tx_merkle_root: Digest::from_slice(&[0u8; 32]).unwrap(),
             timestamp: timestamp as u32,
-            transactions,
+            transactions: vec![TxVariant::OwnerTx(owner_tx.clone())],
         })
         .sign(&minter_key);
 
