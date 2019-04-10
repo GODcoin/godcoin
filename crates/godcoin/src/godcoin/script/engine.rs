@@ -201,21 +201,23 @@ mod tests {
 
     #[test]
     fn if_script() {
+        #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
                 .push(OpFrame::True)
                 .push(OpFrame::OpIf)
-                .push(OpFrame::False)
+                    .push(OpFrame::False)
                 .push(OpFrame::OpEndIf),
         );
         assert!(!engine.eval().unwrap());
         assert!(engine.stack.is_empty());
 
+        #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
                 .push(OpFrame::True)
                 .push(OpFrame::OpIf)
-                .push(OpFrame::True)
+                    .push(OpFrame::True)
                 .push(OpFrame::OpEndIf),
         );
         assert!(engine.eval().unwrap());
@@ -224,26 +226,28 @@ mod tests {
 
     #[test]
     fn if_script_with_ret() {
+        #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
                 .push(OpFrame::True)
                 .push(OpFrame::OpIf)
-                .push(OpFrame::False)
-                .push(OpFrame::OpReturn)
+                    .push(OpFrame::False)
+                    .push(OpFrame::OpReturn)
                 .push(OpFrame::OpEndIf)
                 .push(OpFrame::True),
         );
         assert!(!engine.eval().unwrap());
         assert!(engine.stack.is_empty());
 
+        #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
                 .push(OpFrame::False)
                 .push(OpFrame::OpIf)
-                .push(OpFrame::False)
+                    .push(OpFrame::False)
                 .push(OpFrame::OpElse)
-                .push(OpFrame::True)
-                .push(OpFrame::OpReturn)
+                    .push(OpFrame::True)
+                    .push(OpFrame::OpReturn)
                 .push(OpFrame::OpEndIf)
                 .push(OpFrame::False),
         );
@@ -253,25 +257,27 @@ mod tests {
 
     #[test]
     fn branch_if() {
+        #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
                 .push(OpFrame::True)
                 .push(OpFrame::OpIf)
-                .push(OpFrame::True)
+                    .push(OpFrame::True)
                 .push(OpFrame::OpElse)
-                .push(OpFrame::False)
+                    .push(OpFrame::False)
                 .push(OpFrame::OpEndIf),
         );
         assert!(engine.eval().unwrap());
         assert!(engine.stack.is_empty());
 
+        #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
                 .push(OpFrame::False)
                 .push(OpFrame::OpIf)
-                .push(OpFrame::False)
+                    .push(OpFrame::False)
                 .push(OpFrame::OpElse)
-                .push(OpFrame::True)
+                    .push(OpFrame::True)
                 .push(OpFrame::OpEndIf),
         );
         assert!(engine.eval().unwrap());
@@ -280,37 +286,39 @@ mod tests {
 
     #[test]
     fn nested_branch_if() {
+        #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
                 .push(OpFrame::True)
                 .push(OpFrame::OpIf)
-                .push(OpFrame::True)
-                .push(OpFrame::OpIf)
-                .push(OpFrame::True)
-                .push(OpFrame::OpEndIf)
+                    .push(OpFrame::True)
+                    .push(OpFrame::OpIf)
+                        .push(OpFrame::True)
+                    .push(OpFrame::OpEndIf)
                 .push(OpFrame::OpElse)
-                .push(OpFrame::False)
-                .push(OpFrame::OpIf)
-                .push(OpFrame::False)
-                .push(OpFrame::OpEndIf)
+                    .push(OpFrame::False)
+                    .push(OpFrame::OpIf)
+                        .push(OpFrame::False)
+                    .push(OpFrame::OpEndIf)
                 .push(OpFrame::OpEndIf),
         );
         assert!(engine.eval().unwrap());
         assert!(engine.stack.is_empty());
 
+        #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
                 .push(OpFrame::False)
                 .push(OpFrame::OpIf)
-                .push(OpFrame::True)
-                .push(OpFrame::OpIf)
-                .push(OpFrame::False)
-                .push(OpFrame::OpEndIf)
+                    .push(OpFrame::True)
+                    .push(OpFrame::OpIf)
+                        .push(OpFrame::False)
+                    .push(OpFrame::OpEndIf)
                 .push(OpFrame::OpElse)
-                .push(OpFrame::True)
-                .push(OpFrame::OpIf)
-                .push(OpFrame::True)
-                .push(OpFrame::OpEndIf)
+                    .push(OpFrame::True)
+                    .push(OpFrame::OpIf)
+                        .push(OpFrame::True)
+                    .push(OpFrame::OpEndIf)
                 .push(OpFrame::OpEndIf),
         );
         assert!(engine.eval().unwrap());
