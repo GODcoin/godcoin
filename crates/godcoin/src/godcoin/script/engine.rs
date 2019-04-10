@@ -361,8 +361,8 @@ mod tests {
     #[test]
     fn checksig() {
         let key = KeyPair::gen_keypair();
-        let mut engine = new_engine_with_signer(
-            key.clone(),
+        let mut engine = new_engine_with_signers(
+            &[key],
             Builder::new()
                 .push(OpFrame::PubKey(key.0.clone()))
                 .push(OpFrame::OpCheckSig),
@@ -370,16 +370,16 @@ mod tests {
         assert!(engine.eval().unwrap());
 
         let other = KeyPair::gen_keypair();
-        let mut engine = new_engine_with_signer(
-            key.clone(),
+        let mut engine = new_engine_with_signers(
+            &[key],
             Builder::new()
                 .push(OpFrame::PubKey(other.0.clone()))
                 .push(OpFrame::OpCheckSig),
         );
         assert!(!engine.eval().unwrap());
 
-        let mut engine = new_engine_with_signer(
-            other,
+        let mut engine = new_engine_with_signers(
+            &[other],
             Builder::new()
                 .push(OpFrame::PubKey(key.0))
                 .push(OpFrame::OpCheckSig),
@@ -389,10 +389,10 @@ mod tests {
 
     fn new_engine<'a>(builder: Builder) -> ScriptEngine<'a> {
         let from = KeyPair::gen_keypair();
-        new_engine_with_signer(from, builder)
+        new_engine_with_signers(&[from], builder)
     }
 
-    fn new_engine_with_signer<'a>(key: KeyPair, b: Builder) -> ScriptEngine<'a> {
+    fn new_engine_with_signers<'a>(keys: &[KeyPair], b: Builder) -> ScriptEngine<'a> {
         let to = KeyPair::gen_keypair();
         let script = b.build();
 
@@ -403,13 +403,15 @@ mod tests {
                 fee: Asset::from_str("1 GOLD").unwrap(),
                 signature_pairs: vec![],
             },
-            from: key.clone().0.into(),
+            from: keys[0].clone().0.into(),
             to: to.clone().0.into(),
             amount: Asset::from_str("10 GOLD").unwrap(),
             script: script.clone(),
             memo: vec![],
         };
-        tx.append_sign(&key);
+        for key in keys {
+            tx.append_sign(&key);
+        }
 
         ScriptEngine::checked_new(TxVariant::TransferTx(tx), script).unwrap()
     }
