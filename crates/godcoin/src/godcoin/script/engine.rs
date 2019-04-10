@@ -362,7 +362,7 @@ mod tests {
     fn checksig() {
         let key = KeyPair::gen_keypair();
         let mut engine = new_engine_with_signers(
-            &[key],
+            &[key.clone()],
             Builder::new()
                 .push(OpFrame::PubKey(key.0.clone()))
                 .push(OpFrame::OpCheckSig),
@@ -371,7 +371,7 @@ mod tests {
 
         let other = KeyPair::gen_keypair();
         let mut engine = new_engine_with_signers(
-            &[key],
+            &[key.clone()],
             Builder::new()
                 .push(OpFrame::PubKey(other.0.clone()))
                 .push(OpFrame::OpCheckSig),
