@@ -138,8 +138,8 @@ impl Indexer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{distributions::Alphanumeric, thread_rng, Rng};
     use std::{env, fs, panic};
+    use sodiumoxide::randombytes;
 
     #[test]
     fn test_get_block_pos() {
@@ -164,14 +164,13 @@ mod tests {
         F: FnOnce(Indexer) -> () + panic::UnwindSafe,
     {
         let mut tmp_dir = env::temp_dir();
-        let mut s = String::from("godcoin_test_");
-        s.push_str(
-            &thread_rng()
-                .sample_iter(&Alphanumeric)
-                .take(4)
-                .collect::<String>(),
-        );
-        tmp_dir.push(s);
+        {
+            let mut s = String::from("godcoin_test_");
+            let mut num: [u8; 8] = [0; 8];
+            randombytes::randombytes_into(&mut num);
+            s.push_str(&format!("{}", u64::from_be_bytes(num)));
+            tmp_dir.push(s);
+        }
         fs::create_dir(&tmp_dir).expect(&format!("Could not create temp dir {:?}", &tmp_dir));
 
         let result = panic::catch_unwind(|| {
