@@ -51,7 +51,7 @@ impl Minter {
                 timestamp,
                 signature_pairs: Vec::new(),
             },
-            to: self.wallet_key.clone().into(),
+            to: (&self.wallet_key).into(),
             rewards: vec![],
         }));
 
