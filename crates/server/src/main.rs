@@ -1,3 +1,4 @@
+use actix::prelude::*;
 use actix_web::{middleware, server, App, HttpRequest, HttpResponse};
 use env_logger::{Env, DEFAULT_FILTER_ENV};
 use godcoin::prelude::*;
@@ -7,6 +8,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod minter;
+use minter::Minter;
+
 fn index(_: HttpRequest) -> HttpResponse {
     HttpResponse::Ok().body("Hello world")
 }
@@ -14,6 +18,7 @@ fn index(_: HttpRequest) -> HttpResponse {
 fn main() {
     env_logger::init_from_env(Env::new().filter_or(DEFAULT_FILTER_ENV, "godcoin=info,actix=info"));
     godcoin::init().unwrap();
+    let sys = actix::System::new("godcoin-server");
 
     let home: PathBuf = {
         let home = {
@@ -45,14 +50,13 @@ fn main() {
         blockchain.get_chain_height()
     );
 
-    {
-        let create_genesis = blockchain.get_block(0).is_none();
-        if create_genesis {
-            blockchain.create_genesis_block(&minter_key);
-        }
+    if blockchain.get_block(0).is_none() {
+        blockchain.create_genesis_block(&minter_key);
     }
 
-    let sys = actix::System::new("godcoin-server");
+    let wallet_key = blockchain.get_owner().wallet;
+    Minter::new(blockchain, minter_key, wallet_key).start();
+
     server::HttpServer::new(|| {
         App::new()
             .middleware(middleware::Logger::new(r#"%a "%r" %s %T"#))
