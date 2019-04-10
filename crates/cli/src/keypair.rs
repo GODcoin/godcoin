@@ -1,4 +1,4 @@
-use godcoin::*;
+use godcoin::prelude::{KeyPair, Wif};
 use log::info;
 use std::sync::mpsc;
 
