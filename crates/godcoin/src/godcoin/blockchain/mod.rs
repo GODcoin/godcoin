@@ -306,18 +306,13 @@ impl Blockchain {
         }
     }
 
-    ///
-    /// Create and store a generated genesis block. By default the provided
-    /// `minter_key` will be the genesis minter and will stake with a small
-    /// amount of GOLD tokens.
-    ///
     pub fn create_genesis_block(&self, minter_key: &KeyPair) {
         use sodiumoxide::crypto::hash::sha256::Digest;
 
         info!("=> Generating new block chain");
-        let staker_key = KeyPair::gen_keypair();
-        info!("=> Staker private key: {}", staker_key.1.to_wif());
-        info!("=> Staker public key: {}", staker_key.0.to_wif());
+        let wallet_key = KeyPair::gen_keypair();
+        info!("=> Wallet private key: {}", wallet_key.1.to_wif());
+        info!("=> Wallet public key: {}", wallet_key.0.to_wif());
 
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -332,7 +327,7 @@ impl Blockchain {
                 signature_pairs: Vec::new(),
             },
             minter: minter_key.0.clone(),
-            wallet: staker_key.0.clone().into(),
+            wallet: wallet_key.0.clone().into(),
         };
 
         let transactions = {
@@ -344,7 +339,7 @@ impl Blockchain {
                     timestamp,
                     signature_pairs: Vec::new(),
                 },
-                to: staker_key.0.into(),
+                to: wallet_key.0.into(),
                 rewards: vec![Asset::from_str("1 GOLD").unwrap()],
             }));
             vec.push(TxVariant::OwnerTx(owner_tx.clone()));

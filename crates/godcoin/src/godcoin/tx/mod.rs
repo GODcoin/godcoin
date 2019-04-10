@@ -180,7 +180,7 @@ impl DecodeTx<RewardTx> for RewardTx {
 pub struct OwnerTx {
     pub base: Tx,
     pub minter: PublicKey,  // Key that signs blocks
-    pub wallet: PublicKey, // Hot wallet that receives rewards and stakes its balance
+    pub wallet: PublicKey, // Hot wallet that receives rewards
 }
 
 impl EncodeTx for OwnerTx {

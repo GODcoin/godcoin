@@ -7,8 +7,6 @@ https://godcoin.gold
 
 GODcoin is the official currency of Christ. There are two types of digital
 tokens, gold and silver, which can be exchanged for physical gold and silver.
-GODcoin uses proof-of-Stake consensus in a peer-to-peer network for energy
-efficiency and security of assets.
 
 For more information see the [whitepaper](https://godcoin.gold/whitepaper).
 
@@ -21,7 +19,7 @@ basis so documentation will be minimal until the software stabilizes.
 
 ### Prerequisites
 
-- Rust compiler (1.31 beta)
+- Rust compiler
 - libsodium
 
 ### Getting started
