@@ -378,10 +378,7 @@ mod tests {
         let a = get_asset("123.456 GOLD");
         c(&a.add(&get_asset("2.0 GOLD")).unwrap(), "125.456 GOLD");
         c(&a.add(&get_asset("-2.0 GOLD")).unwrap(), "121.456 GOLD");
-        c(
-            &a.add(&get_asset(".0001 GOLD")).unwrap(),
-            "123.4561 GOLD",
-        );
+        c(&a.add(&get_asset(".0001 GOLD")).unwrap(), "123.4561 GOLD");
         c(&a.sub(&get_asset("2.0 GOLD")).unwrap(), "121.456 GOLD");
         c(&a.sub(&get_asset("-2.0 GOLD")).unwrap(), "125.456 GOLD");
         c(
@@ -393,10 +390,7 @@ mod tests {
             "-12345613.7159 GOLD",
         );
         c(&a.div(&get_asset("23 GOLD"), 3).unwrap(), "5.367 GOLD");
-        c(
-            &a.div(&get_asset("-23 GOLD"), 4).unwrap(),
-            "-5.3676 GOLD",
-        );
+        c(&a.div(&get_asset("-23 GOLD"), 4).unwrap(), "-5.3676 GOLD");
         c(&a.pow(2, 4).unwrap(), "15241.3839 GOLD");
         c(&a.pow(3, 4).unwrap(), "1881640.2952 GOLD");
         c(&a, "123.456 GOLD");

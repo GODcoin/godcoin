@@ -54,12 +54,14 @@ impl Blockchain {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn get_owner(&self) -> OwnerTx {
-        self.indexer.get_owner().expect("Failed to retrieve owner from index")
+        self.indexer
+            .get_owner()
+            .expect("Failed to retrieve owner from index")
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn get_chain_height(&self) -> u64 {
         self.indexer.get_chain_height()
     }
@@ -234,13 +236,13 @@ impl Blockchain {
                 }
                 let owner = self.get_owner();
                 if !(pairs[0].pub_key == owner.minter && pairs[1].pub_key == tx.wallet) {
-                    return Err("signatures don't match previous ownership".to_owned())
+                    return Err("signatures don't match previous ownership".to_owned());
                 }
                 let mut buf = Vec::with_capacity(4096);
                 tx.encode(&mut buf);
                 for sig_pair in &tx.signature_pairs {
                     if !sig_pair.verify(&buf) {
-                        return Err("signature validation failed".to_owned())
+                        return Err("signature validation failed".to_owned());
                     }
                 }
             }

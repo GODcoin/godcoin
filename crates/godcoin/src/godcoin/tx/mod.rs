@@ -179,7 +179,7 @@ impl DecodeTx<RewardTx> for RewardTx {
 #[derive(Debug, Clone)]
 pub struct OwnerTx {
     pub base: Tx,
-    pub minter: PublicKey,  // Key that signs blocks
+    pub minter: PublicKey, // Key that signs blocks
     pub wallet: PublicKey, // Hot wallet that receives rewards
 }
 

@@ -138,8 +138,8 @@ impl Indexer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{env, fs, panic};
     use sodiumoxide::randombytes;
+    use std::{env, fs, panic};
 
     #[test]
     fn test_get_block_pos() {
