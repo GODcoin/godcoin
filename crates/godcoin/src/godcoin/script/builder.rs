@@ -17,7 +17,7 @@ impl Builder {
     }
 
     pub fn push(self, frame: OpFrame) -> Self {
-        self.try_push(frame).unwrap()
+        self.try_push(frame).expect("script byte size exceeded")
     }
 
     pub fn try_push(self, frame: OpFrame) -> Option<Self> {
