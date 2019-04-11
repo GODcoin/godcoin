@@ -19,7 +19,7 @@ pub struct Script(Vec<u8>);
 
 impl Script {
     #[inline]
-    pub fn new(byte_code: Vec<u8>) -> Script {
+    pub fn new(byte_code: Vec<u8>) -> Self {
         Script(byte_code)
     }
 }
@@ -31,19 +31,29 @@ impl From<&[u8]> for Script {
     }
 }
 
+impl From<Vec<u8>> for Script {
+    #[inline]
+    fn from(vec: Vec<u8>) -> Self {
+        Script::new(vec)
+    }
+}
+
 impl From<Builder> for Script {
-    fn from(b: Builder) -> Script {
+    #[inline]
+    fn from(b: Builder) -> Self {
         b.build()
     }
 }
 
 impl<'a> Into<Cow<'a, Script>> for Script {
+    #[inline]
     fn into(self) -> Cow<'a, Script> {
         Cow::Owned(self)
     }
 }
 
 impl<'a> Into<Cow<'a, Script>> for &'a Script {
+    #[inline]
     fn into(self) -> Cow<'a, Script> {
         Cow::Borrowed(self)
     }

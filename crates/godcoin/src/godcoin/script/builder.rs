@@ -13,7 +13,7 @@ impl Builder {
     }
 
     pub fn build(self) -> Script {
-        Script::new(self.byte_code)
+        self.byte_code.into()
     }
 
     pub fn push(self, frame: OpFrame) -> Self {
