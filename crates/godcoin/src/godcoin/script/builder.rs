@@ -32,6 +32,9 @@ impl Builder {
             OpFrame::OpElse => self.insert_bytes(&[Operand::OpElse.into()])?,
             OpFrame::OpEndIf => self.insert_bytes(&[Operand::OpEndIf.into()])?,
             OpFrame::OpReturn => self.insert_bytes(&[Operand::OpReturn.into()])?,
+            OpFrame::OpCheckSigLaxMode => {
+                self.insert_bytes(&[Operand::OpCheckSigLaxMode.into()])?
+            }
             OpFrame::OpCheckSig => self.insert_bytes(&[Operand::OpCheckSig.into()])?,
             OpFrame::OpCheckMultiSig(threshold, key_count) => {
                 self.insert_bytes(&[Operand::OpCheckMultiSig.into(), threshold, key_count])?

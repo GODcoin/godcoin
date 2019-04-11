@@ -15,8 +15,9 @@ pub enum Operand {
     OpReturn = 0x13,
 
     // Crypto
-    OpCheckSig = 0x20,
-    OpCheckMultiSig = 0x21,
+    OpCheckSigLaxMode = 0x20,
+    OpCheckSig = 0x21,
+    OpCheckMultiSig = 0x22,
 }
 
 impl From<Operand> for u8 {
@@ -39,6 +40,7 @@ pub enum OpFrame {
     OpReturn,
 
     // Crypto
+    OpCheckSigLaxMode,
     OpCheckSig,
     OpCheckMultiSig(u8, u8), // M of N: minimum threshold to number of keys
 }

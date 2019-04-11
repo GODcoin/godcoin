@@ -17,6 +17,7 @@ pub struct ScriptEngine<'a> {
     tx: Cow<'a, TxVariant>,
     pos: usize,
     stack: Stack,
+    sig_check_lax: bool,
 }
 
 impl<'a> ScriptEngine<'a> {
@@ -35,6 +36,7 @@ impl<'a> ScriptEngine<'a> {
             tx,
             pos: 0,
             stack: Stack::new(),
+            sig_check_lax: false,
         })
     }
 
@@ -95,18 +97,40 @@ impl<'a> ScriptEngine<'a> {
                     break;
                 }
                 // Crypto
+                OpFrame::OpCheckSigLaxMode => {
+                    self.sig_check_lax = true;
+                }
                 OpFrame::OpCheckSig => {
+                    let sig_check_lax = self.sig_check_lax;
+                    self.sig_check_lax = false;
+
                     let key = map_err_type!(self, self.stack.pop_pubkey())?;
-                    if self.tx.signature_pairs.len() != 1 {
+                    if !(sig_check_lax || self.tx.signature_pairs.len() == 1) {
                         map_err_type!(self, self.stack.push(false))?;
                         continue;
                     }
                     let mut buf = Vec::with_capacity(4096);
                     self.tx.encode(&mut buf);
-                    let success = key.verify(&buf, &self.tx.signature_pairs[0].signature);
-                    map_err_type!(self, self.stack.push(success))?;
+                    if sig_check_lax {
+                        let mut success = false;
+                        for pair in &self.tx.signature_pairs {
+                            if key == pair.pub_key {
+                                if key.verify(&buf, &pair.signature) {
+                                    success = true;
+                                }
+                                break;
+                            }
+                        }
+                        map_err_type!(self, self.stack.push(success))?;
+                    } else {
+                        let success = key.verify(&buf, &self.tx.signature_pairs[0].signature);
+                        map_err_type!(self, self.stack.push(success))?;
+                    }
                 }
                 OpFrame::OpCheckMultiSig(threshold, key_count) => {
+                    let sig_check_lax = self.sig_check_lax;
+                    self.sig_check_lax = false;
+
                     // Keys need to be popped off the stack first before doing anything else
                     // to ensure the stack is in a valid state if anything fails.
                     let keys = {
@@ -146,7 +170,7 @@ impl<'a> ScriptEngine<'a> {
                             }
                         }
                     }
-                    if checked_sig_count != self.tx.signature_pairs.len() {
+                    if !(sig_check_lax || checked_sig_count == self.tx.signature_pairs.len()) {
                         success = false;
                     }
                     if success {
@@ -215,6 +239,7 @@ impl<'a> ScriptEngine<'a> {
             o if o == Operand::OpElse as u8 => Ok(Some(OpFrame::OpElse)),
             o if o == Operand::OpEndIf as u8 => Ok(Some(OpFrame::OpEndIf)),
             o if o == Operand::OpReturn as u8 => Ok(Some(OpFrame::OpReturn)),
+            o if o == Operand::OpCheckSigLaxMode as u8 => Ok(Some(OpFrame::OpCheckSigLaxMode)),
             o if o == Operand::OpCheckSig as u8 => Ok(Some(OpFrame::OpCheckSig)),
             o if o == Operand::OpCheckMultiSig as u8 => {
                 let threshold = match self.script.get(self.pos..self.pos + 1) {
@@ -460,6 +485,38 @@ mod tests {
     }
 
     #[test]
+    fn checksig_lax() {
+        let key = KeyPair::gen_keypair();
+        let mut engine = new_engine_with_signers(
+            &[key.clone()],
+            Builder::new()
+                .push(OpFrame::PubKey(key.0.clone()))
+                .push(OpFrame::OpCheckSigLaxMode)
+                .push(OpFrame::OpCheckSig),
+        );
+        assert!(engine.eval().unwrap());
+
+        let other = KeyPair::gen_keypair();
+        let mut engine = new_engine_with_signers(
+            &[key.clone(), other.clone()],
+            Builder::new()
+                .push(OpFrame::PubKey(other.0.clone()))
+                .push(OpFrame::OpCheckSigLaxMode)
+                .push(OpFrame::OpCheckSig),
+        );
+        assert!(engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signers(
+            &[other],
+            Builder::new()
+                .push(OpFrame::PubKey(key.0))
+                .push(OpFrame::OpCheckSigLaxMode)
+                .push(OpFrame::OpCheckSig),
+        );
+        assert!(!engine.eval().unwrap());
+    }
+
+    #[test]
     fn checkmultisig_equal_threshold() {
         let key_1 = KeyPair::gen_keypair();
         let key_2 = KeyPair::gen_keypair();
@@ -515,6 +572,112 @@ mod tests {
                 .push(OpFrame::PubKey(key_1.0.clone()))
                 .push(OpFrame::PubKey(key_2.0.clone()))
                 .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSig(2, 3))
+                .build();
+
+            let mut tx = TransferTx {
+                base: Tx {
+                    tx_type: TxType::TRANSFER,
+                    timestamp: 1500000000,
+                    fee: Asset::from_str("1 GOLD").unwrap(),
+                    signature_pairs: vec![SigPair {
+                        // Test valid key with invalid signature
+                        pub_key: key_2.0.clone(),
+                        signature: sign::Signature([0; sign::SIGNATUREBYTES]),
+                    }],
+                },
+                from: key_1.clone().0.into(),
+                to: to.clone().0.into(),
+                amount: Asset::from_str("10 GOLD").unwrap(),
+                script: script.clone(),
+                memo: vec![],
+            };
+            tx.append_sign(&key_1);
+
+            ScriptEngine::checked_new(TxVariant::TransferTx(tx), script).unwrap()
+        };
+        assert!(!engine.eval().unwrap());
+    }
+
+    #[test]
+    fn checkmultisig_invalid_sig_lax() {
+        let key_1 = KeyPair::gen_keypair();
+        let key_2 = KeyPair::gen_keypair();
+        let key_3 = KeyPair::gen_keypair();
+
+        let mut engine = new_engine_with_signers(
+            &[key_1.clone(), key_2.clone(), KeyPair::gen_keypair()],
+            Builder::new()
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckSigLaxMode)
+                .push(OpFrame::OpCheckMultiSig(2, 3)),
+        );
+        assert!(engine.eval().unwrap());
+
+        let mut engine = {
+            let to = KeyPair::gen_keypair();
+            let script = Builder::new()
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckSigLaxMode)
+                .push(OpFrame::OpCheckMultiSig(2, 3))
+                .build();
+
+            let mut tx = TransferTx {
+                base: Tx {
+                    tx_type: TxType::TRANSFER,
+                    timestamp: 1500000000,
+                    fee: Asset::from_str("1 GOLD").unwrap(),
+                    signature_pairs: vec![SigPair {
+                        // Test valid key with invalid signature
+                        pub_key: key_2.0.clone(),
+                        signature: sign::Signature([0; sign::SIGNATUREBYTES]),
+                    }],
+                },
+                from: key_1.clone().0.into(),
+                to: to.clone().0.into(),
+                amount: Asset::from_str("10 GOLD").unwrap(),
+                script: script.clone(),
+                memo: vec![],
+            };
+            tx.append_sign(&key_1);
+
+            ScriptEngine::checked_new(TxVariant::TransferTx(tx), script).unwrap()
+        };
+        assert!(!engine.eval().unwrap());
+    }
+
+    #[test]
+    fn checksig_and_checkmultisig() {
+        let key_0 = KeyPair::gen_keypair();
+        let key_1 = KeyPair::gen_keypair();
+        let key_2 = KeyPair::gen_keypair();
+        let key_3 = KeyPair::gen_keypair();
+
+        let mut engine = new_engine_with_signers(
+            &[key_1.clone(), key_2.clone(), key_0.clone()],
+            Builder::new()
+                .push(OpFrame::PubKey(key_0.0.clone()))
+                .push(OpFrame::OpCheckSigLaxMode)
+                .push(OpFrame::OpCheckSig)
+                .push(OpFrame::PubKey(key_0.0.clone()))
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSig(2, 4)),
+        );
+        assert!(engine.eval().unwrap());
+
+        let mut engine = {
+            let to = KeyPair::gen_keypair();
+            let script = Builder::new()
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckSigLaxMode)
                 .push(OpFrame::OpCheckMultiSig(2, 3))
                 .build();
 
