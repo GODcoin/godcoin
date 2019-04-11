@@ -121,20 +121,18 @@ impl Asset {
                 symbol: self.symbol,
             });
         }
-        let big_zero = BigInt::from(0);
-        let big_one = BigInt::from(1);
 
         let decimals = u16::from(self.decimals).checked_mul(num)?;
         let mut res = BigInt::from(1);
         {
             let mut base = BigInt::from(self.amount);
-            let mut exp = BigInt::from(num);
+            let mut exp = num;
             loop {
-                if &exp & &big_one == big_one {
+                if exp & 1 == 1 {
                     res = &res * &base;
                 }
                 exp >>= 1;
-                if exp == big_zero {
+                if exp == 0 {
                     break;
                 };
                 base = &base * &base;
