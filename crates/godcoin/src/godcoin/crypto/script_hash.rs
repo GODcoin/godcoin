@@ -68,17 +68,23 @@ impl From<&Script> for ScriptHash {
     }
 }
 
+impl From<Script> for ScriptHash {
+    fn from(script: Script) -> ScriptHash {
+        (&script).into()
+    }
+}
+
 impl From<PublicKey> for ScriptHash {
     fn from(key: PublicKey) -> ScriptHash {
         let script: Script = key.into();
-        key.into()
+        script.into()
     }
 }
 
 impl From<&PublicKey> for ScriptHash {
     fn from(key: &PublicKey) -> ScriptHash {
         let script: Script = key.clone().into();
-        key.into()
+        script.into()
     }
 }
 
