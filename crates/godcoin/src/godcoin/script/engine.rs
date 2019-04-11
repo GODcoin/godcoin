@@ -242,7 +242,7 @@ impl<'a> ScriptEngine<'a> {
             o if o == Operand::OpCheckSigLaxMode as u8 => Ok(Some(OpFrame::OpCheckSigLaxMode)),
             o if o == Operand::OpCheckSig as u8 => Ok(Some(OpFrame::OpCheckSig)),
             o if o == Operand::OpCheckMultiSig as u8 => {
-                let threshold = match self.script.get(self.pos..self.pos + 1) {
+                let threshold = match self.script.get(self.pos..=self.pos) {
                     Some(key_count) => {
                         self.pos += 1;
                         key_count[0]
@@ -252,7 +252,7 @@ impl<'a> ScriptEngine<'a> {
                     }
                 };
 
-                let key_count = match self.script.get(self.pos..self.pos + 1) {
+                let key_count = match self.script.get(self.pos..=self.pos) {
                     Some(key_count) => {
                         self.pos += 1;
                         key_count[0]

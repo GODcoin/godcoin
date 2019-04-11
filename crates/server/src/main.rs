@@ -65,7 +65,7 @@ fn main() {
                 r.with(|_: HttpRequest| HttpResponse::NotFound().body("Not found"))
             })
     })
-    .bind(env::var("GODCOIN_BIND_ADDR").unwrap_or("127.0.0.1:8080".to_owned()))
+    .bind(env::var("GODCOIN_BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned()))
     .unwrap()
     .start();
 

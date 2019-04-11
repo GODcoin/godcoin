@@ -329,7 +329,7 @@ impl Blockchain {
                 signature_pairs: Vec::new(),
             },
             minter: minter_key.0.clone(),
-            wallet: wallet_key.0.clone().into(),
+            wallet: wallet_key.0.clone(),
         };
 
         let block = (Block {
