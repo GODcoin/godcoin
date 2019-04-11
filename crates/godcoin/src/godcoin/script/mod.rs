@@ -1,3 +1,4 @@
+use crate::crypto::PublicKey;
 use std::borrow::Cow;
 use std::ops::Deref;
 
@@ -42,6 +43,24 @@ impl From<Builder> for Script {
     #[inline]
     fn from(b: Builder) -> Self {
         b.build()
+    }
+}
+
+impl From<PublicKey> for Script {
+    fn from(key: PublicKey) -> Self {
+        let builder = Builder::new()
+            .push(OpFrame::PubKey(key))
+            .push(OpFrame::OpCheckSig);
+        builder.build()
+    }
+}
+
+impl From<&PublicKey> for Script {
+    fn from(key: &PublicKey) -> Self {
+        let builder = Builder::new()
+            .push(OpFrame::PubKey(key.clone()))
+            .push(OpFrame::OpCheckSig);
+        builder.build()
     }
 }
 

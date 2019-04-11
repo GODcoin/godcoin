@@ -2,7 +2,7 @@ use sodiumoxide::crypto::hash::sha256::Digest;
 
 use super::*;
 use crate::crypto::{double_sha256, PublicKey};
-use crate::script::{Builder, OpFrame, Script};
+use crate::script::Script;
 
 pub const SCRIPT_HASH_BUF_PREFIX: u8 = 0x03;
 
@@ -70,19 +70,15 @@ impl From<&Script> for ScriptHash {
 
 impl From<PublicKey> for ScriptHash {
     fn from(key: PublicKey) -> ScriptHash {
-        let builder = Builder::new()
-            .push(OpFrame::PubKey(key))
-            .push(OpFrame::OpCheckSig);
-        (&builder.build()).into()
+        let script: Script = key.into();
+        key.into()
     }
 }
 
 impl From<&PublicKey> for ScriptHash {
     fn from(key: &PublicKey) -> ScriptHash {
-        let builder = Builder::new()
-            .push(OpFrame::PubKey(key.clone()))
-            .push(OpFrame::OpCheckSig);
-        (&builder.build()).into()
+        let script: Script = key.clone().into();
+        key.into()
     }
 }
 
