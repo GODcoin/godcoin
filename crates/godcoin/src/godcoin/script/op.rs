@@ -16,6 +16,7 @@ pub enum Operand {
 
     // Crypto
     OpCheckSig = 0x20,
+    OpCheckMultiSig = 0x21,
 }
 
 impl From<Operand> for u8 {
@@ -39,6 +40,7 @@ pub enum OpFrame {
 
     // Crypto
     OpCheckSig,
+    OpCheckMultiSig(u8, Vec<PublicKey>),
 }
 
 impl From<bool> for OpFrame {

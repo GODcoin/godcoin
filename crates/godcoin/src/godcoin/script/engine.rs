@@ -106,6 +106,44 @@ impl<'a> ScriptEngine<'a> {
                     let success = key.verify(&buf, &self.tx.signature_pairs[0].signature);
                     map_err_type!(self, self.stack.push(success))?;
                 }
+                OpFrame::OpCheckMultiSig(threshold, keys) => {
+                    if threshold == 0 {
+                        map_err_type!(self, self.stack.push(true))?;
+                        continue;
+                    } else if usize::from(threshold) > keys.len() {
+                        map_err_type!(self, self.stack.push(false))?;
+                        continue;
+                    }
+                    let mut buf = Vec::with_capacity(4096);
+                    self.tx.encode(&mut buf);
+
+                    let mut valid_threshold = 0;
+                    let mut checked_sig_count = 0;
+                    let mut success = true;
+                    'key_loop: for key in &keys {
+                        for pair in &self.tx.signature_pairs {
+                            if key == &pair.pub_key {
+                                checked_sig_count += 1;
+                                let sig_verified = key.verify(&buf, &pair.signature);
+                                if sig_verified {
+                                    valid_threshold += 1;
+                                    continue 'key_loop;
+                                } else {
+                                    success = false;
+                                    break 'key_loop;
+                                }
+                            }
+                        }
+                    }
+                    if checked_sig_count != self.tx.signature_pairs.len() {
+                        success = false;
+                    }
+                    if success {
+                        map_err_type!(self, self.stack.push(valid_threshold >= threshold))?;
+                    } else {
+                        map_err_type!(self, self.stack.push(false))?;
+                    }
+                }
                 // Handle push ops
                 _ => {
                     map_err_type!(self, self.stack.push(op))?;
@@ -121,14 +159,14 @@ impl<'a> ScriptEngine<'a> {
         map_err_type!(self, self.stack.pop_bool())
     }
 
-    fn consume_op_until<F>(&mut self, mut filter: F) -> Result<(), EvalErr>
+    fn consume_op_until<F>(&mut self, mut matcher: F) -> Result<(), EvalErr>
     where
         F: FnMut(OpFrame) -> bool,
     {
         loop {
             match self.consume_op()? {
                 Some(op) => {
-                    if filter(op) {
+                    if matcher(op) {
                         break;
                     }
                 }
@@ -167,6 +205,42 @@ impl<'a> ScriptEngine<'a> {
             o if o == Operand::OpEndIf as u8 => Ok(Some(OpFrame::OpEndIf)),
             o if o == Operand::OpReturn as u8 => Ok(Some(OpFrame::OpReturn)),
             o if o == Operand::OpCheckSig as u8 => Ok(Some(OpFrame::OpCheckSig)),
+            o if o == Operand::OpCheckMultiSig as u8 => {
+                let threshold = match self.script.get(self.pos..self.pos + 1) {
+                    Some(key_count) => {
+                        self.pos += 1;
+                        key_count[0]
+                    }
+                    None => {
+                        return Err(self.new_err(EvalErrType::UnexpectedEOF));
+                    }
+                };
+
+                let key_count = match self.script.get(self.pos..self.pos + 1) {
+                    Some(key_count) => {
+                        self.pos += 1;
+                        key_count[0]
+                    }
+                    None => {
+                        return Err(self.new_err(EvalErrType::UnexpectedEOF));
+                    }
+                };
+
+                let mut keys = Vec::with_capacity(usize::from(key_count));
+                for _ in 0..key_count {
+                    match self.script.get(self.pos..self.pos + sign::PUBLICKEYBYTES) {
+                        Some(slice) => {
+                            self.pos += sign::PUBLICKEYBYTES;
+                            keys.push(PublicKey::from_slice(slice).unwrap());
+                        }
+                        None => {
+                            return Err(self.new_err(EvalErrType::UnexpectedEOF));
+                        }
+                    }
+                }
+
+                Ok(Some(OpFrame::OpCheckMultiSig(threshold, keys)))
+            }
             _ => Err(self.new_err(EvalErrType::UnknownOp)),
         }
     }
@@ -182,7 +256,7 @@ mod tests {
 
     use super::*;
     use crate::asset::Asset;
-    use crate::crypto::KeyPair;
+    use crate::crypto::{KeyPair, SigPair};
     use crate::tx::{SignTx, TransferTx, Tx, TxType};
 
     #[test]
@@ -384,6 +458,86 @@ mod tests {
                 .push(OpFrame::PubKey(key.0))
                 .push(OpFrame::OpCheckSig),
         );
+        assert!(!engine.eval().unwrap());
+    }
+
+    #[test]
+    fn checkmultisig_equal_threshold() {
+        let key_1 = KeyPair::gen_keypair();
+        let key_2 = KeyPair::gen_keypair();
+        let key_3 = KeyPair::gen_keypair();
+
+        let mut engine = new_engine_with_signers(
+            &[key_3.clone(), key_1.clone()],
+            Builder::new().push(OpFrame::OpCheckMultiSig(
+                2,
+                vec![key_1.0.clone(), key_2.0.clone(), key_3.0.clone()],
+            )),
+        );
+        assert!(engine.eval().unwrap());
+    }
+
+    #[test]
+    fn checkmultisig_threshold_unmet() {
+        let key_1 = KeyPair::gen_keypair();
+        let key_2 = KeyPair::gen_keypair();
+        let key_3 = KeyPair::gen_keypair();
+
+        let mut engine = new_engine_with_signers(
+            &[key_3.clone(), key_1.clone()],
+            Builder::new().push(OpFrame::OpCheckMultiSig(
+                3,
+                vec![key_1.0.clone(), key_2.0.clone(), key_3.0.clone()],
+            )),
+        );
+        assert!(!engine.eval().unwrap());
+    }
+
+    #[test]
+    fn checkmultisig_invalid_sig() {
+        let key_1 = KeyPair::gen_keypair();
+        let key_2 = KeyPair::gen_keypair();
+        let key_3 = KeyPair::gen_keypair();
+
+        let mut engine = new_engine_with_signers(
+            &[key_1.clone(), key_2.clone(), KeyPair::gen_keypair()],
+            Builder::new().push(OpFrame::OpCheckMultiSig(
+                2,
+                vec![key_1.0.clone(), key_2.0.clone(), key_3.0.clone()],
+            )),
+        );
+        assert!(!engine.eval().unwrap());
+
+        let mut engine = {
+            let to = KeyPair::gen_keypair();
+            let script = Builder::new()
+                .push(OpFrame::OpCheckMultiSig(
+                    2,
+                    vec![key_1.0.clone(), key_2.0.clone(), key_3.0.clone()],
+                ))
+                .build();
+
+            let mut tx = TransferTx {
+                base: Tx {
+                    tx_type: TxType::TRANSFER,
+                    timestamp: 1500000000,
+                    fee: Asset::from_str("1 GOLD").unwrap(),
+                    signature_pairs: vec![SigPair {
+                        // Test valid key with invalid signature
+                        pub_key: key_2.0.clone(),
+                        signature: sign::Signature([0; sign::SIGNATUREBYTES]),
+                    }],
+                },
+                from: key_1.clone().0.into(),
+                to: to.clone().0.into(),
+                amount: Asset::from_str("10 GOLD").unwrap(),
+                script: script.clone(),
+                memo: vec![],
+            };
+            tx.append_sign(&key_1);
+
+            ScriptEngine::checked_new(TxVariant::TransferTx(tx), script).unwrap()
+        };
         assert!(!engine.eval().unwrap());
     }
 
