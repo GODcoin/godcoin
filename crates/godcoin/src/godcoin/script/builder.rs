@@ -26,23 +26,21 @@ impl Builder {
             OpFrame::True => self.insert_bytes(&[Operand::PushTrue.into()])?,
             OpFrame::PubKey(key) => {
                 self.insert_bytes(&[Operand::PushPubKey.into()])?;
-                self.insert_bytes(key.as_ref());
+                self.insert_bytes(key.as_ref())?;
             }
             OpFrame::OpIf => self.insert_bytes(&[Operand::OpIf.into()])?,
             OpFrame::OpElse => self.insert_bytes(&[Operand::OpElse.into()])?,
             OpFrame::OpEndIf => self.insert_bytes(&[Operand::OpEndIf.into()])?,
             OpFrame::OpReturn => self.insert_bytes(&[Operand::OpReturn.into()])?,
             OpFrame::OpCheckSig => self.insert_bytes(&[Operand::OpCheckSig.into()])?,
-            OpFrame::OpCheckMultiSig(threshold, keys) => {
-                self.insert_bytes(&[Operand::OpCheckMultiSig.into(), threshold, keys.len() as u8])?;
-                for key in keys {
-                    self.insert_bytes(key.as_ref())?;
-                }
+            OpFrame::OpCheckMultiSig(threshold, key_count) => {
+                self.insert_bytes(&[Operand::OpCheckMultiSig.into(), threshold, key_count])?
             }
-        };
+        }
         Some(self)
     }
 
+    #[must_use]
     fn insert_bytes(&mut self, bytes: &[u8]) -> Option<()> {
         if self.byte_code.len() + bytes.len() <= constants::MAX_BYTE_SIZE {
             self.byte_code.extend(bytes);

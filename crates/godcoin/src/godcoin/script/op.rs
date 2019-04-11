@@ -40,7 +40,7 @@ pub enum OpFrame {
 
     // Crypto
     OpCheckSig,
-    OpCheckMultiSig(u8, Vec<PublicKey>),
+    OpCheckMultiSig(u8, u8), // M of N: minimum threshold to number of keys
 }
 
 impl From<bool> for OpFrame {

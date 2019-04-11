@@ -106,7 +106,17 @@ impl<'a> ScriptEngine<'a> {
                     let success = key.verify(&buf, &self.tx.signature_pairs[0].signature);
                     map_err_type!(self, self.stack.push(success))?;
                 }
-                OpFrame::OpCheckMultiSig(threshold, keys) => {
+                OpFrame::OpCheckMultiSig(threshold, key_count) => {
+                    // Keys need to be popped off the stack first before doing anything else
+                    // to ensure the stack is in a valid state if anything fails.
+                    let keys = {
+                        let mut vec = Vec::with_capacity(usize::from(key_count));
+                        for _ in 0..key_count {
+                            vec.push(map_err_type!(self, self.stack.pop_pubkey())?);
+                        }
+                        vec
+                    };
+
                     if threshold == 0 {
                         map_err_type!(self, self.stack.push(true))?;
                         continue;
@@ -114,6 +124,7 @@ impl<'a> ScriptEngine<'a> {
                         map_err_type!(self, self.stack.push(false))?;
                         continue;
                     }
+
                     let mut buf = Vec::with_capacity(4096);
                     self.tx.encode(&mut buf);
 
@@ -226,20 +237,7 @@ impl<'a> ScriptEngine<'a> {
                     }
                 };
 
-                let mut keys = Vec::with_capacity(usize::from(key_count));
-                for _ in 0..key_count {
-                    match self.script.get(self.pos..self.pos + sign::PUBLICKEYBYTES) {
-                        Some(slice) => {
-                            self.pos += sign::PUBLICKEYBYTES;
-                            keys.push(PublicKey::from_slice(slice).unwrap());
-                        }
-                        None => {
-                            return Err(self.new_err(EvalErrType::UnexpectedEOF));
-                        }
-                    }
-                }
-
-                Ok(Some(OpFrame::OpCheckMultiSig(threshold, keys)))
+                Ok(Some(OpFrame::OpCheckMultiSig(threshold, key_count)))
             }
             _ => Err(self.new_err(EvalErrType::UnknownOp)),
         }
@@ -469,10 +467,11 @@ mod tests {
 
         let mut engine = new_engine_with_signers(
             &[key_3.clone(), key_1.clone()],
-            Builder::new().push(OpFrame::OpCheckMultiSig(
-                2,
-                vec![key_1.0.clone(), key_2.0.clone(), key_3.0.clone()],
-            )),
+            Builder::new()
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSig(2, 3)),
         );
         assert!(engine.eval().unwrap());
     }
@@ -485,10 +484,11 @@ mod tests {
 
         let mut engine = new_engine_with_signers(
             &[key_3.clone(), key_1.clone()],
-            Builder::new().push(OpFrame::OpCheckMultiSig(
-                3,
-                vec![key_1.0.clone(), key_2.0.clone(), key_3.0.clone()],
-            )),
+            Builder::new()
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSig(3, 3)),
         );
         assert!(!engine.eval().unwrap());
     }
@@ -501,20 +501,21 @@ mod tests {
 
         let mut engine = new_engine_with_signers(
             &[key_1.clone(), key_2.clone(), KeyPair::gen_keypair()],
-            Builder::new().push(OpFrame::OpCheckMultiSig(
-                2,
-                vec![key_1.0.clone(), key_2.0.clone(), key_3.0.clone()],
-            )),
+            Builder::new()
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSig(2, 3)),
         );
         assert!(!engine.eval().unwrap());
 
         let mut engine = {
             let to = KeyPair::gen_keypair();
             let script = Builder::new()
-                .push(OpFrame::OpCheckMultiSig(
-                    2,
-                    vec![key_1.0.clone(), key_2.0.clone(), key_3.0.clone()],
-                ))
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSig(2, 3))
                 .build();
 
             let mut tx = TransferTx {
