@@ -2,7 +2,6 @@ use log::info;
 use parking_lot::Mutex;
 use std::path::*;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod block;
 pub mod index;
@@ -228,21 +227,18 @@ impl Blockchain {
 
         check_amt!(tx.fee, "fee");
         match tx {
-            TxVariant::OwnerTx(tx) => {
-                let pairs = &tx.signature_pairs;
-                if pairs.len() != 2 {
-                    return Err("not enough signatures to change ownership".to_owned());
-                }
+            TxVariant::OwnerTx(new_owner) => {
                 let owner = self.get_owner();
-                if !(pairs[0].pub_key == owner.minter && pairs[1].pub_key == tx.wallet) {
-                    return Err("signatures don't match previous ownership".to_owned());
+                if owner.wallet != (&new_owner.script).into() {
+                    return Err("script hash does not match previous wallet address".to_owned());
                 }
-                let mut buf = Vec::with_capacity(4096);
-                tx.encode(&mut buf);
-                for sig_pair in &tx.signature_pairs {
-                    if !sig_pair.verify(&buf) {
-                        return Err("signature validation failed".to_owned());
-                    }
+
+                let success = ScriptEngine::checked_new(tx, &new_owner.script)
+                    .ok_or_else(|| "failed to initialize script engine")?
+                    .eval()
+                    .map_err(|e| format!("{}: {:?}", e.pos, e.err))?;
+                if !success {
+                    return Err("script returned false".to_owned());
                 }
             }
             TxVariant::RewardTx(tx) => {
@@ -309,11 +305,28 @@ impl Blockchain {
 
     pub fn create_genesis_block(&self, minter_key: &KeyPair) {
         use sodiumoxide::crypto::hash::sha256::Digest;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let wallet_key_1 = KeyPair::gen_keypair();
+        let wallet_key_2 = KeyPair::gen_keypair();
+        let wallet_key_3 = KeyPair::gen_keypair();
+        let wallet_key_4 = KeyPair::gen_keypair();
+
+        let script = Builder::new()
+            .push(OpFrame::PubKey(minter_key.0.clone()))
+            .push(OpFrame::OpCheckSigFastFail)
+            .push(OpFrame::PubKey(wallet_key_1.0.clone()))
+            .push(OpFrame::PubKey(wallet_key_2.0.clone()))
+            .push(OpFrame::PubKey(wallet_key_3.0.clone()))
+            .push(OpFrame::PubKey(wallet_key_4.0.clone()))
+            .push(OpFrame::OpCheckMultiSig(2, 4))
+            .build();
 
         info!("=> Generating new block chain");
-        let wallet_key = KeyPair::gen_keypair();
-        info!("=> Wallet private key: {}", wallet_key.1.to_wif());
-        info!("=> Wallet public key: {}", wallet_key.0.to_wif());
+        info!("=> Wallet key 1: {}", wallet_key_1.1.to_wif());
+        info!("=> Wallet key 2: {}", wallet_key_2.1.to_wif());
+        info!("=> Wallet key 3: {}", wallet_key_3.1.to_wif());
+        info!("=> Wallet key 4: {}", wallet_key_4.1.to_wif());
 
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -328,7 +341,8 @@ impl Blockchain {
                 signature_pairs: Vec::new(),
             },
             minter: minter_key.0.clone(),
-            wallet: wallet_key.0.clone(),
+            wallet: script.into(),
+            script: Builder::new().push(OpFrame::False).build(),
         };
 
         let block = (Block {

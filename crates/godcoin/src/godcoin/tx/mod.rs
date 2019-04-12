@@ -179,15 +179,17 @@ impl DecodeTx<RewardTx> for RewardTx {
 #[derive(Debug, Clone)]
 pub struct OwnerTx {
     pub base: Tx,
-    pub minter: PublicKey, // Key that signs blocks
-    pub wallet: PublicKey, // Hot wallet that receives rewards
+    pub minter: PublicKey,  // Key that signs blocks
+    pub wallet: ScriptHash, // Hot wallet that receives rewards
+    pub script: Script,     // Hot wallet previous script
 }
 
 impl EncodeTx for OwnerTx {
     fn encode(&self, v: &mut Vec<u8>) {
         self.encode_base(v);
         v.push_pub_key(&self.minter);
-        v.push_pub_key(&self.wallet);
+        v.push_script_hash(&self.wallet);
+        v.push_bytes(&self.script);
     }
 }
 
@@ -195,11 +197,13 @@ impl DecodeTx<OwnerTx> for OwnerTx {
     fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<OwnerTx> {
         assert_eq!(tx.tx_type, TxType::OWNER);
         let minter = cur.take_pub_key().ok()?;
-        let wallet = cur.take_pub_key().ok()?;
+        let wallet = cur.take_script_hash().ok()?;
+        let script = cur.take_bytes().ok()?.into();
         Some(OwnerTx {
             base: tx,
             minter,
             wallet,
+            script,
         })
     }
 }
@@ -230,7 +234,7 @@ impl DecodeTx<TransferTx> for TransferTx {
         assert_eq!(tx.tx_type, TxType::TRANSFER);
         let from = cur.take_script_hash().ok()?;
         let to = cur.take_script_hash().ok()?;
-        let script = Script::new(cur.take_bytes().ok()?);
+        let script = cur.take_bytes().ok()?.into();
         let amount = cur.take_asset().ok()?;
         let memo = cur.take_bytes().ok()?;
         Some(TransferTx {
@@ -325,7 +329,8 @@ mod tests {
                 signature_pairs: vec![],
             },
             minter: minter.0,
-            wallet: wallet.0.into(),
+            wallet: wallet.0.clone().into(),
+            script: wallet.0.into(),
         };
 
         let mut v = vec![];
@@ -353,7 +358,7 @@ mod tests {
             },
             from: from.0.into(),
             to: to.0.into(),
-            script: Script::new(vec![1, 2, 3, 4]),
+            script: vec![1, 2, 3, 4].into(),
             amount: get_asset("1.0456 GOLD"),
             memo: Vec::from(String::from("Hello world!").as_bytes()),
         };
@@ -368,7 +373,7 @@ mod tests {
         cmp_base_tx!(dec, TxType::TRANSFER, 1234567890, "1.23 GOLD");
         assert_eq!(transfer_tx.from, dec.from);
         assert_eq!(transfer_tx.to, dec.to);
-        assert_eq!(transfer_tx.script, Script::new(vec![1, 2, 3, 4]));
+        assert_eq!(transfer_tx.script, vec![1, 2, 3, 4].into());
         assert_eq!(transfer_tx.amount.to_string(), dec.amount.to_string());
         assert_eq!(transfer_tx.memo, dec.memo);
     }
@@ -384,7 +389,7 @@ mod tests {
             },
             from: KeyPair::gen_keypair().0.into(),
             to: KeyPair::gen_keypair().0.into(),
-            script: Script::new(vec![1, 2, 3, 4]),
+            script: vec![1, 2, 3, 4].into(),
             amount: get_asset("1.0456 GOLD"),
             memo: Vec::from(String::from("Hello world!").as_bytes()),
         };

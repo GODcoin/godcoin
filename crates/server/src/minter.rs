@@ -9,7 +9,7 @@ use std::{
 pub struct Minter {
     chain: Blockchain,
     minter_key: KeyPair,
-    wallet_key: PublicKey,
+    wallet_addr: ScriptHash,
     txs: Vec<TxVariant>,
 }
 
@@ -25,11 +25,11 @@ impl Actor for Minter {
 }
 
 impl Minter {
-    pub fn new(chain: Blockchain, minter_key: KeyPair, wallet_key: PublicKey) -> Self {
+    pub fn new(chain: Blockchain, minter_key: KeyPair, wallet_addr: ScriptHash) -> Self {
         Self {
             chain,
             minter_key,
-            wallet_key,
+            wallet_addr,
             txs: Vec::new(),
         }
     }
@@ -50,7 +50,7 @@ impl Minter {
                 timestamp,
                 signature_pairs: Vec::new(),
             },
-            to: (&self.wallet_key).into(),
+            to: self.wallet_addr.clone(),
             rewards: vec![],
         }));
 

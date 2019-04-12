@@ -54,8 +54,8 @@ fn main() {
         blockchain.create_genesis_block(&minter_key);
     }
 
-    let wallet_key = blockchain.get_owner().wallet;
-    Minter::new(blockchain, minter_key, wallet_key).start();
+    let wallet_addr = blockchain.get_owner().wallet;
+    Minter::new(blockchain, minter_key, wallet_addr).start();
 
     server::HttpServer::new(|| {
         App::new()
