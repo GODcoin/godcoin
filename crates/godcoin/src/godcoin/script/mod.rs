@@ -3,17 +3,18 @@ use std::borrow::Cow;
 use std::ops::Deref;
 
 pub mod builder;
-pub mod constants;
 pub mod engine;
 pub mod error;
 pub mod op;
 mod stack;
 
 pub use self::builder::*;
-pub use self::constants::*;
 pub use self::engine::*;
 pub use self::error::*;
 pub use self::op::*;
+
+pub const MAX_FRAME_STACK: usize = 64;
+pub const MAX_BYTE_SIZE: usize = 2048;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Script(Vec<u8>);

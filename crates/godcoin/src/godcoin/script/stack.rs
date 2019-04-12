@@ -1,6 +1,6 @@
 use crate::crypto::PublicKey;
 
-use super::constants::MAX_FRAME_STACK;
+use super::MAX_FRAME_STACK;
 use super::error::*;
 use super::OpFrame;
 

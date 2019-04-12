@@ -1,4 +1,4 @@
-use super::{constants, op::*, Script};
+use super::{MAX_BYTE_SIZE, op::*, Script};
 
 #[derive(Default)]
 pub struct Builder {
@@ -8,7 +8,7 @@ pub struct Builder {
 impl Builder {
     pub fn new() -> Builder {
         Builder {
-            byte_code: Vec::with_capacity(constants::MAX_BYTE_SIZE),
+            byte_code: Vec::with_capacity(MAX_BYTE_SIZE),
         }
     }
 
@@ -47,7 +47,7 @@ impl Builder {
 
     #[must_use]
     fn insert_bytes(&mut self, bytes: &[u8]) -> Option<()> {
-        if self.byte_code.len() + bytes.len() <= constants::MAX_BYTE_SIZE {
+        if self.byte_code.len() + bytes.len() <= MAX_BYTE_SIZE {
             self.byte_code.extend(bytes);
             Some(())
         } else {
