@@ -4,6 +4,7 @@ use super::constants::MAX_FRAME_STACK;
 use super::error::*;
 use super::OpFrame;
 
+#[derive(Debug)]
 pub struct Stack {
     inner: Vec<OpFrame>,
 }

@@ -15,9 +15,8 @@ pub enum Operand {
     OpReturn = 0x13,
 
     // Crypto
-    OpCheckSigLaxMode = 0x20,
-    OpCheckSig = 0x21,
-    OpCheckMultiSig = 0x22,
+    OpCheckSig = 0x20,
+    OpCheckMultiSig = 0x21,
 }
 
 impl From<Operand> for u8 {
@@ -26,7 +25,7 @@ impl From<Operand> for u8 {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum OpFrame {
     // Push value
     False,
@@ -40,7 +39,6 @@ pub enum OpFrame {
     OpReturn,
 
     // Crypto
-    OpCheckSigLaxMode,
     OpCheckSig,
     OpCheckMultiSig(u8, u8), // M of N: minimum threshold to number of keys
 }
