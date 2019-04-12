@@ -51,7 +51,7 @@ impl From<PublicKey> for Script {
     fn from(key: PublicKey) -> Self {
         let builder = Builder::new()
             .push(OpFrame::PubKey(key))
-            .push(OpFrame::OpCheckSig);
+            .push(OpFrame::OpCheckSigFastFail);
         builder.build()
     }
 }
