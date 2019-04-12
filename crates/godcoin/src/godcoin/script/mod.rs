@@ -56,15 +56,6 @@ impl From<PublicKey> for Script {
     }
 }
 
-impl From<&PublicKey> for Script {
-    fn from(key: &PublicKey) -> Self {
-        let builder = Builder::new()
-            .push(OpFrame::PubKey(key.clone()))
-            .push(OpFrame::OpCheckSig);
-        builder.build()
-    }
-}
-
 impl<'a> Into<Cow<'a, Script>> for Script {
     #[inline]
     fn into(self) -> Cow<'a, Script> {
