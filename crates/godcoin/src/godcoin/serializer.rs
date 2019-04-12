@@ -176,7 +176,6 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
 
     #[test]
     fn test_u32_serialization() {
@@ -200,7 +199,7 @@ mod tests {
     #[test]
     fn test_asset_serialization() {
         {
-            let a = Asset::from_str("12.34 GOLD").unwrap();
+            let a = "12.34 GOLD".parse().unwrap();
             let mut v = vec![];
             v.push_asset(&a);
 

@@ -1,4 +1,4 @@
-use super::{MAX_BYTE_SIZE, op::*, Script};
+use super::{op::*, Script, MAX_BYTE_SIZE};
 
 #[derive(Default)]
 pub struct Builder {

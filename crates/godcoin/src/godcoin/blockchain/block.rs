@@ -141,10 +141,7 @@ impl Deref for SignedBlock {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use super::*;
-    use crate::asset::Asset;
     use crate::crypto::KeyPair;
 
     #[test]
@@ -155,7 +152,7 @@ mod tests {
             vec.push(TxVariant::RewardTx(RewardTx {
                 base: Tx {
                     tx_type: TxType::REWARD,
-                    fee: Asset::from_str("0 GOLD").unwrap(),
+                    fee: "0 GOLD".parse().unwrap(),
                     timestamp: 1234567890,
                     signature_pairs: Vec::new(),
                 },

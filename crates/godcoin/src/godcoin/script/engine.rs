@@ -259,10 +259,7 @@ impl<'a> ScriptEngine<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use super::*;
-    use crate::asset::Asset;
     use crate::crypto::{KeyPair, SigPair};
     use crate::tx::{SignTx, TransferTx, Tx, TxType};
 
@@ -534,7 +531,7 @@ mod tests {
                 base: Tx {
                     tx_type: TxType::TRANSFER,
                     timestamp: 1500000000,
-                    fee: Asset::from_str("1 GOLD").unwrap(),
+                    fee: "1 GOLD".parse().unwrap(),
                     signature_pairs: vec![SigPair {
                         // Test valid key with invalid signature
                         pub_key: key_2.0.clone(),
@@ -543,7 +540,7 @@ mod tests {
                 },
                 from: key_1.clone().0.into(),
                 to: to.clone().0.into(),
-                amount: Asset::from_str("10 GOLD").unwrap(),
+                amount: "10 GOLD".parse().unwrap(),
                 script: script.clone(),
                 memo: vec![],
             };
@@ -694,12 +691,12 @@ mod tests {
             base: Tx {
                 tx_type: TxType::TRANSFER,
                 timestamp: 1500000000,
-                fee: Asset::from_str("1 GOLD").unwrap(),
+                fee: "1 GOLD".parse().unwrap(),
                 signature_pairs: vec![],
             },
             from: keys[0].clone().0.into(),
             to: to.clone().0.into(),
-            amount: Asset::from_str("10 GOLD").unwrap(),
+            amount: "10 GOLD".parse().unwrap(),
             script: script.clone(),
             memo: vec![],
         };

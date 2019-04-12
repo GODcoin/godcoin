@@ -253,8 +253,6 @@ tx_sign!(TransferTx);
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use super::*;
     use crate::crypto;
 
@@ -415,6 +413,6 @@ mod tests {
     }
 
     fn get_asset(s: &str) -> Asset {
-        Asset::from_str(s).unwrap()
+        s.parse().unwrap()
     }
 }

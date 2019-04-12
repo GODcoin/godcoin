@@ -3,7 +3,6 @@ use godcoin::prelude::*;
 use log::info;
 use std::{
     mem,
-    str::FromStr,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -47,7 +46,7 @@ impl Minter {
         transactions.push(TxVariant::RewardTx(RewardTx {
             base: Tx {
                 tx_type: TxType::REWARD,
-                fee: Asset::from_str("0 GOLD").unwrap(),
+                fee: "0 GOLD".parse().unwrap(),
                 timestamp,
                 signature_pairs: Vec::new(),
             },

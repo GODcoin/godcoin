@@ -1,7 +1,6 @@
 use log::info;
 use parking_lot::Mutex;
 use std::path::*;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -13,7 +12,7 @@ pub use self::block::*;
 pub use self::index::Indexer;
 pub use self::store::BlockStore;
 
-use crate::asset::{self, Asset, Balance};
+use crate::asset::{self, Balance};
 use crate::crypto::*;
 use crate::script::*;
 use crate::tx::*;
@@ -324,7 +323,7 @@ impl Blockchain {
         let owner_tx = OwnerTx {
             base: Tx {
                 tx_type: TxType::OWNER,
-                fee: Asset::from_str("0 GOLD").unwrap(),
+                fee: "0 GOLD".parse().unwrap(),
                 timestamp,
                 signature_pairs: Vec::new(),
             },

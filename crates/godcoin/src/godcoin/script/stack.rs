@@ -1,8 +1,8 @@
 use crate::crypto::PublicKey;
 
-use super::MAX_FRAME_STACK;
 use super::error::*;
 use super::OpFrame;
+use super::MAX_FRAME_STACK;
 
 #[derive(Debug)]
 pub struct Stack {
