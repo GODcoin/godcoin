@@ -115,8 +115,7 @@ impl BlockStore {
         };
 
         let mut cursor = Cursor::<&[u8]>::new(&block_vec);
-        let block = SignedBlock::decode_with_tx(&mut cursor).unwrap();
-        Some(block)
+        Some(SignedBlock::decode_with_tx(&mut cursor).expect("failed to decode block from disk"))
     }
 
     pub fn insert(&mut self, block: SignedBlock) {
