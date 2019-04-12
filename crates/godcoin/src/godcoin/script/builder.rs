@@ -38,9 +38,17 @@ impl Builder {
             OpFrame::OpReturn => self.insert_bytes(&[Operand::OpReturn.into()])?,
             // Crypto
             OpFrame::OpCheckSig => self.insert_bytes(&[Operand::OpCheckSig.into()])?,
+            OpFrame::OpCheckSigFastFail => {
+                self.insert_bytes(&[Operand::OpCheckSigFastFail.into()])?
+            }
             OpFrame::OpCheckMultiSig(threshold, key_count) => {
                 self.insert_bytes(&[Operand::OpCheckMultiSig.into(), threshold, key_count])?
             }
+            OpFrame::OpCheckMultiSigFastFail(threshold, key_count) => self.insert_bytes(&[
+                Operand::OpCheckMultiSigFastFail.into(),
+                threshold,
+                key_count,
+            ])?,
         }
         Some(self)
     }

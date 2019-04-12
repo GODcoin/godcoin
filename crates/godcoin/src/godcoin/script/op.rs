@@ -19,7 +19,9 @@ pub enum Operand {
 
     // Crypto
     OpCheckSig = 0x30,
-    OpCheckMultiSig = 0x31,
+    OpCheckSigFastFail = 0x31,
+    OpCheckMultiSig = 0x32,
+    OpCheckMultiSigFastFail = 0x33,
 }
 
 impl From<Operand> for u8 {
@@ -46,7 +48,9 @@ pub enum OpFrame {
 
     // Crypto
     OpCheckSig,
+    OpCheckSigFastFail,
     OpCheckMultiSig(u8, u8), // M of N: minimum threshold to number of keys
+    OpCheckMultiSigFastFail(u8, u8),
 }
 
 impl From<bool> for OpFrame {

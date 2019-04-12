@@ -39,6 +39,16 @@ impl<'a> ScriptEngine<'a> {
     }
 
     pub fn eval(&mut self) -> Result<bool, EvalErr> {
+        macro_rules! pop_multisig_keys {
+            ($self:expr, $key_count:expr) => {{
+                let mut vec = Vec::with_capacity(usize::from($key_count));
+                for _ in 0..$key_count {
+                    vec.push(map_err_type!($self, $self.stack.pop_pubkey())?);
+                }
+                vec
+            }};
+        }
+
         self.pos = 0;
         let mut if_marker = 0;
         let mut ignore_else = false;
@@ -102,61 +112,24 @@ impl<'a> ScriptEngine<'a> {
                 // Crypto
                 OpFrame::OpCheckSig => {
                     let key = map_err_type!(self, self.stack.pop_pubkey())?;
-                    let mut buf = Vec::with_capacity(4096);
-                    self.tx.encode(&mut buf);
-                    let mut success = false;
-                    for pair in &self.tx.signature_pairs {
-                        if key == pair.pub_key {
-                            if key.verify(&buf, &pair.signature) {
-                                success = true;
-                            }
-                            break;
-                        }
-                    }
+                    let success = self.check_sigs(1, &[key]);
                     map_err_type!(self, self.stack.push(success))?;
                 }
+                OpFrame::OpCheckSigFastFail => {
+                    let key = map_err_type!(self, self.stack.pop_pubkey())?;
+                    if !self.check_sigs(1, &[key]) {
+                        return Ok(false);
+                    }
+                }
                 OpFrame::OpCheckMultiSig(threshold, key_count) => {
-                    // Keys need to be popped off the stack first before doing anything else
-                    // to ensure the stack is in a valid state if anything fails.
-                    let keys = {
-                        let mut vec = Vec::with_capacity(usize::from(key_count));
-                        for _ in 0..key_count {
-                            vec.push(map_err_type!(self, self.stack.pop_pubkey())?);
-                        }
-                        vec
-                    };
-
-                    if threshold == 0 {
-                        map_err_type!(self, self.stack.push(true))?;
-                        continue;
-                    } else if usize::from(threshold) > keys.len() {
-                        map_err_type!(self, self.stack.push(false))?;
-                        continue;
-                    }
-
-                    let mut buf = Vec::with_capacity(4096);
-                    self.tx.encode(&mut buf);
-
-                    let mut valid_threshold = 0;
-                    let mut success = true;
-                    'key_loop: for key in &keys {
-                        for pair in &self.tx.signature_pairs {
-                            if key == &pair.pub_key {
-                                let sig_verified = key.verify(&buf, &pair.signature);
-                                if sig_verified {
-                                    valid_threshold += 1;
-                                    continue 'key_loop;
-                                } else {
-                                    success = false;
-                                    break 'key_loop;
-                                }
-                            }
-                        }
-                    }
-                    if success {
-                        map_err_type!(self, self.stack.push(valid_threshold >= threshold))?;
-                    } else {
-                        map_err_type!(self, self.stack.push(false))?;
+                    let keys = pop_multisig_keys!(self, key_count);
+                    let success = self.check_sigs(usize::from(threshold), &keys);
+                    map_err_type!(self, self.stack.push(success))?;
+                }
+                OpFrame::OpCheckMultiSigFastFail(threshold, key_count) => {
+                    let keys = pop_multisig_keys!(self, key_count);
+                    if !self.check_sigs(usize::from(threshold), &keys) {
+                        return Ok(false);
                     }
                 }
                 // Handle push ops
@@ -193,6 +166,31 @@ impl<'a> ScriptEngine<'a> {
     }
 
     fn consume_op(&mut self) -> Result<Option<OpFrame>, EvalErr> {
+        macro_rules! read_bytes {
+            ($self:expr, $len:expr) => {
+                match $self.script.get($self.pos..$self.pos + $len) {
+                    Some(b) => {
+                        $self.pos += $len;
+                        b
+                    }
+                    None => {
+                        return Err($self.new_err(EvalErrType::UnexpectedEOF));
+                    }
+                }
+            };
+            ($self:expr) => {
+                match $self.script.get($self.pos) {
+                    Some(b) => {
+                        $self.pos += 1;
+                        *b
+                    }
+                    None => {
+                        return Err($self.new_err(EvalErrType::UnexpectedEOF));
+                    }
+                }
+            };
+        }
+
         if self.pos == self.script.len() {
             return Ok(None);
         }
@@ -204,16 +202,8 @@ impl<'a> ScriptEngine<'a> {
             o if o == Operand::PushFalse as u8 => Ok(Some(OpFrame::False)),
             o if o == Operand::PushTrue as u8 => Ok(Some(OpFrame::True)),
             o if o == Operand::PushPubKey as u8 => {
-                let slice = self.pos..self.pos + sign::PUBLICKEYBYTES;
-                let key = match self.script.get(slice) {
-                    Some(slice) => {
-                        self.pos += sign::PUBLICKEYBYTES;
-                        PublicKey::from_slice(slice).unwrap()
-                    }
-                    None => {
-                        return Err(self.new_err(EvalErrType::UnexpectedEOF));
-                    }
-                };
+                let slice = read_bytes!(self, sign::PUBLICKEYBYTES);
+                let key = PublicKey::from_slice(slice).unwrap();
                 Ok(Some(OpFrame::PubKey(key)))
             }
             // Stack manipulation
@@ -225,31 +215,51 @@ impl<'a> ScriptEngine<'a> {
             o if o == Operand::OpReturn as u8 => Ok(Some(OpFrame::OpReturn)),
             // Crypto
             o if o == Operand::OpCheckSig as u8 => Ok(Some(OpFrame::OpCheckSig)),
+            o if o == Operand::OpCheckSigFastFail as u8 => Ok(Some(OpFrame::OpCheckSigFastFail)),
             o if o == Operand::OpCheckMultiSig as u8 => {
-                let threshold = match self.script.get(self.pos) {
-                    Some(threshold) => {
-                        self.pos += 1;
-                        *threshold
-                    }
-                    None => {
-                        return Err(self.new_err(EvalErrType::UnexpectedEOF));
-                    }
-                };
-
-                let key_count = match self.script.get(self.pos) {
-                    Some(key_count) => {
-                        self.pos += 1;
-                        *key_count
-                    }
-                    None => {
-                        return Err(self.new_err(EvalErrType::UnexpectedEOF));
-                    }
-                };
-
+                let threshold = read_bytes!(self);
+                let key_count = read_bytes!(self);
                 Ok(Some(OpFrame::OpCheckMultiSig(threshold, key_count)))
+            }
+            o if o == Operand::OpCheckMultiSigFastFail as u8 => {
+                let threshold = read_bytes!(self);
+                let key_count = read_bytes!(self);
+                Ok(Some(OpFrame::OpCheckMultiSigFastFail(threshold, key_count)))
             }
             _ => Err(self.new_err(EvalErrType::UnknownOp)),
         }
+    }
+
+    fn check_sigs(&self, threshold: usize, keys: &[PublicKey]) -> bool {
+        if threshold == 0 {
+            return true;
+        } else if usize::from(threshold) > keys.len() {
+            return false;
+        }
+
+        let mut buf = Vec::with_capacity(4096);
+        self.tx.encode(&mut buf);
+
+        let mut valid_threshold = 0;
+        let mut success = true;
+        'key_loop: for key in keys {
+            for pair in &self.tx.signature_pairs {
+                if key == &pair.pub_key {
+                    let sig_verified = key.verify(&buf, &pair.signature);
+                    if sig_verified {
+                        valid_threshold += 1;
+                        continue 'key_loop;
+                    } else {
+                        success = false;
+                        break 'key_loop;
+                    }
+                }
+            }
+        }
+        if success {
+            success = valid_threshold >= threshold;
+        }
+        return success;
     }
 
     fn new_err(&self, err: EvalErrType) -> EvalErr {
@@ -674,6 +684,42 @@ mod tests {
                 .push(OpFrame::PubKey(key_2.0.clone()))
                 .push(OpFrame::PubKey(key_3.0.clone()))
                 .push(OpFrame::OpCheckMultiSig(2, 3))
+        );
+        assert!(!engine.eval().unwrap());
+    }
+
+    #[test]
+    fn checksig_and_checkmultisig_with_fast_fail() {
+        let key_0 = KeyPair::gen_keypair();
+        let key_1 = KeyPair::gen_keypair();
+        let key_2 = KeyPair::gen_keypair();
+        let key_3 = KeyPair::gen_keypair();
+
+        // Test tx must be signed with key_0 but threshold is met
+        #[rustfmt::skip]
+        let mut engine = new_engine_with_signers(
+            &[key_1.clone(), key_2.clone()],
+            Builder::new()
+                .push(OpFrame::PubKey(key_0.0.clone()))
+                .push(OpFrame::OpCheckSigFastFail)
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSig(2, 3))
+        );
+        assert!(!engine.eval().unwrap());
+
+        // Test multisig threshold not met
+        #[rustfmt::skip]
+        let mut engine = new_engine_with_signers(
+            &[key_0.clone(), key_1.clone()],
+            Builder::new()
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSigFastFail(2, 3))
+                .push(OpFrame::PubKey(key_0.0.clone()))
+                .push(OpFrame::OpCheckSig)
         );
         assert!(!engine.eval().unwrap());
     }
