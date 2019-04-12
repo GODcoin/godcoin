@@ -4,19 +4,22 @@ use crate::crypto::PublicKey;
 #[repr(u8)]
 pub enum Operand {
     // Push value
-    PushFalse = 0x0,
-    PushTrue = 0x1,
-    PushPubKey = 0x2,
+    PushFalse = 0x00,
+    PushTrue = 0x01,
+    PushPubKey = 0x02,
+
+    // Stack manipulation
+    OpNot = 0x10,
 
     // Control
-    OpIf = 0x10,
-    OpElse = 0x11,
-    OpEndIf = 0x12,
-    OpReturn = 0x13,
+    OpIf = 0x20,
+    OpElse = 0x21,
+    OpEndIf = 0x22,
+    OpReturn = 0x23,
 
     // Crypto
-    OpCheckSig = 0x20,
-    OpCheckMultiSig = 0x21,
+    OpCheckSig = 0x30,
+    OpCheckMultiSig = 0x31,
 }
 
 impl From<Operand> for u8 {
@@ -31,6 +34,9 @@ pub enum OpFrame {
     False,
     True,
     PubKey(PublicKey),
+
+    // Stack manipulation
+    OpNot,
 
     // Control
     OpIf,

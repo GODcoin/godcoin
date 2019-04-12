@@ -44,6 +44,11 @@ impl<'a> ScriptEngine<'a> {
         let mut ignore_else = false;
         while let Some(op) = self.consume_op()? {
             match op {
+                // Stack manipulation
+                OpFrame::OpNot => {
+                    let b = map_err_type!(self, self.stack.pop_bool())?;
+                    map_err_type!(self, self.stack.push(!b))?;
+                }
                 // Control
                 OpFrame::OpIf => {
                     if_marker += 1;
@@ -195,6 +200,7 @@ impl<'a> ScriptEngine<'a> {
         self.pos += 1;
 
         match byte {
+            // Push value
             o if o == Operand::PushFalse as u8 => Ok(Some(OpFrame::False)),
             o if o == Operand::PushTrue as u8 => Ok(Some(OpFrame::True)),
             o if o == Operand::PushPubKey as u8 => {
@@ -210,10 +216,14 @@ impl<'a> ScriptEngine<'a> {
                 };
                 Ok(Some(OpFrame::PubKey(key)))
             }
+            // Stack manipulation
+            o if o == Operand::OpNot as u8 => Ok(Some(OpFrame::OpNot)),
+            // Control
             o if o == Operand::OpIf as u8 => Ok(Some(OpFrame::OpIf)),
             o if o == Operand::OpElse as u8 => Ok(Some(OpFrame::OpElse)),
             o if o == Operand::OpEndIf as u8 => Ok(Some(OpFrame::OpEndIf)),
             o if o == Operand::OpReturn as u8 => Ok(Some(OpFrame::OpReturn)),
+            // Crypto
             o if o == Operand::OpCheckSig as u8 => Ok(Some(OpFrame::OpCheckSig)),
             o if o == Operand::OpCheckMultiSig as u8 => {
                 let threshold = match self.script.get(self.pos) {
@@ -545,7 +555,7 @@ mod tests {
     }
 
     #[test]
-    fn checksig_and_checkmultisig() {
+    fn checksig_and_checkmultisig_with_if() {
         let key_0 = KeyPair::gen_keypair();
         let key_1 = KeyPair::gen_keypair();
         let key_2 = KeyPair::gen_keypair();
@@ -602,6 +612,71 @@ mod tests {
                     .push(OpFrame::OpReturn)
                 .push(OpFrame::OpEndIf)
                 .push(OpFrame::False),
+        );
+        assert!(!engine.eval().unwrap());
+    }
+
+    #[test]
+    fn checksig_and_checkmultisig_with_if_not() {
+        let key_0 = KeyPair::gen_keypair();
+        let key_1 = KeyPair::gen_keypair();
+        let key_2 = KeyPair::gen_keypair();
+        let key_3 = KeyPair::gen_keypair();
+
+        // Test threshold is met and tx is signed with key_0
+        #[rustfmt::skip]
+        let mut engine = new_engine_with_signers(
+            &[key_0.clone(), key_1.clone(), key_2.clone()],
+            Builder::new()
+                .push(OpFrame::PubKey(key_0.0.clone()))
+                .push(OpFrame::OpCheckSig)
+                .push(OpFrame::OpNot)
+                .push(OpFrame::OpIf)
+                    .push(OpFrame::False)
+                    .push(OpFrame::OpReturn)
+                .push(OpFrame::OpEndIf)
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSig(2, 3))
+        );
+        assert!(engine.eval().unwrap());
+
+        // Test tx must be signed with key_0 but threshold is met
+        #[rustfmt::skip]
+        let mut engine = new_engine_with_signers(
+            &[key_1.clone(), key_2.clone()],
+            Builder::new()
+                .push(OpFrame::PubKey(key_0.0.clone()))
+                .push(OpFrame::OpCheckSig)
+                .push(OpFrame::OpNot)
+                .push(OpFrame::OpIf)
+                    .push(OpFrame::False)
+                    .push(OpFrame::OpReturn)
+                .push(OpFrame::OpEndIf)
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSig(2, 3))
+        );
+        assert!(!engine.eval().unwrap());
+
+        // Test multisig threshold not met
+        #[rustfmt::skip]
+        let mut engine = new_engine_with_signers(
+            &[key_0.clone(), key_1.clone()],
+            Builder::new()
+                .push(OpFrame::PubKey(key_0.0.clone()))
+                .push(OpFrame::OpCheckSig)
+                .push(OpFrame::OpNot)
+                .push(OpFrame::OpIf)
+                    .push(OpFrame::False)
+                    .push(OpFrame::OpReturn)
+                .push(OpFrame::OpEndIf)
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSig(2, 3))
         );
         assert!(!engine.eval().unwrap());
     }
