@@ -1,12 +1,12 @@
-use serde::{Serialize, Serializer, Deserialize};
 use actix_web::HttpResponse;
+use serde::{Deserialize, Serialize, Serializer};
 
 #[derive(Debug, Deserialize)]
 pub struct Request {
     pub jsonrpc: String,
     pub id: Option<u32>,
     pub method: String,
-    pub params: Option<Vec<serde_json::Value>>
+    pub params: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -62,7 +62,7 @@ pub struct ErrorInfo {
     pub code: ErrCode,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub data: Option<serde_json::Value>
+    pub data: Option<serde_json::Value>,
 }
 
 impl ErrorInfo {
@@ -100,8 +100,9 @@ impl Into<ErrorInfo> for ErrCode {
             ErrCode::InvalidReq => "invalid request",
             ErrCode::MethodNotFound => "method not found",
             ErrCode::InvalidParams => "parameters unacceptable for method",
-            ErrCode::InternalError => "an unknown error has occurred"
-        }.to_owned();
+            ErrCode::InternalError => "an unknown error has occurred",
+        }
+        .to_owned();
         ErrorInfo {
             code: self,
             message,

@@ -8,17 +8,45 @@ use std::{
     path::{Path, PathBuf},
 };
 
-mod minter;
 mod jsonrpc;
 mod method;
+mod minter;
 
-use minter::Minter;
 use jsonrpc::*;
+use minter::Minter;
 
 fn index(body: String) -> HttpResponse {
-    let request = serde_json::from_str::<jsonrpc::Request>(&body);
-    match request {
-        Ok(request) => method::process_req(request),
+    let value = serde_json::from_str::<serde_json::Value>(&body);
+    match value {
+        Ok(value) => match value {
+            serde_json::Value::Object(_) => {
+                let val = method::process_req_value(value);
+                if let Some(val) = val {
+                    let json =
+                        serde_json::to_string(&val).expect("failed to convert value to string");
+                    HttpResponse::Ok().body(json).into()
+                } else {
+                    HttpResponse::Ok().into()
+                }
+            }
+            serde_json::Value::Array(array) => {
+                let mut vec = Vec::with_capacity(array.len());
+                for value in array {
+                    let val = method::process_req_value(value);
+                    if let Some(val) = val {
+                        vec.push(val);
+                    }
+                }
+
+                let json = serde_json::to_string(&vec).expect("failed to convert value to string");
+                HttpResponse::Ok().body(json).into()
+            }
+            _ => {
+                let msg = "expected object or array".to_owned();
+                let info = ErrorInfo::new(ErrCode::InvalidReq, msg);
+                ErrResponse::new(None, info).into()
+            }
+        },
         Err(e) => {
             use serde_json::error::Category;
             let code = match e.classify() {
