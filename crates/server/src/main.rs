@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use actix_web::{middleware, server, App, HttpRequest, HttpResponse};
+use actix_web::{http, middleware, server, App, HttpRequest, HttpResponse};
 use env_logger::{Env, DEFAULT_FILTER_ENV};
 use godcoin::prelude::*;
 use log::info;
@@ -9,10 +9,27 @@ use std::{
 };
 
 mod minter;
-use minter::Minter;
+mod jsonrpc;
+mod method;
 
-fn index(_: HttpRequest) -> HttpResponse {
-    HttpResponse::Ok().body("Hello world")
+use minter::Minter;
+use jsonrpc::*;
+
+fn index(body: String) -> HttpResponse {
+    let request = serde_json::from_str::<jsonrpc::Request>(&body);
+    match request {
+        Ok(request) => method::process_req(request),
+        Err(e) => {
+            use serde_json::error::Category;
+            let code = match e.classify() {
+                Category::Syntax | Category::Eof => ErrCode::ParseError,
+                Category::Data => ErrCode::InvalidReq,
+                _ => ErrCode::InternalError,
+            };
+            let info = ErrorInfo::new(code, e.to_string());
+            ErrResponse::new(None, info).into()
+        }
+    }
 }
 
 fn main() {
@@ -60,7 +77,12 @@ fn main() {
     server::HttpServer::new(|| {
         App::new()
             .middleware(middleware::Logger::new(r#"%a "%r" %s %T"#))
-            .resource("/", |r| r.with(index))
+            .resource("/", |r| {
+                r.method(http::Method::POST).with_config(index, |cfg| {
+                    // Limit 64 KiB
+                    cfg.0.limit(65536);
+                })
+            })
             .default_resource(|r| {
                 r.with(|_: HttpRequest| HttpResponse::NotFound().body("Not found"))
             })
