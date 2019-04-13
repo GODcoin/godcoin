@@ -85,6 +85,7 @@ impl ErrorInfo {
 
 #[derive(Copy, Clone, Debug)]
 #[repr(i32)]
+#[allow(dead_code)]
 pub enum ErrCode {
     ParseError = -32700,
     InvalidReq = -32600,
