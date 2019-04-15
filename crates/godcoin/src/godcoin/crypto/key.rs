@@ -105,7 +105,7 @@ impl AsRef<[u8]> for PublicKey {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PrivateKey {
     seed: sign::Seed,
     key: sign::SecretKey,
