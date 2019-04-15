@@ -1,11 +1,11 @@
 use clap::{App, AppSettings, SubCommand};
-use log::error;
-use std::sync::mpsc;
-use tokio::prelude::*;
+use std::{path::{PathBuf, Path}, env};
 
 mod keypair;
+mod wallet;
 
 use self::keypair::*;
+use self::wallet::*;
 
 fn main() {
     let env = env_logger::Env::new().filter_or(env_logger::DEFAULT_FILTER_ENV, "godcoin=info");
@@ -17,39 +17,34 @@ fn main() {
         .version(env!("CARGO_PKG_VERSION"))
         .setting(AppSettings::VersionlessSubcommands)
         .setting(AppSettings::SubcommandRequiredElseHelp)
-        .subcommand(SubCommand::with_name("keygen").about("Generates a keypair"));
+        .subcommand(SubCommand::with_name("keygen").about("Generates a keypair"))
+        .subcommand(SubCommand::with_name("wallet").about("Opens the GODcoin CLI wallet"));
     let matches = app.get_matches();
 
-    let (tx, rx) = mpsc::channel::<()>();
-    let mut rt = tokio::runtime::Runtime::new().unwrap();
-
-    {
-        let tx = tx.clone();
-        rt.block_on(
-            future::lazy(move || {
-                use ::std::io::{Error, ErrorKind};
-
-                if matches.subcommand_matches("keygen").is_some() {
-                    generate_keypair(&tx);
-                } else {
-                    return Err(Error::new(ErrorKind::Other, "Failed to match subcommand"));
+    if matches.subcommand_matches("keygen").is_some() {
+        generate_keypair();
+    } else if matches.subcommand_matches("wallet").is_some() {
+        let home: PathBuf = {
+            let home = {
+                use dirs;
+                match env::var("GODCOIN_HOME") {
+                    Ok(s) => PathBuf::from(s),
+                    Err(_) => Path::join(&dirs::data_local_dir().unwrap(), "godcoin"),
                 }
+            };
+            if !Path::is_dir(&home) {
+                let res = std::fs::create_dir(&home);
+                res.unwrap_or_else(|_| panic!("Failed to create dir at {:?}", &home));
+                println!("Created GODcoin home at {:?}", &home);
+            } else {
+                println!("Found GODcoin home at {:?}", &home);
+            }
+            home
+        };
 
-                Ok(())
-            })
-            .map_err(|err| {
-                error!("Startup failure: {:?}", err);
-            }),
-        )
-        .unwrap();
+        Wallet::new(home).start();
+    } else {
+        println!("Failed to match subcommand");
+        std::process::exit(1);
     }
-
-    ctrlc::set_handler(move || {
-        println!("Received ctrl-c signal, shutting down...");
-        tx.send(()).unwrap();
-    })
-    .unwrap();
-
-    rx.recv().unwrap();
-    rt.shutdown_now().wait().ok().unwrap();
 }

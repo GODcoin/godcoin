@@ -5,11 +5,13 @@ authors = ["Samuel Grenier <samrg472@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-ctrlc = "3.1.1"
 dirs = "1.0.5"
 env_logger = "0.6.1"
 godcoin = { path = "../godcoin" }
 log = "0.4.6"
+rustyline = "3.0.0"
+rocksdb = "0.12.1"
+sodiumoxide = { version = "0.2.1", default-features = false, features = ["std"] }
 tokio = "0.1.18"
 
 [dependencies.clap]
