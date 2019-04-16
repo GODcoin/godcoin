@@ -5,7 +5,8 @@ authors = ["Samuel Grenier <samrg472@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-actix = "0.7.9"
+actix = "=0.7.9"
+bytes = "0.4.12"
 dirs = "1.0.5"
 env_logger = "0.6.1"
 godcoin = { path = "../godcoin" }

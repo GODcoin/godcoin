@@ -4,10 +4,11 @@ use log::info;
 use std::{
     mem,
     time::{Duration, SystemTime, UNIX_EPOCH},
+    sync::Arc,
 };
 
 pub struct Minter {
-    chain: Blockchain,
+    chain: Arc<Blockchain>,
     minter_key: KeyPair,
     wallet_addr: ScriptHash,
     txs: Vec<TxVariant>,
@@ -25,7 +26,7 @@ impl Actor for Minter {
 }
 
 impl Minter {
-    pub fn new(chain: Blockchain, minter_key: KeyPair, wallet_addr: ScriptHash) -> Self {
+    pub fn new(chain: Arc<Blockchain>, minter_key: KeyPair, wallet_addr: ScriptHash) -> Self {
         Self {
             chain,
             minter_key,
