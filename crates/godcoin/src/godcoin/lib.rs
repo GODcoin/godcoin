@@ -7,6 +7,7 @@ pub mod tx;
 
 pub mod blockchain;
 pub mod constants;
+pub mod net;
 pub mod script;
 pub mod serializer;
 

@@ -3,8 +3,8 @@ use godcoin::prelude::*;
 use log::info;
 use std::{
     mem,
-    time::{Duration, SystemTime, UNIX_EPOCH},
     sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 pub struct Minter {

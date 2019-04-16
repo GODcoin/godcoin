@@ -1,5 +1,8 @@
 use clap::{App, AppSettings, SubCommand};
-use std::{path::{PathBuf, Path}, env};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 mod keypair;
 mod wallet;
