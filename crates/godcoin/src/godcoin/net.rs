@@ -13,11 +13,13 @@ pub enum MsgRequest {
 }
 
 impl MsgRequest {
-    pub fn serialize(&self, bytes: &mut Vec<u8>) {
+    pub fn serialize(self) -> Vec<u8> {
         match self {
             MsgRequest::GetBlock(height) => {
-                bytes.push(MsgType::GetBlock as u8);
-                bytes.push_u64(*height);
+                let mut buf = Vec::with_capacity(9);
+                buf.push(MsgType::GetBlock as u8);
+                buf.push_u64(height);
+                buf
             }
         }
     }
@@ -37,6 +39,7 @@ impl MsgRequest {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
 #[repr(u16)]
 pub enum ErrorKind {
     UnknownError = 0,
@@ -55,6 +58,7 @@ impl TryFrom<u16> for ErrorKind {
     }
 }
 
+#[derive(Clone, Debug)]
 pub enum MsgResponse {
     Error(ErrorKind, Option<String>), // code, message
     GetBlock(SignedBlock),
