@@ -208,7 +208,7 @@ impl Wallet {
                         let res = MsgResponse::deserialize(&mut cursor).map_err(|e| {
                             format!("Failed to deserialize response: {}", e)
                         })?;
-                        println!("{:?}", res);
+                        println!("{:#?}", res);
                     },
                     Err(e) => {
                         return Err(format!("{}", e))
