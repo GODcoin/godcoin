@@ -1,6 +1,6 @@
 use crate::{prelude::SignedBlock, serializer::*};
 use std::convert::{TryFrom, TryInto};
-use std::io::{self, Cursor, Error, Read};
+use std::io::{self, Cursor, Error};
 
 #[repr(u8)]
 pub enum MsgType {
@@ -98,9 +98,8 @@ impl MsgResponse {
             t if t == MsgType::Error as u8 => {
                 let kind = cursor.take_u16()?.try_into()?;
                 let msg = {
-                    let mut buf = Vec::with_capacity(1024);
-                    let read = cursor.read_to_end(&mut buf)?;
-                    if read > 0 {
+                    let buf = cursor.take_bytes()?;
+                    if buf.len() > 0 {
                         Some(String::from_utf8_lossy(&buf).into_owned())
                     } else {
                         None
