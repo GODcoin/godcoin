@@ -20,7 +20,7 @@ pub struct PrivateWif(Box<str>);
 
 impl fmt::Display for PrivateWif {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", &*self.0)
+        fmt::Display::fmt(&self.0, f)
     }
 }
 
@@ -39,7 +39,7 @@ impl std::ops::Drop for PrivateWif {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct PublicKey(pub(crate) sign::PublicKey);
 
 impl PublicKey {
@@ -102,6 +102,12 @@ impl Wif<PublicKey, Box<str>> for PublicKey {
 impl AsRef<[u8]> for PublicKey {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
+    }
+}
+
+impl fmt::Debug for PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&self.0, f)
     }
 }
 
