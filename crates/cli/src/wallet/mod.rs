@@ -1,6 +1,7 @@
-use godcoin::prelude::{KeyPair, PrivateKey, Wif};
+use godcoin::{net::*, prelude::{KeyPair, PrivateKey, Wif}};
 use rustyline::{error::ReadlineError, Editor};
-use std::path::PathBuf;
+use std::{path::PathBuf, io::{Read, Cursor}};
+use reqwest::{Url, Client};
 
 mod db;
 mod parser;
@@ -25,6 +26,7 @@ macro_rules! check_args {
 
 pub struct Wallet {
     prompt: String,
+    url: Url,
     db: Db,
 }
 
@@ -37,7 +39,7 @@ impl Wallet {
             "new>> "
         })
         .to_owned();
-        Wallet { db, prompt }
+        Wallet { db, prompt, url: "http://localhost:7777".parse().unwrap() }
     }
 
     pub fn start(mut self) {
@@ -54,18 +56,20 @@ impl Wallet {
                     match self.process_line(&mut args) {
                         Ok(store_history) => {
                             if store_history {
-                                rl.add_history_entry(line.as_ref());
+                                rl.add_history_entry(line);
+                            } else {
+                                sodiumoxide::utils::memzero(&mut line.into_bytes());
                             }
                         }
                         Err(s) => {
                             println!("{}", s);
+                            sodiumoxide::utils::memzero(&mut line.into_bytes());
                         }
                     }
 
                     for a in args {
                         sodiumoxide::utils::memzero(&mut a.into_bytes());
                     }
-                    sodiumoxide::utils::memzero(&mut line.into_bytes());
                 }
                 Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
                     println!("Closing walllet...");
@@ -182,6 +186,33 @@ impl Wallet {
                 println!("Accounts:");
                 for (acc, key) in self.db.get_accounts() {
                     println!("  {} => {}", acc, key.0.to_wif());
+                }
+            }
+            "get_block" => {
+                check_args!(args, 2);
+                let height: u64 = args[1].parse().map_err(|_| {
+                    "Failed to parse height argument".to_owned()
+                })?;
+                let client = Client::new();
+                let res = client.post(self.url.clone())
+                    .body(MsgRequest::GetBlock(height).serialize())
+                    .send();
+                match res {
+                    Ok(mut res) => {
+                        let len = res.content_length().unwrap_or(0);
+                        let mut content = Vec::with_capacity(len as usize);
+                        res.read_to_end(&mut content).map_err(|e| {
+                            format!("{}", e)
+                        })?;
+                        let mut cursor = Cursor::<&[u8]>::new(&content);
+                        let res = MsgResponse::deserialize(&mut cursor).map_err(|e| {
+                            format!("Failed to deserialize response: {}", e)
+                        })?;
+                        println!("{:?}", res);
+                    },
+                    Err(e) => {
+                        return Err(format!("{}", e))
+                    }
                 }
             }
             "help" => {

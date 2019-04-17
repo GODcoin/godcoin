@@ -9,6 +9,7 @@ dirs = "1.0.5"
 env_logger = "0.6.1"
 godcoin = { path = "../godcoin" }
 log = "0.4.6"
+reqwest = "0.9.15"
 rustyline = "3.0.0"
 rocksdb = "0.12.1"
 sodiumoxide = { version = "0.2.1", default-features = false, features = ["std"] }
