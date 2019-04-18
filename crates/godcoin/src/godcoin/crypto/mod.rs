@@ -42,10 +42,11 @@ impl AsRef<[u8]> for Digest {
 
 impl Debug for Digest {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        f.write_str("Digest(\"")?;
         for x in self.as_ref() {
             write!(f, "{:x}", x)?;
         }
-        Ok(())
+        f.write_str("\")")
     }
 }
 

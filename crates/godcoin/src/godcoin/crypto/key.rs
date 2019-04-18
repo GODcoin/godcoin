@@ -107,7 +107,7 @@ impl AsRef<[u8]> for PublicKey {
 
 impl fmt::Debug for PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
+        write!(f, "PublicKey({:?})", self.to_wif())
     }
 }
 
