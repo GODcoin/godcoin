@@ -1,6 +1,8 @@
 use crate::crypto::PublicKey;
-use std::borrow::Cow;
-use std::ops::Deref;
+use std::{
+    borrow::Cow,
+    ops::Deref,
+};
 
 pub mod builder;
 pub mod engine;
@@ -67,6 +69,13 @@ impl<'a> Into<Cow<'a, Script>> for &'a Script {
     #[inline]
     fn into(self) -> Cow<'a, Script> {
         Cow::Borrowed(self)
+    }
+}
+
+impl AsRef<[u8]> for Script {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 
