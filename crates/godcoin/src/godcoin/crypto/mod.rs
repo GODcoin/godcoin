@@ -42,11 +42,18 @@ impl AsRef<[u8]> for Digest {
 
 impl Debug for Digest {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        f.write_str("Digest(\"")?;
-        for x in self.as_ref() {
-            write!(f, "{:x}", x)?;
-        }
-        f.write_str("\")")
+        use fmt::Write;
+
+        let digest: String = {
+            let bytes = self.as_ref();
+            let mut s = String::with_capacity(bytes.len() * 2);
+            for x in self.as_ref() {
+                write!(s, "{:x}", x)?;
+            }
+            s
+        };
+
+        f.debug_tuple("Digest").field(&digest).finish()
     }
 }
 

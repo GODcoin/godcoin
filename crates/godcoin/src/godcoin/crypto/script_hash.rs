@@ -1,5 +1,5 @@
 use super::*;
-use crate::crypto::{double_sha256, PublicKey, Digest};
+use crate::crypto::{double_sha256, Digest, PublicKey};
 use crate::script::Script;
 
 pub const SCRIPT_HASH_BUF_PREFIX: u8 = 0x03;

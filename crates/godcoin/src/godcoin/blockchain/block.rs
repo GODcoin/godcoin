@@ -2,7 +2,7 @@ use std::io::Cursor;
 use std::ops::Deref;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::crypto::{self, double_sha256, KeyPair, Digest};
+use crate::crypto::{self, double_sha256, Digest, KeyPair};
 use crate::serializer::*;
 use crate::tx::*;
 
