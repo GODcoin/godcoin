@@ -1,7 +1,13 @@
-use godcoin::{net::*, prelude::{KeyPair, PrivateKey, Wif}};
+use godcoin::{
+    net::*,
+    prelude::{KeyPair, PrivateKey, Wif},
+};
+use reqwest::{Client, Url};
 use rustyline::{error::ReadlineError, Editor};
-use std::{path::PathBuf, io::{Read, Cursor}};
-use reqwest::{Url, Client};
+use std::{
+    io::{Cursor, Read},
+    path::PathBuf,
+};
 
 mod db;
 mod parser;
@@ -39,7 +45,11 @@ impl Wallet {
             "new>> "
         })
         .to_owned();
-        Wallet { db, prompt, url: "http://localhost:7777".parse().unwrap() }
+        Wallet {
+            db,
+            prompt,
+            url: "http://localhost:7777".parse().unwrap(),
+        }
     }
 
     pub fn start(mut self) {
@@ -190,29 +200,26 @@ impl Wallet {
             }
             "get_block" => {
                 check_args!(args, 2);
-                let height: u64 = args[1].parse().map_err(|_| {
-                    "Failed to parse height argument".to_owned()
-                })?;
+                let height: u64 = args[1]
+                    .parse()
+                    .map_err(|_| "Failed to parse height argument".to_owned())?;
                 let client = Client::new();
-                let res = client.post(self.url.clone())
+                let res = client
+                    .post(self.url.clone())
                     .body(MsgRequest::GetBlock(height).serialize())
                     .send();
                 match res {
                     Ok(mut res) => {
                         let len = res.content_length().unwrap_or(0);
                         let mut content = Vec::with_capacity(len as usize);
-                        res.read_to_end(&mut content).map_err(|e| {
-                            format!("{}", e)
-                        })?;
+                        res.read_to_end(&mut content)
+                            .map_err(|e| format!("{}", e))?;
                         let mut cursor = Cursor::<&[u8]>::new(&content);
-                        let res = MsgResponse::deserialize(&mut cursor).map_err(|e| {
-                            format!("Failed to deserialize response: {}", e)
-                        })?;
+                        let res = MsgResponse::deserialize(&mut cursor)
+                            .map_err(|e| format!("Failed to deserialize response: {}", e))?;
                         println!("{:#?}", res);
-                    },
-                    Err(e) => {
-                        return Err(format!("{}", e))
                     }
+                    Err(e) => return Err(format!("{}", e)),
                 }
             }
             "help" => {
