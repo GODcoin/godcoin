@@ -233,7 +233,7 @@ impl<'a> ScriptEngine<'a> {
     fn check_sigs(&self, threshold: usize, keys: &[PublicKey]) -> bool {
         if threshold == 0 {
             return true;
-        } else if usize::from(threshold) > keys.len() {
+        } else if threshold > keys.len() {
             return false;
         }
 
@@ -259,7 +259,7 @@ impl<'a> ScriptEngine<'a> {
         if success {
             success = valid_threshold >= threshold;
         }
-        return success;
+        success
     }
 
     fn new_err(&self, err: EvalErrType) -> EvalErr {

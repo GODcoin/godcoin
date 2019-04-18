@@ -94,7 +94,7 @@ impl Wallet {
     }
 
     fn process_line(&mut self, args: &mut Vec<String>) -> Result<bool, String> {
-        if args.len() == 0 {
+        if args.is_empty() {
             return Ok(false);
         }
         match &*args[0] {
@@ -263,6 +263,6 @@ impl Wallet {
             }
             println!("  {}  {}", c, cmd[1]);
         }
-        println!("");
+        println!();
     }
 }

@@ -99,10 +99,10 @@ impl MsgResponse {
                 let kind = cursor.take_u16()?.try_into()?;
                 let msg = {
                     let buf = cursor.take_bytes()?;
-                    if buf.len() > 0 {
-                        Some(String::from_utf8_lossy(&buf).into_owned())
-                    } else {
+                    if buf.is_empty() {
                         None
+                    } else {
+                        Some(String::from_utf8_lossy(&buf).into_owned())
                     }
                 };
                 Ok(MsgResponse::Error(kind, msg))
