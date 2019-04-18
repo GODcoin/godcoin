@@ -1,10 +1,8 @@
-use sodiumoxide::crypto::hash::sha256::Digest;
 use std::io::Cursor;
 use std::ops::Deref;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::crypto;
-use crate::crypto::{double_sha256, KeyPair};
+use crate::crypto::{self, double_sha256, KeyPair, Digest};
 use crate::serializer::*;
 use crate::tx::*;
 

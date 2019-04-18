@@ -304,7 +304,7 @@ impl Blockchain {
     }
 
     pub fn create_genesis_block(&self, minter_key: &KeyPair) {
-        use sodiumoxide::crypto::hash::sha256::Digest;
+        use crate::crypto::Digest;
         use std::time::{SystemTime, UNIX_EPOCH};
 
         let wallet_key_1 = KeyPair::gen_keypair();
