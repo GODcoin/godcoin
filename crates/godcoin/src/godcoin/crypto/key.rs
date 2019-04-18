@@ -3,9 +3,9 @@ use sodiumoxide::crypto::sign;
 use sodiumoxide::randombytes;
 use std::fmt;
 
+use super::double_sha256;
 use super::error::*;
 use super::sigpair::*;
-use super::util::*;
 
 pub const PUB_ADDRESS_PREFIX: &str = "GOD";
 const PRIV_BUF_PREFIX: u8 = 0x01;
