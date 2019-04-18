@@ -3,9 +3,9 @@ use sodiumoxide::crypto::sign;
 use sodiumoxide::randombytes;
 use std::fmt;
 
-use super::double_sha256;
 use super::error::*;
 use super::sigpair::*;
+use super::{double_sha256, Signature};
 
 pub const PUB_ADDRESS_PREFIX: &str = "GOD";
 const PRIV_BUF_PREFIX: u8 = 0x01;
@@ -44,8 +44,8 @@ pub struct PublicKey(pub(crate) sign::PublicKey);
 
 impl PublicKey {
     #[inline]
-    pub fn verify(&self, msg: &[u8], sig: &sign::Signature) -> bool {
-        sign::verify_detached(sig, msg, &self.0)
+    pub fn verify(&self, msg: &[u8], sig: &Signature) -> bool {
+        sign::verify_detached(&sig.0, msg, &self.0)
     }
 
     #[inline]
@@ -119,8 +119,8 @@ pub struct PrivateKey {
 
 impl PrivateKey {
     #[inline]
-    pub fn sign(&self, msg: &[u8]) -> sign::Signature {
-        sign::sign_detached(msg, &self.key)
+    pub fn sign(&self, msg: &[u8]) -> Signature {
+        Signature(sign::sign_detached(msg, &self.key))
     }
 
     #[inline]
@@ -185,7 +185,7 @@ impl KeyPair {
     }
 
     #[inline]
-    pub fn verify(&self, msg: &[u8], sig: &sign::Signature) -> bool {
+    pub fn verify(&self, msg: &[u8], sig: &Signature) -> bool {
         PublicKey::verify(&self.0, msg, sig)
     }
 
@@ -286,17 +286,17 @@ mod tests {
         let msg = "Hello world!".as_bytes();
         let kp = KeyPair::gen_keypair();
 
-        let sig = &kp.1.sign(msg);
-        assert!(kp.0.verify(msg, sig));
+        let sig = kp.1.sign(msg);
+        assert!(kp.0.verify(msg, &sig));
 
         let pair = SigPair {
             pub_key: kp.0,
-            signature: *sig,
+            signature: sig.clone(),
         };
         assert!(pair.verify(msg));
 
         // Test bad keys
         let kp = KeyPair::gen_keypair();
-        assert!(!kp.verify(msg, sig));
+        assert!(!kp.verify(msg, &sig));
     }
 }

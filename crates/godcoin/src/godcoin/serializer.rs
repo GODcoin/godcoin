@@ -1,8 +1,7 @@
-use sodiumoxide::crypto::sign::Signature;
 use std::io::{Cursor, Error, ErrorKind, Read};
 
 use crate::asset::{Asset, AssetSymbol};
-use crate::crypto::{PublicKey, ScriptHash, SigPair};
+use crate::crypto::{PublicKey, ScriptHash, SigPair, Signature};
 
 pub trait BufWrite {
     fn push_u16(&mut self, num: u16);

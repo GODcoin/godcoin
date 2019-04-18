@@ -270,7 +270,7 @@ impl<'a> ScriptEngine<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::{KeyPair, SigPair};
+    use crate::crypto::{KeyPair, SigPair, Signature};
     use crate::tx::{SignTx, TransferTx, Tx, TxType};
 
     #[test]
@@ -545,7 +545,7 @@ mod tests {
                     signature_pairs: vec![SigPair {
                         // Test valid key with invalid signature
                         pub_key: key_2.0.clone(),
-                        signature: sign::Signature([0; sign::SIGNATUREBYTES]),
+                        signature: Signature(sign::Signature([0; sign::SIGNATUREBYTES])),
                     }],
                 },
                 from: key_1.clone().0.into(),
