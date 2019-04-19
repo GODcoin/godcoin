@@ -1,8 +1,5 @@
 use crate::crypto::PublicKey;
-use std::{
-    borrow::Cow,
-    ops::Deref,
-};
+use std::{borrow::Cow, ops::Deref};
 
 pub mod builder;
 pub mod engine;

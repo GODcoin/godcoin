@@ -94,9 +94,8 @@ impl Indexer {
         let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
         let bal_buf = self.db.get_cf(cf, hash.as_ref()).unwrap()?;
         let cur = &mut Cursor::<&[u8]>::new(&bal_buf);
-        let gold = cur.take_asset().unwrap();
-        let silver = cur.take_asset().unwrap();
-        Some(Balance { gold, silver })
+        let bal = cur.take_balance().unwrap();
+        Some(bal)
     }
 
     pub fn set_balance(&self, hash: &ScriptHash, bal: &Balance) {
@@ -104,8 +103,7 @@ impl Indexer {
         let key = hash.as_ref();
         let val = {
             let mut vec = Vec::with_capacity(mem::size_of::<Balance>());
-            vec.push_asset(&bal.gold);
-            vec.push_asset(&bal.silver);
+            vec.push_balance(bal);
             vec
         };
         self.db.put_cf(cf, key, &val).unwrap();
@@ -116,9 +114,7 @@ impl Indexer {
         match bal_buf {
             Some(bal_buf) => {
                 let cur = &mut Cursor::<&[u8]>::new(&bal_buf);
-                let gold = cur.take_asset().unwrap();
-                let silver = cur.take_asset().unwrap();
-                Balance { gold, silver }
+                cur.take_balance().unwrap()
             }
             None => Balance::default(),
         }
@@ -127,8 +123,7 @@ impl Indexer {
     pub fn set_token_supply(&self, bal: &Balance) {
         let val = {
             let mut vec = Vec::with_capacity(mem::size_of::<Balance>());
-            vec.push_asset(&bal.gold);
-            vec.push_asset(&bal.silver);
+            vec.push_balance(bal);
             vec
         };
         self.db.put(KEY_TOKEN_SUPPLY, &val).unwrap();

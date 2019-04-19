@@ -1,6 +1,6 @@
 use std::io::{Cursor, Error, ErrorKind, Read};
 
-use crate::asset::{Asset, AssetSymbol};
+use crate::asset::{Asset, AssetSymbol, Balance};
 use crate::crypto::{PublicKey, ScriptHash, SigPair, Signature};
 
 pub trait BufWrite {
@@ -13,6 +13,7 @@ pub trait BufWrite {
     fn push_script_hash(&mut self, hash: &ScriptHash);
     fn push_sig_pair(&mut self, pair: &SigPair);
     fn push_asset(&mut self, asset: &Asset);
+    fn push_balance(&mut self, bal: &Balance);
 }
 
 impl BufWrite for Vec<u8> {
@@ -77,6 +78,11 @@ impl BufWrite for Vec<u8> {
         self.push(asset.decimals);
         self.push(asset.symbol as u8);
     }
+
+    fn push_balance(&mut self, bal: &Balance) {
+        self.push_asset(&bal.gold);
+        self.push_asset(&bal.silver);
+    }
 }
 
 pub trait BufRead {
@@ -90,6 +96,7 @@ pub trait BufRead {
     fn take_script_hash(&mut self) -> Result<ScriptHash, Error>;
     fn take_sig_pair(&mut self) -> Result<SigPair, Error>;
     fn take_asset(&mut self) -> Result<Asset, Error>;
+    fn take_balance(&mut self) -> Result<Balance, Error>;
 }
 
 impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
@@ -169,6 +176,14 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
         };
         Asset::checked_new(amount, decimals, symbol)
             .ok_or_else(|| Error::new(ErrorKind::Other, "invalid asset"))
+    }
+
+    fn take_balance(&mut self) -> Result<Balance, Error> {
+        let gold = self.take_asset()?;
+        let silver = self.take_asset()?;
+        debug_assert_eq!(gold.symbol, AssetSymbol::GOLD);
+        debug_assert_eq!(silver.symbol, AssetSymbol::SILVER);
+        Ok(Balance { gold, silver })
     }
 }
 
