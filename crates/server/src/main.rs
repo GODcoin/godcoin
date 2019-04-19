@@ -23,9 +23,14 @@ struct AppState {
 fn index(req: HttpRequest<AppState>, body: bytes::Bytes) -> HttpResponse {
     match MsgRequest::deserialize(&mut Cursor::new(&body)) {
         Ok(msg_req) => match msg_req {
+            MsgRequest::GetProperties => {
+                let chain = &req.state().chain;
+                let props = chain.get_properties();
+                MsgResponse::GetProperties(props).into_res()
+            }
             MsgRequest::GetBlock(height) => {
-                let state = req.state();
-                match state.chain.get_block(height) {
+                let chain = &req.state().chain;
+                match chain.get_block(height) {
                     Some(block) => MsgResponse::GetBlock(block.as_ref().clone()).into_res(),
                     None => MsgResponse::Error(ErrorKind::InvalidHeight, None).into_res(),
                 }

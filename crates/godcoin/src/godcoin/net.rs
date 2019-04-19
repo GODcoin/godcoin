@@ -1,20 +1,26 @@
-use crate::{prelude::SignedBlock, serializer::*};
+use crate::{
+    prelude::{Properties, SignedBlock},
+    serializer::*,
+};
 use std::convert::{TryFrom, TryInto};
 use std::io::{self, Cursor, Error};
 
 #[repr(u8)]
 pub enum MsgType {
     Error = 0,
-    GetBlock = 1,
+    GetProperties = 1,
+    GetBlock = 2,
 }
 
 pub enum MsgRequest {
+    GetProperties,
     GetBlock(u64), // height
 }
 
 impl MsgRequest {
     pub fn serialize(self) -> Vec<u8> {
         match self {
+            MsgRequest::GetProperties => vec![MsgType::GetProperties as u8],
             MsgRequest::GetBlock(height) => {
                 let mut buf = Vec::with_capacity(9);
                 buf.push(MsgType::GetBlock as u8);
@@ -27,6 +33,7 @@ impl MsgRequest {
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
         let tag = cursor.take_u8()?;
         match tag {
+            t if t == MsgType::GetProperties as u8 => Ok(MsgRequest::GetProperties),
             t if t == MsgType::GetBlock as u8 => {
                 let height = cursor.take_u64()?;
                 Ok(MsgRequest::GetBlock(height))
@@ -61,11 +68,14 @@ impl TryFrom<u16> for ErrorKind {
 #[derive(Clone, Debug)]
 pub enum MsgResponse {
     Error(ErrorKind, Option<String>), // code, message
+    GetProperties(Properties),
     GetBlock(SignedBlock),
 }
 
 impl MsgResponse {
     pub fn serialize(self) -> Vec<u8> {
+        use std::mem;
+
         match self {
             MsgResponse::Error(code, msg) => match msg {
                 Some(msg) => {
@@ -83,6 +93,14 @@ impl MsgResponse {
                     buf
                 }
             },
+            MsgResponse::GetProperties(props) => {
+                let mut buf = Vec::with_capacity(1 + mem::size_of::<Properties>());
+                buf.push(MsgType::GetProperties as u8);
+                buf.push_u64(props.height);
+                buf.push_balance(&props.network_fee);
+                buf.push_balance(&props.token_supply);
+                buf
+            }
             MsgResponse::GetBlock(block) => {
                 let mut buf = Vec::with_capacity(1_048_576);
                 buf.push(MsgType::GetBlock as u8);
@@ -106,6 +124,16 @@ impl MsgResponse {
                     }
                 };
                 Ok(MsgResponse::Error(kind, msg))
+            }
+            t if t == MsgType::GetProperties as u8 => {
+                let height = cursor.take_u64()?;
+                let network_fee = cursor.take_balance()?;
+                let token_supply = cursor.take_balance()?;
+                Ok(MsgResponse::GetProperties(Properties {
+                    height,
+                    network_fee,
+                    token_supply,
+                }))
             }
             t if t == MsgType::GetBlock as u8 => {
                 let block = SignedBlock::decode_with_tx(cursor)

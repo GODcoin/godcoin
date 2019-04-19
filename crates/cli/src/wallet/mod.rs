@@ -30,6 +30,28 @@ macro_rules! check_args {
     };
 }
 
+macro_rules! send_print_rpc_req {
+    ($wallet:expr, $req:expr) => {
+        let res = Client::new()
+            .post($wallet.url.clone())
+            .body($req.serialize())
+            .send();
+        match res {
+            Ok(mut res) => {
+                let len = res.content_length().unwrap_or(0);
+                let mut content = Vec::with_capacity(len as usize);
+                res.read_to_end(&mut content)
+                    .map_err(|e| format!("{}", e))?;
+                let mut cursor = Cursor::<&[u8]>::new(&content);
+                let res = MsgResponse::deserialize(&mut cursor)
+                    .map_err(|e| format!("Failed to deserialize response: {}", e))?;
+                println!("{:#?}", res);
+            }
+            Err(e) => return Err(format!("{}", e)),
+        }
+    };
+}
+
 pub struct Wallet {
     prompt: String,
     url: Url,
@@ -198,29 +220,16 @@ impl Wallet {
                     println!("  {} => {}", acc, key.0.to_wif());
                 }
             }
+            "get_properties" => {
+                send_print_rpc_req!(self, MsgRequest::GetProperties);
+            }
             "get_block" => {
                 check_args!(args, 2);
                 let height: u64 = args[1]
                     .parse()
                     .map_err(|_| "Failed to parse height argument".to_owned())?;
-                let client = Client::new();
-                let res = client
-                    .post(self.url.clone())
-                    .body(MsgRequest::GetBlock(height).serialize())
-                    .send();
-                match res {
-                    Ok(mut res) => {
-                        let len = res.content_length().unwrap_or(0);
-                        let mut content = Vec::with_capacity(len as usize);
-                        res.read_to_end(&mut content)
-                            .map_err(|e| format!("{}", e))?;
-                        let mut cursor = Cursor::<&[u8]>::new(&content);
-                        let res = MsgResponse::deserialize(&mut cursor)
-                            .map_err(|e| format!("Failed to deserialize response: {}", e))?;
-                        println!("{:#?}", res);
-                    }
-                    Err(e) => return Err(format!("{}", e)),
-                }
+
+                send_print_rpc_req!(self, MsgRequest::GetBlock(height));
             }
             "help" => {
                 Self::print_usage("Displaying help...");
