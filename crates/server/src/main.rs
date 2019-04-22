@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use actix_web::{http, middleware, server, App, HttpRequest, HttpResponse};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use env_logger::{Env, DEFAULT_FILTER_ENV};
 use godcoin::{net::*, prelude::*};
 use log::{error, info};
@@ -16,20 +16,20 @@ mod net;
 use minter::Minter;
 use net::*;
 
-struct AppState {
+struct AppData {
     chain: Arc<Blockchain>,
 }
 
-fn index(req: HttpRequest<AppState>, body: bytes::Bytes) -> HttpResponse {
+fn index(data: web::Data<AppData>, body: bytes::Bytes) -> HttpResponse {
     match MsgRequest::deserialize(&mut Cursor::new(&body)) {
         Ok(msg_req) => match msg_req {
             MsgRequest::GetProperties => {
-                let chain = &req.state().chain;
+                let chain = &data.chain;
                 let props = chain.get_properties();
                 MsgResponse::GetProperties(props).into_res()
             }
             MsgRequest::GetBlock(height) => {
-                let chain = &req.state().chain;
+                let chain = &data.chain;
                 match chain.get_block(height) {
                     Some(block) => MsgResponse::GetBlock(block.as_ref().clone()).into_res(),
                     None => MsgResponse::Error(ErrorKind::InvalidHeight, None).into_res(),
@@ -87,24 +87,26 @@ fn main() {
     let wallet_addr = blockchain.get_owner().wallet;
     Minter::new(Arc::clone(&blockchain), minter_key, wallet_addr).start();
 
-    server::HttpServer::new(move || {
-        App::with_state(AppState {
-            chain: Arc::clone(&blockchain),
-        })
-        .middleware(middleware::Logger::new(r#"%a "%r" %s %T"#))
-        .resource("/", |r| {
-            r.method(http::Method::POST).with_config(index, |cfg| {
-                // Limit 64 KiB
-                cfg.1.limit(65536);
+    HttpServer::new(move || {
+        App::new()
+            .data(AppData {
+                chain: Arc::clone(&blockchain),
             })
-        })
-        .default_resource(|r| {
-            r.with(|_: HttpRequest<_>| HttpResponse::NotFound().body("Not found"))
-        })
+            .wrap(middleware::Logger::new(r#"%a "%r" %s %T"#))
+            .service(
+                web::resource("/").route(
+                    web::post()
+                        .data({
+                            // Limit 64 KiB
+                            web::PayloadConfig::default().limit(65536)
+                        })
+                        .to(index),
+                ),
+            )
     })
     .bind(env::var("GODCOIN_BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:7777".to_owned()))
     .unwrap()
     .start();
 
-    sys.run();
+    sys.run().unwrap();
 }
