@@ -251,7 +251,8 @@ impl Wallet {
         cmds.push(["delete_account <account>", "Delete an existing account"]);
         cmds.push(["get_account <account>", "Retrieve account information"]);
         cmds.push(["list_accounts", "List all accounts"]);
-        cmds.push(["list_accounts", "List all accounts"]);
+        cmds.push(["get_properties", "Retrieve global network properties"]);
+        cmds.push(["get_block <height>", "Retrieve a block from the network"]);
 
         let mut max_len = 0;
         for cmd in &cmds {
