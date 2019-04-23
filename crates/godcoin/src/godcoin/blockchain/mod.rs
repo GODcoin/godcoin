@@ -94,6 +94,7 @@ impl Blockchain {
             for tx in &block.transactions {
                 let has_match = match tx {
                     TxVariant::OwnerTx(_) => false,
+                    TxVariant::MintTx(_) => false,
                     TxVariant::RewardTx(_) => false,
                     TxVariant::TransferTx(tx) => &tx.from == hash,
                 };
@@ -149,6 +150,12 @@ impl Blockchain {
         for tx in txs {
             match tx {
                 TxVariant::OwnerTx(_) => {}
+                TxVariant::MintTx(tx) => {
+                    if &tx.to == hash {
+                        bal.add(&tx.balance.gold)?;
+                        bal.add(&tx.balance.silver)?;
+                    }
+                }
                 TxVariant::RewardTx(tx) => {
                     if &tx.to == hash {
                         for reward in &tx.rewards {
@@ -225,7 +232,10 @@ impl Blockchain {
             };
         }
 
-        check_amt!(tx.fee, "fee");
+        if !(tx.tx_type == TxType::OWNER || tx.tx_type == TxType::MINT) {
+            check_amt!(tx.fee, "fee");
+        }
+
         match tx {
             TxVariant::OwnerTx(new_owner) => {
                 let owner = self.get_owner();
@@ -241,6 +251,19 @@ impl Blockchain {
                     return Err("script returned false".to_owned());
                 }
             }
+            TxVariant::MintTx(mint_tx) => {
+                let owner = self.get_owner();
+                if owner.wallet != (&mint_tx.script).into() {
+                    return Err("script hash does not match current wallet address".to_owned());
+                }
+                let success = ScriptEngine::checked_new(tx, &mint_tx.script)
+                    .ok_or_else(|| "failed to initialize script engine")?
+                    .eval()
+                    .map_err(|e| format!("{}: {:?}", e.pos, e.err))?;
+                if !success {
+                    return Err("script returned false".to_owned());
+                }
+            }
             TxVariant::RewardTx(tx) => {
                 if !tx.signature_pairs.is_empty() {
                     return Err("reward transaction must not be signed".to_owned());
@@ -249,7 +272,7 @@ impl Blockchain {
             TxVariant::TransferTx(transfer) => {
                 if transfer.fee.symbol != transfer.amount.symbol {
                     return Err("symbol mismatch between fee and amount".to_owned());
-                } else if transfer.from != ScriptHash::from(&transfer.script) {
+                } else if transfer.from != (&transfer.script).into() {
                     return Err("from and script hash mismatch".to_owned());
                 }
 
@@ -280,15 +303,18 @@ impl Blockchain {
             TxVariant::OwnerTx(tx) => {
                 self.indexer.set_owner(tx);
             }
+            TxVariant::MintTx(tx) => {
+                let mut supply = self.indexer.get_token_supply();
+                supply.add(&tx.balance.gold).unwrap();
+                supply.add(&tx.balance.silver).unwrap();
+                self.indexer.set_token_supply(&supply);
+            }
             TxVariant::RewardTx(tx) => {
                 let mut bal = self.get_balance(&tx.to);
-                let mut supply = self.indexer.get_token_supply();
                 for r in &tx.rewards {
                     bal.add(r).unwrap();
-                    supply.add(r).unwrap();
                 }
                 self.indexer.set_balance(&tx.to, &bal);
-                self.indexer.set_token_supply(&supply);
             }
             TxVariant::TransferTx(tx) => {
                 let mut from_bal = self.get_balance(&tx.from);

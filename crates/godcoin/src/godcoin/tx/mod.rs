@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::io::Cursor;
 
-use crate::asset::Asset;
+use crate::asset::{Asset, Balance};
 use crate::crypto::{KeyPair, PublicKey, ScriptHash, SigPair};
 use crate::script::Script;
 use crate::serializer::*;
@@ -29,16 +29,18 @@ pub trait SignTx {
 
 #[derive(Debug, Clone)]
 pub enum TxVariant {
-    RewardTx(RewardTx),
     OwnerTx(OwnerTx),
+    MintTx(MintTx),
+    RewardTx(RewardTx),
     TransferTx(TransferTx),
 }
 
 impl TxVariant {
     pub fn encode(&self, v: &mut Vec<u8>) {
         match self {
-            TxVariant::RewardTx(tx) => tx.encode(v),
             TxVariant::OwnerTx(tx) => tx.encode(v),
+            TxVariant::MintTx(tx) => tx.encode(v),
+            TxVariant::RewardTx(tx) => tx.encode(v),
             TxVariant::TransferTx(tx) => tx.encode(v),
         };
     }
@@ -55,8 +57,9 @@ impl TxVariant {
         }
 
         match self {
-            TxVariant::RewardTx(tx) => encode_sigs!(tx, v),
             TxVariant::OwnerTx(tx) => encode_sigs!(tx, v),
+            TxVariant::MintTx(tx) => encode_sigs!(tx, v),
+            TxVariant::RewardTx(tx) => encode_sigs!(tx, v),
             TxVariant::TransferTx(tx) => encode_sigs!(tx, v),
         };
     }
@@ -74,6 +77,7 @@ impl TxVariant {
         base.signature_pairs = sigs;
         match base.tx_type {
             TxType::OWNER => Some(TxVariant::OwnerTx(OwnerTx::decode(cur, base)?)),
+            TxType::MINT => Some(TxVariant::MintTx(MintTx::decode(cur, base)?)),
             TxType::REWARD => Some(TxVariant::RewardTx(RewardTx::decode(cur, base)?)),
             TxType::TRANSFER => Some(TxVariant::TransferTx(TransferTx::decode(cur, base)?)),
         }
@@ -86,6 +90,7 @@ impl std::ops::Deref for TxVariant {
     fn deref(&self) -> &Self::Target {
         match self {
             TxVariant::OwnerTx(tx) => &tx.base,
+            TxVariant::MintTx(tx) => &tx.base,
             TxVariant::RewardTx(tx) => &tx.base,
             TxVariant::TransferTx(tx) => &tx.base,
         }
@@ -122,6 +127,7 @@ impl Tx {
     fn decode_base(cur: &mut Cursor<&[u8]>) -> Option<Tx> {
         let tx_type = match cur.take_u8().ok()? {
             t if t == TxType::OWNER as u8 => TxType::OWNER,
+            t if t == TxType::MINT as u8 => TxType::MINT,
             t if t == TxType::REWARD as u8 => TxType::REWARD,
             t if t == TxType::TRANSFER as u8 => TxType::TRANSFER,
             _ => return None,
@@ -138,7 +144,39 @@ impl Tx {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
+pub struct MintTx {
+    pub base: Tx,
+    pub to: ScriptHash,
+    pub balance: Balance,
+    pub script: Script,
+}
+
+impl EncodeTx for MintTx {
+    fn encode(&self, v: &mut Vec<u8>) {
+        self.encode_base(v);
+        v.push_script_hash(&self.to);
+        v.push_balance(&self.balance);
+        v.push_bytes(&self.script);
+    }
+}
+
+impl DecodeTx<MintTx> for MintTx {
+    fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<Self> {
+        assert_eq!(tx.tx_type, TxType::MINT);
+        let to = cur.take_script_hash().ok()?;
+        let balance = cur.take_balance().ok()?;
+        let script = Script::from(cur.take_bytes().ok()?);
+        Some(Self {
+            base: tx,
+            to,
+            balance,
+            script,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct RewardTx {
     pub base: Tx,
     pub to: ScriptHash,
@@ -248,11 +286,13 @@ impl DecodeTx<TransferTx> for TransferTx {
     }
 }
 
-tx_deref!(RewardTx);
 tx_deref!(OwnerTx);
+tx_deref!(MintTx);
+tx_deref!(RewardTx);
 tx_deref!(TransferTx);
 
 tx_sign!(OwnerTx);
+tx_sign!(MintTx);
 tx_sign!(TransferTx);
 
 #[cfg(test)]
@@ -290,34 +330,6 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_reward() {
-        let to = crypto::KeyPair::gen_keypair();
-        let reward_tx = RewardTx {
-            base: Tx {
-                tx_type: TxType::REWARD,
-                timestamp: 123,
-                fee: get_asset("123 GOLD"),
-                signature_pairs: vec![],
-            },
-            to: to.0.into(),
-            rewards: vec![get_asset("1.50 GOLD"), get_asset("1.0 SILVER")],
-        };
-
-        let mut v = vec![];
-        reward_tx.encode(&mut v);
-
-        let mut c = Cursor::<&[u8]>::new(&v);
-        let base = Tx::decode_base(&mut c).unwrap();
-        let dec = RewardTx::decode(&mut c, base).unwrap();
-
-        cmp_base_tx!(dec, TxType::REWARD, 123, "123 GOLD");
-        assert_eq!(reward_tx.to, dec.to);
-        assert_eq!(reward_tx.rewards.len(), dec.rewards.len());
-        assert_eq!(reward_tx.rewards[0].to_string(), dec.rewards[0].to_string());
-        assert_eq!(reward_tx.rewards[1].to_string(), dec.rewards[1].to_string());
-    }
-
-    #[test]
     fn test_encode_owner() {
         let minter = crypto::KeyPair::gen_keypair();
         let wallet = crypto::KeyPair::gen_keypair();
@@ -343,6 +355,71 @@ mod tests {
         cmp_base_tx!(dec, TxType::OWNER, 1230, "123 GOLD");
         assert_eq!(owner_tx.minter, dec.minter);
         assert_eq!(owner_tx.wallet, dec.wallet);
+    }
+
+    #[test]
+    fn test_encode_mint() {
+        let wallet = crypto::KeyPair::gen_keypair();
+        let mint_tx = MintTx {
+            base: Tx {
+                tx_type: TxType::MINT,
+                timestamp: 1234,
+                fee: get_asset("123 GOLD"),
+                signature_pairs: vec![],
+            },
+            to: wallet.0.clone().into(),
+            balance: Balance {
+                gold: "10 GOLD".parse().unwrap(),
+                silver: "100 SILVER".parse().unwrap(),
+            },
+            script: wallet.0.into(),
+        };
+
+        let mut v = vec![];
+        mint_tx.encode(&mut v);
+
+        let mut c = Cursor::<&[u8]>::new(&v);
+        let base = Tx::decode_base(&mut c).unwrap();
+        let dec = MintTx::decode(&mut c, base).unwrap();
+
+        cmp_base_tx!(dec, TxType::MINT, 1234, "123 GOLD");
+        assert_eq!(mint_tx.to, dec.to);
+        assert_eq!(
+            mint_tx.balance.gold.to_string(),
+            dec.balance.gold.to_string()
+        );
+        assert_eq!(
+            mint_tx.balance.silver.to_string(),
+            dec.balance.silver.to_string()
+        );
+    }
+
+    #[test]
+    fn test_encode_reward() {
+        let to = crypto::KeyPair::gen_keypair();
+        let reward_tx = RewardTx {
+            base: Tx {
+                tx_type: TxType::REWARD,
+                timestamp: 123,
+                fee: get_asset("123 GOLD"),
+                signature_pairs: vec![],
+            },
+            to: to.0.into(),
+            rewards: vec![get_asset("1.50 GOLD"), get_asset("1.0 SILVER")],
+        };
+
+        let mut v = vec![];
+        reward_tx.encode(&mut v);
+
+        let mut c = Cursor::<&[u8]>::new(&v);
+        let base = Tx::decode_base(&mut c).unwrap();
+        let dec = RewardTx::decode(&mut c, base).unwrap();
+
+        cmp_base_tx!(dec, TxType::REWARD, 123, "123 GOLD");
+        assert_eq!(reward_tx.to, dec.to);
+        assert_eq!(reward_tx.rewards.len(), dec.rewards.len());
+        assert_eq!(reward_tx.rewards[0].to_string(), dec.rewards[0].to_string());
+        assert_eq!(reward_tx.rewards[1].to_string(), dec.rewards[1].to_string());
     }
 
     #[test]
