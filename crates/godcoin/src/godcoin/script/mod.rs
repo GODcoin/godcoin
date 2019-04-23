@@ -1,5 +1,9 @@
 use crate::crypto::PublicKey;
-use std::{borrow::Cow, ops::Deref};
+use std::{
+    borrow::Cow,
+    fmt::{self, Debug, Formatter},
+    ops::Deref,
+};
 
 pub mod builder;
 pub mod engine;
@@ -15,13 +19,30 @@ pub use self::op::*;
 pub const MAX_FRAME_STACK: usize = 64;
 pub const MAX_BYTE_SIZE: usize = 2048;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Script(Vec<u8>);
 
 impl Script {
     #[inline]
     pub fn new(byte_code: Vec<u8>) -> Self {
         Script(byte_code)
+    }
+}
+
+impl Debug for Script {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        use fmt::Write;
+
+        let digest: String = {
+            let bytes = self.as_ref();
+            let mut s = String::with_capacity(bytes.len() * 2);
+            for x in self.as_ref() {
+                write!(s, "{:x}", x)?;
+            }
+            s
+        };
+
+        f.debug_tuple("Script").field(&digest).finish()
     }
 }
 

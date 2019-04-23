@@ -323,6 +323,7 @@ impl Blockchain {
             .build();
 
         info!("=> Generating new block chain");
+        info!("=> {:?}", script);
         info!("=> Wallet key 1: {}", wallet_key_1.1.to_wif());
         info!("=> Wallet key 2: {}", wallet_key_2.1.to_wif());
         info!("=> Wallet key 3: {}", wallet_key_3.1.to_wif());
