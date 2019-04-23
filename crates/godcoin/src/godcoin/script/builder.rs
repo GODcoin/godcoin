@@ -63,3 +63,9 @@ impl Builder {
         }
     }
 }
+
+impl AsRef<[u8]> for Builder {
+    fn as_ref(&self) -> &[u8] {
+        &self.byte_code
+    }
+}

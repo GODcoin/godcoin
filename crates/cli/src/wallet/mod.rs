@@ -1,6 +1,6 @@
 use godcoin::{
     net::*,
-    prelude::{KeyPair, PrivateKey, Wif},
+    prelude::{KeyPair, PrivateKey, ScriptHash, Wif},
 };
 use reqwest::{Client, Url};
 use rustyline::{error::ReadlineError, Editor};
@@ -11,6 +11,7 @@ use std::{
 
 mod db;
 mod parser;
+mod script_builder;
 
 use self::db::{Db, DbState, Password};
 
@@ -218,6 +219,18 @@ impl Wallet {
                 println!("Accounts:");
                 for (acc, key) in self.db.get_accounts() {
                     println!("  {} => {}", acc, key.0.to_wif());
+                }
+            }
+            "build_script" => {
+                let script = script_builder::build(&args[1..]);
+                match script {
+                    Ok(script) => {
+                        println!("{:?}", script);
+                        println!("{:?}", ScriptHash::from(script));
+                    }
+                    Err(e) => {
+                        println!("{:?}", e);
+                    }
                 }
             }
             "get_properties" => {

@@ -1,6 +1,6 @@
 use std::error::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum WifErrorKind {
     InvalidLen,
     InvalidPrefix,
@@ -8,7 +8,7 @@ pub enum WifErrorKind {
     InvalidBs58Encoding,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct WifError {
     pub kind: WifErrorKind,
 }
