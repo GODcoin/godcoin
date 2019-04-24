@@ -10,11 +10,8 @@ use std::{
     sync::Arc,
 };
 
-mod minter;
-mod net;
-
-use minter::Minter;
-use net::*;
+use server::minter::Minter;
+use server::net::*;
 
 struct AppData {
     chain: Arc<Blockchain>,
