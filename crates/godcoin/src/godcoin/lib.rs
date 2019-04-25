@@ -11,6 +11,8 @@ pub mod net;
 pub mod script;
 pub mod serializer;
 
+pub mod test;
+
 pub fn init() -> Result<(), ()> {
     sodiumoxide::init()
 }
