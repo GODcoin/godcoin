@@ -37,27 +37,27 @@ mod tests {
     #[test]
     fn test_parse_single_arg() {
         let args = parse_line("abc");
-        assert!(args.len() == 1);
+        assert_eq!(args.len(), 1);
         assert_eq!(args[0], "abc");
 
         let args = parse_line("abc ");
-        assert!(args.len() == 1);
+        assert_eq!(args.len(), 1);
         assert_eq!(args[0], "abc");
 
         let args = parse_line("abc   ");
-        assert!(args.len() == 1);
+        assert_eq!(args.len(), 1);
         assert_eq!(args[0], "abc");
     }
 
     #[test]
     fn test_parse_two_args() {
         let args = parse_line("abc 123");
-        assert!(args.len() == 2);
+        assert_eq!(args.len(), 2);
         assert_eq!(args[0], "abc");
         assert_eq!(args[1], "123");
 
         let args = parse_line("abc  123");
-        assert!(args.len() == 2);
+        assert_eq!(args.len(), 2);
         assert_eq!(args[0], "abc");
         assert_eq!(args[1], "123");
     }
@@ -65,13 +65,13 @@ mod tests {
     #[test]
     fn test_parse_multiargs() {
         let args = parse_line("abc  123    def");
-        assert!(args.len() == 3);
+        assert_eq!(args.len(), 3);
         assert_eq!(args[0], "abc");
         assert_eq!(args[1], "123");
         assert_eq!(args[2], "def");
 
         let args = parse_line("abc 123    def 456");
-        assert!(args.len() == 4);
+        assert_eq!(args.len(), 4);
         assert_eq!(args[0], "abc");
         assert_eq!(args[1], "123");
         assert_eq!(args[2], "def");
@@ -81,22 +81,22 @@ mod tests {
     #[test]
     fn test_parse_quotes() {
         let args = parse_line("\"abc  123\"    def");
-        assert!(args.len() == 2);
+        assert_eq!(args.len(), 2);
         assert_eq!(args[0], "abc  123");
         assert_eq!(args[1], "def");
 
         let args = parse_line("abc\"  \"123    def");
-        assert!(args.len() == 2);
+        assert_eq!(args.len(), 2);
         assert_eq!(args[0], "abc  123");
         assert_eq!(args[1], "def");
 
         let args = parse_line("\"  \"123 def");
-        assert!(args.len() == 2);
+        assert_eq!(args.len(), 2);
         assert_eq!(args[0], "  123");
         assert_eq!(args[1], "def");
 
         let args = parse_line("\"  abc");
-        assert!(args.len() == 1);
+        assert_eq!(args.len(), 1);
         assert_eq!(args[0], "  abc");
     }
 }
