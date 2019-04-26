@@ -23,5 +23,6 @@ pub mod prelude {
     pub use super::crypto::{
         KeyPair, PrivateKey, PublicKey, ScriptHash, SigPair, Wif, WifError, WifErrorKind,
     };
+    pub use super::net::{self, MsgRequest, MsgResponse};
     pub use super::tx::{OwnerTx, RewardTx, TransferTx, Tx, TxType, TxVariant};
 }

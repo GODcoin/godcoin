@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use godcoin::{net::*, prelude::*};
 use log::{error, info};
 use std::{io::Cursor, path::PathBuf, sync::Arc};
@@ -41,9 +41,7 @@ pub fn start(config: ServerConfig) {
                             // Limit 64 KiB
                             web::PayloadConfig::default().limit(65536)
                         })
-                        .to(|chain: web::Data<Arc<Blockchain>>, body: bytes::Bytes| {
-                            handle_request(&chain, &body).into_res()
-                        }),
+                        .to(index),
                 ),
             )
     })
@@ -52,23 +50,27 @@ pub fn start(config: ServerConfig) {
     .start();
 }
 
-pub fn handle_request(chain: &Blockchain, req: &[u8]) -> MsgResponse {
-    match MsgRequest::deserialize(&mut Cursor::new(req)) {
-        Ok(msg_req) => match msg_req {
-            MsgRequest::GetProperties => {
-                let props = chain.get_properties();
-                MsgResponse::GetProperties(props)
-            }
-            MsgRequest::GetBlock(height) => match chain.get_block(height) {
-                Some(block) => MsgResponse::GetBlock(block.as_ref().clone()),
-                None => MsgResponse::Error(ErrorKind::InvalidHeight, None),
-            },
-        },
+fn index(chain: web::Data<Arc<Blockchain>>, body: bytes::Bytes) -> HttpResponse {
+    match MsgRequest::deserialize(&mut Cursor::new(&body)) {
+        Ok(msg_req) => handle_request(&chain, msg_req).into_res(),
         Err(e) => match e.kind() {
             _ => {
                 error!("Unknown error occurred during deserialization: {:?}", e);
-                MsgResponse::Error(ErrorKind::UnknownError, None)
+                MsgResponse::Error(ErrorKind::UnknownError, None).into_res()
             }
+        },
+    }
+}
+
+pub fn handle_request(chain: &Blockchain, req: MsgRequest) -> MsgResponse {
+    match req {
+        MsgRequest::GetProperties => {
+            let props = chain.get_properties();
+            MsgResponse::GetProperties(props)
+        }
+        MsgRequest::GetBlock(height) => match chain.get_block(height) {
+            Some(block) => MsgResponse::GetBlock(block.as_ref().clone()),
+            None => MsgResponse::Error(ErrorKind::InvalidHeight, None),
         },
     }
 }
