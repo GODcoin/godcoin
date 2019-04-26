@@ -37,7 +37,7 @@ fn main() {
 
     let bind_addr = env::var("GODCOIN_BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:7777".to_owned());
 
-    server::start(server::ServerConfig {
+    godcoin_server::start(godcoin_server::ServerConfig {
         home,
         minter_key,
         bind_addr,
