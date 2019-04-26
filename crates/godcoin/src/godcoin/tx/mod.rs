@@ -23,8 +23,6 @@ pub trait DecodeTx<T> {
 pub trait SignTx {
     fn sign(&self, key_pair: &KeyPair) -> SigPair;
     fn append_sign(&mut self, key_pair: &KeyPair);
-    fn verify_all(&self) -> bool;
-    fn verify_keys(&self, keys: &[PublicKey]) -> bool;
 }
 
 #[derive(Debug, Clone)]
@@ -453,45 +451,6 @@ mod tests {
         assert_eq!(transfer_tx.script, vec![1, 2, 3, 4].into());
         assert_eq!(transfer_tx.amount.to_string(), dec.amount.to_string());
         assert_eq!(transfer_tx.memo, dec.memo);
-    }
-
-    #[test]
-    fn test_verify_sigs() {
-        let mut transfer_tx = TransferTx {
-            base: Tx {
-                tx_type: TxType::TRANSFER,
-                timestamp: 1234567890,
-                fee: get_asset("1.23 GOLD"),
-                signature_pairs: vec![],
-            },
-            from: KeyPair::gen_keypair().0.into(),
-            to: KeyPair::gen_keypair().0.into(),
-            script: vec![1, 2, 3, 4].into(),
-            amount: get_asset("1.0456 GOLD"),
-            memo: Vec::from(String::from("Hello world!").as_bytes()),
-        };
-        let keys = (0..=4)
-            .map(|_| {
-                let key = KeyPair::gen_keypair();
-                transfer_tx.append_sign(&key);
-                key.0
-            })
-            .collect::<Vec<_>>();
-
-        // Test valid sigs with valid ordering
-        assert!(transfer_tx.verify_all());
-        assert!(transfer_tx.verify_keys(&keys));
-        assert!(transfer_tx.verify_keys(&[keys[0].clone(), keys[3].clone(), keys[4].clone()]));
-
-        // Test valid sigs with invalid ordering
-        assert!(!transfer_tx.verify_keys(&[keys[1].clone(), keys[0].clone()]));
-        assert!(!transfer_tx.verify_keys(&[keys[0].clone(), keys[2].clone(), keys[1].clone()]));
-
-        // Test invalid key
-        let bad_key = KeyPair::gen_keypair().0;
-        assert!(!transfer_tx.verify_keys(&[bad_key.clone()]));
-        assert!(!transfer_tx.verify_keys(&[keys[0].clone(), bad_key.clone()]));
-        assert!(!transfer_tx.verify_keys(&[bad_key, keys[0].clone()]));
     }
 
     fn get_asset(s: &str) -> Asset {
