@@ -46,7 +46,7 @@ impl MsgRequest {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u16)]
 pub enum ErrorKind {
     UnknownError = 0,
