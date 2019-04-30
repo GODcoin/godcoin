@@ -1,16 +1,18 @@
-use crate::prelude::*;
+use godcoin::prelude::*;
+use godcoin_server::prelude::*;
 use sodiumoxide::randombytes;
 use std::{
     env, fs,
     ops::{Deref, DerefMut, Drop},
     path::PathBuf,
+    sync::Arc,
 };
 
-pub struct TestBlockchain(Blockchain, PathBuf);
+pub struct TestMinter(Minter, Arc<Blockchain>, PathBuf);
 
-impl TestBlockchain {
+impl TestMinter {
     pub fn new() -> Self {
-        crate::init().unwrap();
+        godcoin::init().unwrap();
         let mut tmp_dir = env::temp_dir();
         {
             let mut s = String::from("godcoin_test_");
@@ -21,26 +23,34 @@ impl TestBlockchain {
         }
         fs::create_dir(&tmp_dir).expect(&format!("Could not create temp dir {:?}", &tmp_dir));
 
-        let chain = Blockchain::new(&tmp_dir);
-        Self(chain, tmp_dir)
+        let chain = Arc::new(Blockchain::new(&tmp_dir));
+
+        let minter_key = KeyPair::gen_keypair();
+        let minter_wallet = (&minter_key.0).into();
+        let minter = Minter::new(Arc::clone(&chain), minter_key, minter_wallet);
+        Self(minter, chain, tmp_dir)
+    }
+
+    pub fn chain(&self) -> &Blockchain {
+        &self.1
     }
 }
 
-impl Drop for TestBlockchain {
+impl Drop for TestMinter {
     fn drop(&mut self) {
-        fs::remove_dir_all(&self.1).expect("Failed to rm dir");
+        fs::remove_dir_all(&self.2).expect("Failed to rm dir");
     }
 }
 
-impl Deref for TestBlockchain {
-    type Target = Blockchain;
+impl Deref for TestMinter {
+    type Target = Minter;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for TestBlockchain {
+impl DerefMut for TestMinter {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

@@ -11,8 +11,6 @@ pub mod net;
 pub mod script;
 pub mod serializer;
 
-pub mod test;
-
 pub fn init() -> Result<(), ()> {
     sodiumoxide::init()
 }
@@ -24,5 +22,6 @@ pub mod prelude {
         KeyPair, PrivateKey, PublicKey, ScriptHash, SigPair, Wif, WifError, WifErrorKind,
     };
     pub use super::net::{self, MsgRequest, MsgResponse};
+    pub use super::script::{Script, ScriptEngine};
     pub use super::tx::{OwnerTx, RewardTx, TransferTx, Tx, TxType, TxVariant};
 }

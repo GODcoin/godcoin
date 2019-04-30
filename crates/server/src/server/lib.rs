@@ -7,8 +7,12 @@ use std::{io::Cursor, path::PathBuf, sync::Arc};
 pub mod minter;
 pub mod net;
 
-use minter::*;
-use net::*;
+pub mod prelude {
+    pub use super::minter::*;
+    pub use super::net::*;
+}
+
+use prelude::*;
 
 pub struct ServerConfig {
     pub home: PathBuf,

@@ -1,17 +1,21 @@
-use godcoin::{prelude::*, test::*};
+use godcoin::prelude::*;
 use godcoin_server::handle_request;
+
+mod common;
+
+use common::TestMinter;
 
 #[test]
 fn empty_blockchain() {
-    let chain = TestBlockchain::new();
-    assert!(chain.get_block(0).is_none());
+    let minter = TestMinter::new();
+    assert!(minter.chain().get_block(0).is_none());
 }
 
 #[test]
 fn get_properties() {
-    let chain = TestBlockchain::new();
+    let minter = TestMinter::new();
 
-    let res = handle_request(&chain, MsgRequest::GetBlock(0));
+    let res = handle_request(minter.chain(), MsgRequest::GetBlock(0));
     match res {
         MsgResponse::Error(kind, msg) => {
             assert_eq!(kind, net::ErrorKind::InvalidHeight);
@@ -20,7 +24,7 @@ fn get_properties() {
         _ => panic!("Unexpected response: {:?}", res),
     }
 
-    let res = handle_request(&chain, MsgRequest::GetBlock(0));
+    let res = handle_request(minter.chain(), MsgRequest::GetBlock(0));
     match res {
         MsgResponse::Error(kind, msg) => {
             assert_eq!(kind, net::ErrorKind::InvalidHeight);
