@@ -23,7 +23,7 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
             "OP_PUBKEY" => {
                 let key = iter.next();
                 if let Some(key) = key {
-                    let key = PublicKey::from_wif(key).map_err(|e| BuildError::WifError(e))?;
+                    let key = PublicKey::from_wif(key).map_err(BuildError::WifError)?;
                     builder.try_push(OpFrame::PubKey(key))
                 } else {
                     return Err(BuildError::MissingArgForOp(op.to_owned()));
