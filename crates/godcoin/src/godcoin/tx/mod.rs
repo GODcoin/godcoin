@@ -366,10 +366,8 @@ mod tests {
                 signature_pairs: vec![],
             },
             to: wallet.0.clone().into(),
-            balance: Balance {
-                gold: "10 GOLD".parse().unwrap(),
-                silver: "100 SILVER".parse().unwrap(),
-            },
+            balance: Balance::from("10 GOLD".parse().unwrap(), "100 SILVER".parse().unwrap())
+                .unwrap(),
             script: wallet.0.into(),
         };
 
@@ -383,12 +381,12 @@ mod tests {
         cmp_base_tx!(dec, TxType::MINT, 1234, "123 GOLD");
         assert_eq!(mint_tx.to, dec.to);
         assert_eq!(
-            mint_tx.balance.gold.to_string(),
-            dec.balance.gold.to_string()
+            mint_tx.balance.gold().to_string(),
+            dec.balance.gold().to_string()
         );
         assert_eq!(
-            mint_tx.balance.silver.to_string(),
-            dec.balance.silver.to_string()
+            mint_tx.balance.silver().to_string(),
+            dec.balance.silver().to_string()
         );
     }
 

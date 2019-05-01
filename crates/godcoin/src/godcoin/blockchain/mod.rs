@@ -77,11 +77,10 @@ impl Blockchain {
 
     pub fn get_total_fee(&self, hash: &ScriptHash) -> Option<Balance> {
         let net_fee = self.get_network_fee()?;
-        let addr_fee = self.get_address_fee(hash)?;
-        Some(Balance {
-            gold: net_fee.gold.add(&addr_fee.gold)?,
-            silver: net_fee.silver.add(&addr_fee.silver)?,
-        })
+        let mut addr_fee = self.get_address_fee(hash)?;
+        addr_fee.add(net_fee.gold())?;
+        addr_fee.add(net_fee.silver())?;
+        Some(addr_fee)
     }
 
     pub fn get_address_fee(&self, hash: &ScriptHash) -> Option<Balance> {
@@ -110,7 +109,7 @@ impl Blockchain {
         let prec = asset::MAX_PRECISION;
         let gold = GOLD_FEE_MIN.mul(&GOLD_FEE_MULT.pow(tx_count as u16, prec)?, prec)?;
         let silver = SILVER_FEE_MIN.mul(&SILVER_FEE_MULT.pow(tx_count as u16, prec)?, prec)?;
-        Some(Balance { gold, silver })
+        Balance::from(gold, silver)
     }
 
     pub fn get_network_fee(&self) -> Option<Balance> {
@@ -138,7 +137,7 @@ impl Blockchain {
         let gold = GOLD_FEE_MIN.mul(&GOLD_FEE_NET_MULT.pow(tx_count as u16, prec)?, prec)?;
         let silver = SILVER_FEE_MIN.mul(&SILVER_FEE_NET_MULT.pow(tx_count as u16, prec)?, prec)?;
 
-        Some(Balance { gold, silver })
+        Balance::from(gold, silver)
     }
 
     pub fn get_balance(&self, hash: &ScriptHash) -> Balance {
@@ -152,8 +151,8 @@ impl Blockchain {
                 TxVariant::OwnerTx(_) => {}
                 TxVariant::MintTx(tx) => {
                     if &tx.to == hash {
-                        bal.add(&tx.balance.gold)?;
-                        bal.add(&tx.balance.silver)?;
+                        bal.add(tx.balance.gold())?;
+                        bal.add(tx.balance.silver())?;
                     }
                 }
                 TxVariant::RewardTx(tx) => {
@@ -291,8 +290,8 @@ impl Blockchain {
                     .ok_or("failed to subtract fee")?
                     .sub(&transfer.amount)
                     .ok_or("failed to subtract amount")?;
-                check_suf_bal!(&bal.gold);
-                check_suf_bal!(&bal.silver);
+                check_suf_bal!(bal.gold());
+                check_suf_bal!(bal.silver());
             }
         }
         Ok(())
@@ -305,8 +304,8 @@ impl Blockchain {
             }
             TxVariant::MintTx(tx) => {
                 let mut supply = self.indexer.get_token_supply();
-                supply.add(&tx.balance.gold).unwrap();
-                supply.add(&tx.balance.silver).unwrap();
+                supply.add(tx.balance.gold()).unwrap();
+                supply.add(tx.balance.silver()).unwrap();
                 self.indexer.set_token_supply(&supply);
             }
             TxVariant::RewardTx(tx) => {

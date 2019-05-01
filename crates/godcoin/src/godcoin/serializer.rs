@@ -80,8 +80,8 @@ impl BufWrite for Vec<u8> {
     }
 
     fn push_balance(&mut self, bal: &Balance) {
-        self.push_asset(&bal.gold);
-        self.push_asset(&bal.silver);
+        self.push_asset(bal.gold());
+        self.push_asset(bal.silver());
     }
 }
 
@@ -181,9 +181,7 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     fn take_balance(&mut self) -> Result<Balance, Error> {
         let gold = self.take_asset()?;
         let silver = self.take_asset()?;
-        debug_assert_eq!(gold.symbol, AssetSymbol::GOLD);
-        debug_assert_eq!(silver.symbol, AssetSymbol::SILVER);
-        Ok(Balance { gold, silver })
+        Balance::from(gold, silver).ok_or_else(|| Error::new(ErrorKind::Other, "invalid balance"))
     }
 }
 

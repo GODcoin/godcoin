@@ -251,8 +251,8 @@ impl FromStr for Asset {
 
 #[derive(Clone, Debug)]
 pub struct Balance {
-    pub gold: Asset,
-    pub silver: Asset,
+    gold: Asset,
+    silver: Asset,
 }
 
 macro_rules! agnostic_op {
@@ -277,6 +277,27 @@ macro_rules! agnostic_op {
 
 agnostic_op!(add);
 agnostic_op!(sub);
+
+impl Balance {
+    #[inline]
+    pub fn from(gold: Asset, silver: Asset) -> Option<Self> {
+        if gold.symbol == AssetSymbol::GOLD && silver.symbol == AssetSymbol::SILVER {
+            Some(Balance { gold, silver })
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    pub fn gold(&self) -> &Asset {
+        &self.gold
+    }
+
+    #[inline]
+    pub fn silver(&self) -> &Asset {
+        &self.silver
+    }
+}
 
 impl Default for Balance {
     fn default() -> Balance {

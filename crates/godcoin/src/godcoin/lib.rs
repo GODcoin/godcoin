@@ -22,6 +22,6 @@ pub mod prelude {
         KeyPair, PrivateKey, PublicKey, ScriptHash, SigPair, Wif, WifError, WifErrorKind,
     };
     pub use super::net::{self, MsgRequest, MsgResponse};
-    pub use super::script::{Script, ScriptEngine};
-    pub use super::tx::{OwnerTx, RewardTx, TransferTx, Tx, TxType, TxVariant};
+    pub use super::script::{self, OpFrame, Script, ScriptEngine};
+    pub use super::tx::{MintTx, OwnerTx, RewardTx, TransferTx, Tx, TxType, TxVariant};
 }
