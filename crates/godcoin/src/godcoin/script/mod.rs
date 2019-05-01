@@ -31,17 +31,7 @@ impl Script {
 
 impl Debug for Script {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        use fmt::Write;
-
-        let digest: String = {
-            let bytes = self.as_ref();
-            let mut s = String::with_capacity(bytes.len() * 2);
-            for x in self.as_ref() {
-                write!(s, "{:x}", x)?;
-            }
-            s
-        };
-
+        let digest = faster_hex::hex_string(self.as_ref()).unwrap();
         f.debug_tuple("Script").field(&digest).finish()
     }
 }

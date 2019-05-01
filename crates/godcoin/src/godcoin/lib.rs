@@ -1,5 +1,5 @@
 #[macro_use]
-mod buf_util;
+mod util;
 
 pub mod asset;
 pub mod crypto;

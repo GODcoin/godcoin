@@ -44,17 +44,7 @@ macro_rules! impl_wrapper {
 
         impl Debug for $name {
             fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-                use fmt::Write;
-
-                let digest: String = {
-                    let bytes = self.as_ref();
-                    let mut s = String::with_capacity(bytes.len() * 2);
-                    for x in self.as_ref() {
-                        write!(s, "{:x}", x)?;
-                    }
-                    s
-                };
-
+                let digest = faster_hex::hex_string(self.as_ref()).unwrap();
                 f.debug_tuple(stringify!($name)).field(&digest).finish()
             }
         }

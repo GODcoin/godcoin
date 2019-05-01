@@ -269,7 +269,7 @@ impl Wallet {
 
         let mut max_len = 0;
         for cmd in &cmds {
-            assert!(cmd.len() == 2);
+            assert_eq!(cmd.len(), 2);
             let cmd_len = cmd[0].len();
             if cmd_len > max_len {
                 max_len = cmd_len;
