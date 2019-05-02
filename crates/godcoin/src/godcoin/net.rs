@@ -94,7 +94,7 @@ impl MsgResponse {
                 }
             },
             MsgResponse::GetProperties(props) => {
-                let mut buf = Vec::with_capacity(1 + mem::size_of::<Properties>());
+                let mut buf = Vec::with_capacity(4096 + mem::size_of::<Properties>());
                 buf.push(MsgType::GetProperties as u8);
                 buf.push_u64(props.height);
                 {
