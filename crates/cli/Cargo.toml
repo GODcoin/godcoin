@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 dirs = "1.0.5"
 env_logger = "0.6.1"
+faster-hex = "0.3.1"
 godcoin = { path = "../godcoin" }
 log = "0.4.6"
 reqwest = "0.9.15"

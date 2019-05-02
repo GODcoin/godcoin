@@ -1,57 +1,13 @@
-use godcoin::{
-    net::*,
-    prelude::{KeyPair, PrivateKey, ScriptHash, Wif},
-};
-use reqwest::{Client, Url};
+use reqwest::Url;
 use rustyline::{error::ReadlineError, Editor};
-use std::{
-    io::{Cursor, Read},
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
+mod cmd;
 mod db;
 mod parser;
 mod script_builder;
 
-use self::db::{Db, DbState, Password};
-
-macro_rules! check_unlocked {
-    ($self:expr) => {
-        if $self.db.state() != DbState::Unlocked {
-            return Err("wallet not unlocked".to_owned());
-        }
-    };
-}
-
-macro_rules! check_args {
-    ($args:expr, $count:expr) => {
-        if $args.len() != $count {
-            return Err("Missing arguments or too many provided".to_owned());
-        }
-    };
-}
-
-macro_rules! send_print_rpc_req {
-    ($wallet:expr, $req:expr) => {
-        let res = Client::new()
-            .post($wallet.url.clone())
-            .body($req.serialize())
-            .send();
-        match res {
-            Ok(mut res) => {
-                let len = res.content_length().unwrap_or(0);
-                let mut content = Vec::with_capacity(len as usize);
-                res.read_to_end(&mut content)
-                    .map_err(|e| format!("{}", e))?;
-                let mut cursor = Cursor::<&[u8]>::new(&content);
-                let res = MsgResponse::deserialize(&mut cursor)
-                    .map_err(|e| format!("Failed to deserialize response: {}", e))?;
-                println!("{:#?}", res);
-            }
-            Err(e) => return Err(format!("{}", e)),
-        }
-    };
-}
+use self::db::{Db, DbState};
 
 pub struct Wallet {
     prompt: String,
@@ -105,7 +61,7 @@ impl Wallet {
                     }
                 }
                 Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
-                    println!("Closing walllet...");
+                    println!("Closing wallet...");
                     break;
                 }
                 Err(err) => {
@@ -121,137 +77,26 @@ impl Wallet {
             return Ok(false);
         }
         match &*args[0] {
-            "new" => {
-                let state = self.db.state();
-                if state != DbState::New {
-                    if state == DbState::Locked {
-                        println!("Use unlock to use the existing wallet");
-                        return Ok(false);
-                    } else if state == DbState::Unlocked {
-                        println!("Existing wallet already unlocked");
-                        return Ok(false);
-                    } else {
-                        return Err(format!("Unknown state: {:?}", state));
-                    }
-                }
-
-                check_args!(args, 2);
-                let pass = &Password(args.remove(1).into_bytes());
-                self.db.set_password(pass);
-                self.prompt = "locked>> ".to_owned();
-                return Ok(false);
-            }
-            "unlock" => {
-                let state = self.db.state();
-                if state != DbState::Locked {
-                    if state == DbState::New {
-                        println!("A wallet has not yet been created, use new to create one");
-                        return Ok(false);
-                    } else if state == DbState::Unlocked {
-                        println!("Wallet already unlocked");
-                        return Ok(false);
-                    }
-                    return Err(format!("Unknown state: {:?}", state));
-                }
-
-                check_args!(args, 2);
-                let pass = &Password(args.remove(1).into_bytes());
-                if self.db.unlock(pass) {
-                    self.prompt = "unlocked>> ".to_owned();
-                } else {
-                    println!("Failed to unlock wallet...incorrect password");
-                }
-                return Ok(false);
-            }
-            "create_account" => {
-                check_unlocked!(self);
-                let account = &args[1];
-                if self.db.get_account(account).is_some() {
-                    println!("Account already exists");
-                    return Ok(true);
-                }
-                let key = KeyPair::gen_keypair();
-                self.db.set_account(account, &key.1);
-                println!("Public key => {}", key.0.to_wif());
-                println!("Private key => {}", key.1.to_wif());
-            }
-            "import_account" => {
-                check_unlocked!(self);
-                check_args!(args, 3);
-                let account = &args[1];
-                let wif = PrivateKey::from_wif(&args[2]).map_err(|_| "Invalid wif".to_owned())?;
-                for (acc, pair) in self.db.get_accounts() {
-                    if &acc == account {
-                        println!("Account already exists");
-                        return Ok(true);
-                    } else if pair.1 == wif.1 {
-                        println!("Wif already exists under account `{}`", &acc);
-                        return Ok(true);
-                    }
-                }
-                self.db.set_account(account, &wif.1);
-            }
-            "get_account" => {
-                check_unlocked!(self);
-                check_args!(args, 2);
-                let key = self.db.get_account(&args[1]);
-                match key {
-                    Some(key) => {
-                        println!("Public key => {}", key.0.to_wif());
-                        println!("Private key => {}", key.1.to_wif());
-                    }
-                    None => {
-                        println!("Account not found");
-                    }
-                }
-            }
-            "delete_account" => {
-                check_unlocked!(self);
-                check_args!(args, 2);
-                if self.db.del_account(&args[1]) {
-                    println!("Account permanently deleted");
-                } else {
-                    println!("Account not found");
-                }
-            }
-            "list_accounts" => {
-                check_unlocked!(self);
-                println!("Accounts:");
-                for (acc, key) in self.db.get_accounts() {
-                    println!("  {} => {}", acc, key.0.to_wif());
-                }
-            }
-            "build_script" => {
-                let script = script_builder::build(&args[1..]);
-                match script {
-                    Ok(script) => {
-                        println!("{:?}", script);
-                        println!("{:?}", ScriptHash::from(script));
-                    }
-                    Err(e) => {
-                        println!("{:?}", e);
-                    }
-                }
-            }
-            "get_properties" => {
-                send_print_rpc_req!(self, MsgRequest::GetProperties);
-            }
-            "get_block" => {
-                check_args!(args, 2);
-                let height: u64 = args[1]
-                    .parse()
-                    .map_err(|_| "Failed to parse height argument".to_owned())?;
-
-                send_print_rpc_req!(self, MsgRequest::GetBlock(height));
-            }
+            "new" => cmd::create_wallet(self, args),
+            "unlock" => cmd::unlock(self, args),
+            "create_account" => cmd::account::create(self, args),
+            "import_account" => cmd::account::import(self, args),
+            "get_account" => cmd::account::get(self, args),
+            "delete_account" => cmd::account::delete(self, args),
+            "list_accounts" => cmd::account::list(self, args),
+            "build_script" => cmd::build_script(self, args),
+            "build_mint_tx" => cmd::build_mint_tx(self, args),
+            "get_properties" => cmd::get_properties(self, args),
+            "get_block" => cmd::get_block(self, args),
             "help" => {
                 Self::print_usage("Displaying help...");
+                Ok(true)
             }
             _ => {
                 Self::print_usage(&format!("Invalid command: {}", args[0]));
+                Ok(true)
             }
         }
-        Ok(true)
     }
 
     fn print_usage(header: &str) {
@@ -264,6 +109,11 @@ impl Wallet {
         cmds.push(["delete_account <account>", "Delete an existing account"]);
         cmds.push(["get_account <account>", "Retrieve account information"]);
         cmds.push(["list_accounts", "List all accounts"]);
+        cmds.push(["build_script <...op>", "Builds a script"]);
+        cmds.push([
+            "build_mint_tx <timestamp_offset> <gold_asset> <silver_asset> <owner_script>",
+            "Builds a mint transaction",
+        ]);
         cmds.push(["get_properties", "Retrieve global network properties"]);
         cmds.push(["get_block <height>", "Retrieve a block from the network"]);
 
