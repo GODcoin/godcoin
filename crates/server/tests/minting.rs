@@ -12,7 +12,7 @@ fn empty_blockchain() {
 }
 
 #[test]
-fn get_properties() {
+fn get_block() {
     let minter = TestMinter::new();
 
     let res = handle_request(minter.chain(), MsgRequest::GetBlock(0));

@@ -108,7 +108,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
         MsgResponse::GetProperties(props) => props,
         _ => return Err("wallet not unlocked".to_owned()),
     }
-        .owner;
+    .owner;
 
     let mint_tx = TxVariant::MintTx(MintTx {
         base: Tx {
