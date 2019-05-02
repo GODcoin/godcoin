@@ -1,5 +1,5 @@
 use crate::{
-    prelude::{Properties, SignedBlock},
+    prelude::{Properties, SignedBlock, TxVariant},
     serializer::*,
 };
 use std::convert::{TryFrom, TryInto};
@@ -97,6 +97,11 @@ impl MsgResponse {
                 let mut buf = Vec::with_capacity(1 + mem::size_of::<Properties>());
                 buf.push(MsgType::GetProperties as u8);
                 buf.push_u64(props.height);
+                {
+                    let mut tx_buf = Vec::with_capacity(4096);
+                    TxVariant::OwnerTx(props.owner).encode_with_sigs(&mut tx_buf);
+                    buf.push_bytes(&tx_buf);
+                }
                 buf.push_balance(&props.network_fee);
                 buf.push_balance(&props.token_supply);
                 buf
@@ -127,10 +132,22 @@ impl MsgResponse {
             }
             t if t == MsgType::GetProperties as u8 => {
                 let height = cursor.take_u64()?;
+                let owner = {
+                    let var = TxVariant::decode_with_sigs(cursor).ok_or_else(|| {
+                        Error::new(io::ErrorKind::InvalidData, "failed to deserialize owner tx")
+                    })?;
+                    match var {
+                        TxVariant::OwnerTx(tx) => tx,
+                        _ => {
+                            return Err(Error::new(io::ErrorKind::InvalidData, "expected owner tx"))
+                        }
+                    }
+                };
                 let network_fee = cursor.take_balance()?;
                 let token_supply = cursor.take_balance()?;
                 Ok(MsgResponse::GetProperties(Properties {
                     height,
+                    owner,
                     network_fee,
                     token_supply,
                 }))

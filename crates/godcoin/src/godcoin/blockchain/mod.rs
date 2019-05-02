@@ -24,6 +24,7 @@ pub struct Blockchain {
 #[derive(Clone, Debug)]
 pub struct Properties {
     pub height: u64,
+    pub owner: OwnerTx,
     pub token_supply: Balance,
     pub network_fee: Balance,
 }
@@ -45,6 +46,7 @@ impl Blockchain {
     pub fn get_properties(&self) -> Properties {
         Properties {
             height: self.get_chain_height(),
+            owner: self.get_owner(),
             token_supply: self.indexer.get_token_supply(),
             network_fee: self
                 .get_network_fee()
