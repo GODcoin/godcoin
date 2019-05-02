@@ -100,7 +100,7 @@ impl MsgResponse {
                 {
                     let mut tx_buf = Vec::with_capacity(4096);
                     TxVariant::OwnerTx(props.owner).encode_with_sigs(&mut tx_buf);
-                    buf.push_bytes(&tx_buf);
+                    buf.extend_from_slice(&tx_buf);
                 }
                 buf.push_balance(&props.network_fee);
                 buf.push_balance(&props.token_supply);
