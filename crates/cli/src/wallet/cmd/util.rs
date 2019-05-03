@@ -42,3 +42,16 @@ macro_rules! send_print_rpc_req {
         println!("{:#?}", res);
     };
 }
+
+macro_rules! hex_to_bytes {
+    ($string:expr) => {{
+        let len = $string.len() / 2;
+        let mut dst = Vec::with_capacity(len);
+        dst.resize(len, 0);
+        let res = faster_hex::hex_decode($string.as_bytes(), &mut dst);
+        match res {
+            Ok(_) => Ok(dst),
+            Err(_) => Err("invalid hex string"),
+        }
+    }};
+}
