@@ -10,11 +10,13 @@ pub enum MsgType {
     Error = 0,
     GetProperties = 1,
     GetBlock = 2,
+    Broadcast = 3,
 }
 
 pub enum MsgRequest {
     GetProperties,
     GetBlock(u64), // height
+    Broadcast(TxVariant),
 }
 
 impl MsgRequest {
@@ -27,6 +29,12 @@ impl MsgRequest {
                 buf.push_u64(height);
                 buf
             }
+            MsgRequest::Broadcast(tx) => {
+                let mut buf = Vec::with_capacity(4096);
+                buf.push(MsgType::Broadcast as u8);
+                tx.encode_with_sigs(&mut buf);
+                buf
+            }
         }
     }
 
@@ -37,6 +45,11 @@ impl MsgRequest {
             t if t == MsgType::GetBlock as u8 => {
                 let height = cursor.take_u64()?;
                 Ok(MsgRequest::GetBlock(height))
+            }
+            t if t == MsgType::Broadcast as u8 => {
+                let tx = TxVariant::decode_with_sigs(cursor)
+                    .ok_or_else(|| Error::new(io::ErrorKind::InvalidData, "failed to decode tx"))?;
+                Ok(MsgRequest::Broadcast(tx))
             }
             _ => Err(Error::new(
                 io::ErrorKind::InvalidData,
@@ -70,6 +83,7 @@ pub enum MsgResponse {
     Error(ErrorKind, Option<String>), // code, message
     GetProperties(Properties),
     GetBlock(SignedBlock),
+    Broadcast(),
 }
 
 impl MsgResponse {
@@ -111,6 +125,9 @@ impl MsgResponse {
                 buf.push(MsgType::GetBlock as u8);
                 block.encode_with_tx(&mut buf);
                 buf
+            }
+            MsgResponse::Broadcast() => {
+                vec![MsgType::Broadcast as u8]
             }
         }
     }

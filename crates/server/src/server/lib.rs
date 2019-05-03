@@ -76,5 +76,9 @@ pub fn handle_request(chain: &Blockchain, req: MsgRequest) -> MsgResponse {
             Some(block) => MsgResponse::GetBlock(block.as_ref().clone()),
             None => MsgResponse::Error(ErrorKind::InvalidHeight, None),
         },
+        MsgRequest::Broadcast(tx) => {
+            // TODO
+            unimplemented!()
+        }
     }
 }

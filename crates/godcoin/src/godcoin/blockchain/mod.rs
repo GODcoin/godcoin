@@ -16,17 +16,17 @@ use crate::crypto::*;
 use crate::script::*;
 use crate::tx::*;
 
-pub struct Blockchain {
-    indexer: Arc<Indexer>,
-    store: Mutex<BlockStore>,
-}
-
 #[derive(Clone, Debug)]
 pub struct Properties {
     pub height: u64,
     pub owner: OwnerTx,
     pub token_supply: Balance,
     pub network_fee: Balance,
+}
+
+pub struct Blockchain {
+    indexer: Arc<Indexer>,
+    store: Mutex<BlockStore>,
 }
 
 impl Blockchain {
