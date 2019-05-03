@@ -85,6 +85,7 @@ impl Wallet {
             "delete_account" => cmd::account::delete(self, args),
             "list_accounts" => cmd::account::list(self, args),
             "build_script" => cmd::build_script(self, args),
+            "decode_tx" => cmd::decode_tx(self, args),
             "build_mint_tx" => cmd::build_mint_tx(self, args),
             "get_properties" => cmd::get_properties(self, args),
             "get_block" => cmd::get_block(self, args),
@@ -110,6 +111,10 @@ impl Wallet {
         cmds.push(["get_account <account>", "Retrieve account information"]);
         cmds.push(["list_accounts", "List all accounts"]);
         cmds.push(["build_script <...op>", "Builds a script"]);
+        cmds.push([
+            "decode_tx <tx_hex>",
+            "Decodes a transaction and prints it to console",
+        ]);
         cmds.push([
             "build_mint_tx <timestamp_offset> <gold_asset> <silver_asset> <owner_script>",
             "Builds a mint transaction",

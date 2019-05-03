@@ -69,6 +69,25 @@ pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
     Ok(true)
 }
 
+pub fn decode_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+    check_args!(args, 1);
+
+    let tx_bytes = {
+        let src = &args[1];
+        let len = src.len() / 2;
+        let mut dst = Vec::with_capacity(len);
+        dst.resize(len, 0);
+        faster_hex::hex_decode(src.as_bytes(), &mut dst).map_err(|_| "invalid hex string")?;
+        dst
+    };
+
+    let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
+    let tx = TxVariant::decode_with_sigs(cursor).ok_or("Failed to decode tx")?;
+    println!("{:#?}", tx);
+
+    Ok(true)
+}
+
 pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
     check_args!(args, 4);
     let timestamp: u64 = {
