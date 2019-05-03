@@ -1,5 +1,8 @@
-use std::borrow::Cow;
-use std::io::Cursor;
+use std::{
+    borrow::Cow,
+    io::Cursor,
+    ops::{Deref, DerefMut},
+};
 
 use crate::asset::{Asset, Balance};
 use crate::crypto::{KeyPair, PublicKey, ScriptHash, SigPair};
@@ -82,7 +85,7 @@ impl TxVariant {
     }
 }
 
-impl std::ops::Deref for TxVariant {
+impl Deref for TxVariant {
     type Target = Tx;
 
     fn deref(&self) -> &Self::Target {
@@ -91,6 +94,17 @@ impl std::ops::Deref for TxVariant {
             TxVariant::MintTx(tx) => &tx.base,
             TxVariant::RewardTx(tx) => &tx.base,
             TxVariant::TransferTx(tx) => &tx.base,
+        }
+    }
+}
+
+impl DerefMut for TxVariant {
+    fn deref_mut(&mut self) -> &mut Tx {
+        match self {
+            TxVariant::OwnerTx(tx) => &mut tx.base,
+            TxVariant::MintTx(tx) => &mut tx.base,
+            TxVariant::RewardTx(tx) => &mut tx.base,
+            TxVariant::TransferTx(tx) => &mut tx.base,
         }
     }
 }
