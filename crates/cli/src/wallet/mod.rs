@@ -87,6 +87,7 @@ impl Wallet {
             "build_script" => cmd::build_script(self, args),
             "decode_tx" => cmd::decode_tx(self, args),
             "sign_tx" => cmd::sign_tx(self, args),
+            "unsign_tx" => cmd::unsign_tx(self, args),
             "build_mint_tx" => cmd::build_mint_tx(self, args),
             "get_properties" => cmd::get_properties(self, args),
             "get_block" => cmd::get_block(self, args),
@@ -117,6 +118,10 @@ impl Wallet {
             "Decodes a transaction and prints it to console",
         ]);
         cmds.push(["sign_tx <account> <tx_hex>", "Signs a raw transaction"]);
+        cmds.push([
+            "unsign_tx <sig_pos> <tx_hex>",
+            "Removes a signature from a raw transaction",
+        ]);
         cmds.push([
             "build_mint_tx <timestamp_offset> <gold_asset> <silver_asset> <owner_script>",
             "Builds a mint transaction",

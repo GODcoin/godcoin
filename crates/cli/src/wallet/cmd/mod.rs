@@ -90,18 +90,43 @@ pub fn sign_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, Stri
         .ok_or("Account does not exist")?;
 
     let mut tx_bytes = hex_to_bytes!(args[2])?;
-    let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
-    let mut tx = TxVariant::decode_with_sigs(cursor).ok_or("Failed to decode tx")?;
+    let mut tx = {
+        let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
+        TxVariant::decode_with_sigs(cursor).ok_or("Failed to decode tx")?
+    };
 
     match &mut tx {
-        TxVariant::OwnerTx(ref mut tx) => tx.append_sign(&account),
-        TxVariant::MintTx(ref mut tx) => tx.append_sign(&account),
+        TxVariant::OwnerTx(tx) => tx.append_sign(&account),
+        TxVariant::MintTx(tx) => tx.append_sign(&account),
         TxVariant::RewardTx(_) => return Err("Cannot sign reward tx".to_owned()),
-        TxVariant::TransferTx(ref mut tx) => tx.append_sign(&account),
+        TxVariant::TransferTx(tx) => tx.append_sign(&account),
     }
 
     tx_bytes.clear();
     tx_bytes.reserve(128);
+    tx.encode_with_sigs(&mut tx_bytes);
+    println!("{}", faster_hex::hex_string(&tx_bytes).unwrap());
+
+    Ok(true)
+}
+
+pub fn unsign_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+    check_args!(args, 2);
+    let sig_pos: usize = args[1]
+        .parse()
+        .map_err(|_| "Failed to parse signature position".to_owned())?;
+
+    let mut tx_bytes = hex_to_bytes!(args[2])?;
+    let mut tx = {
+        let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
+        TxVariant::decode_with_sigs(cursor).ok_or("Failed to decode tx")?
+    };
+
+    if sig_pos < tx.signature_pairs.len() {
+        tx.signature_pairs.remove(sig_pos);
+    }
+
+    tx_bytes.clear();
     tx.encode_with_sigs(&mut tx_bytes);
     println!("{}", faster_hex::hex_string(&tx_bytes).unwrap());
 
