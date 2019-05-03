@@ -76,6 +76,7 @@ impl Wallet {
         if args.is_empty() {
             return Ok(false);
         }
+        println!();
         match &*args[0] {
             "new" => cmd::create_wallet(self, args),
             "unlock" => cmd::unlock(self, args),
