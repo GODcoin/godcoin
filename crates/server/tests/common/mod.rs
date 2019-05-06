@@ -1,14 +1,11 @@
+use actix::prelude::*;
 use godcoin::prelude::*;
 use godcoin_server::prelude::*;
+use godcoin_server::ServerData;
 use sodiumoxide::randombytes;
-use std::{
-    env, fs,
-    ops::{Deref, DerefMut, Drop},
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{env, fs, ops::Drop, path::PathBuf, sync::Arc};
 
-pub struct TestMinter(Minter, Arc<Blockchain>, PathBuf);
+pub struct TestMinter(ServerData, PathBuf);
 
 impl TestMinter {
     pub fn new() -> Self {
@@ -27,31 +24,22 @@ impl TestMinter {
 
         let minter_key = KeyPair::gen_keypair();
         let minter_wallet = (&minter_key.0).into();
-        let minter = Minter::new(Arc::clone(&chain), minter_key, minter_wallet);
-        Self(minter, chain, tmp_dir)
+        let minter = Minter::new(Arc::clone(&chain), minter_key, minter_wallet).start();
+        let data = ServerData { chain, minter };
+        Self(data, tmp_dir)
     }
 
     pub fn chain(&self) -> &Blockchain {
-        &self.1
+        &self.0.chain
+    }
+
+    pub fn data(&self) -> &ServerData {
+        &self.0
     }
 }
 
 impl Drop for TestMinter {
     fn drop(&mut self) {
-        fs::remove_dir_all(&self.2).expect("Failed to rm dir");
-    }
-}
-
-impl Deref for TestMinter {
-    type Target = Minter;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for TestMinter {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        fs::remove_dir_all(&self.1).expect("Failed to rm dir");
     }
 }

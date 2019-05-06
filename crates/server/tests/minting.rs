@@ -1,3 +1,4 @@
+use actix::prelude::*;
 use godcoin::prelude::*;
 use godcoin_server::handle_request;
 
@@ -13,23 +14,28 @@ fn empty_blockchain() {
 
 #[test]
 fn get_block() {
-    let minter = TestMinter::new();
+    System::run(|| {
+        let minter = TestMinter::new();
 
-    let res = handle_request(minter.chain(), MsgRequest::GetBlock(0));
-    match res {
-        MsgResponse::Error(kind, msg) => {
-            assert_eq!(kind, net::ErrorKind::InvalidHeight);
-            assert_eq!(msg, None);
+        let res = handle_request(minter.data(), MsgRequest::GetBlock(0));
+        match res {
+            MsgResponse::Error(kind, msg) => {
+                assert_eq!(kind, net::ErrorKind::InvalidHeight);
+                assert_eq!(msg, None);
+            }
+            _ => panic!("Unexpected response: {:?}", res),
         }
-        _ => panic!("Unexpected response: {:?}", res),
-    }
 
-    let res = handle_request(minter.chain(), MsgRequest::GetBlock(0));
-    match res {
-        MsgResponse::Error(kind, msg) => {
-            assert_eq!(kind, net::ErrorKind::InvalidHeight);
-            assert_eq!(msg, None);
+        let res = handle_request(minter.data(), MsgRequest::GetBlock(0));
+        match res {
+            MsgResponse::Error(kind, msg) => {
+                assert_eq!(kind, net::ErrorKind::InvalidHeight);
+                assert_eq!(msg, None);
+            }
+            _ => panic!("Unexpected response: {:?}", res),
         }
-        _ => panic!("Unexpected response: {:?}", res),
-    }
+
+        System::current().stop();
+    })
+    .unwrap();
 }

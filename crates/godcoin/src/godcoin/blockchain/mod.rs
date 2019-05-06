@@ -208,7 +208,7 @@ impl Blockchain {
         for i in 0..len {
             let tx = &block.transactions[i];
             let txs = &block.transactions[0..i];
-            if let Err(s) = self.verify_tx(tx, txs) {
+            if let Err(s) = self.verify_tx(tx, txs, true) {
                 return Err(format!("tx verification failed: {}", s));
             }
         }
@@ -216,7 +216,12 @@ impl Blockchain {
         Ok(())
     }
 
-    pub fn verify_tx(&self, tx: &TxVariant, additional_txs: &[TxVariant]) -> Result<(), String> {
+    pub fn verify_tx(
+        &self,
+        tx: &TxVariant,
+        additional_txs: &[TxVariant],
+        skip_reward_verification: bool,
+    ) -> Result<(), String> {
         macro_rules! check_amt {
             ($asset:expr, $name:expr) => {
                 if $asset.amount < 0 {
@@ -266,7 +271,9 @@ impl Blockchain {
                 }
             }
             TxVariant::RewardTx(tx) => {
-                if !tx.signature_pairs.is_empty() {
+                if !skip_reward_verification {
+                    return Err("reward transactions are prohibited".to_owned());
+                } else if !tx.signature_pairs.is_empty() {
                     return Err("reward transaction must not be signed".to_owned());
                 }
             }

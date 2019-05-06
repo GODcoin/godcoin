@@ -20,6 +20,12 @@ pub struct ServerConfig {
     pub bind_addr: String,
 }
 
+#[derive(Clone)]
+pub struct ServerData {
+    pub chain: Arc<Blockchain>,
+    pub minter: Addr<Minter>,
+}
+
 pub fn start(config: ServerConfig) {
     let blockchain = Arc::new(Blockchain::new(&config.home));
     info!(
@@ -32,11 +38,15 @@ pub fn start(config: ServerConfig) {
     }
 
     let wallet_addr = blockchain.get_owner().wallet;
-    Minter::new(Arc::clone(&blockchain), config.minter_key, wallet_addr).start();
+    let minter = Minter::new(Arc::clone(&blockchain), config.minter_key, wallet_addr).start();
+    minter.do_send(minter::StartProductionLoop);
 
     HttpServer::new(move || {
         App::new()
-            .data(Arc::clone(&blockchain))
+            .data(ServerData {
+                chain: Arc::clone(&blockchain),
+                minter: minter.clone(),
+            })
             .wrap(middleware::Logger::new(r#"%a "%r" %s %T"#))
             .service(
                 web::resource("/").route(
@@ -54,9 +64,9 @@ pub fn start(config: ServerConfig) {
     .start();
 }
 
-fn index(chain: web::Data<Arc<Blockchain>>, body: bytes::Bytes) -> HttpResponse {
+fn index(data: web::Data<ServerData>, body: bytes::Bytes) -> HttpResponse {
     match MsgRequest::deserialize(&mut Cursor::new(&body)) {
-        Ok(msg_req) => handle_request(&chain, msg_req).into_res(),
+        Ok(msg_req) => handle_request(&data, msg_req).into_res(),
         Err(e) => match e.kind() {
             _ => {
                 error!("Unknown error occurred during deserialization: {:?}", e);
@@ -66,19 +76,23 @@ fn index(chain: web::Data<Arc<Blockchain>>, body: bytes::Bytes) -> HttpResponse 
     }
 }
 
-pub fn handle_request(chain: &Blockchain, req: MsgRequest) -> MsgResponse {
+pub fn handle_request(data: &ServerData, req: MsgRequest) -> MsgResponse {
     match req {
         MsgRequest::GetProperties => {
-            let props = chain.get_properties();
+            let props = data.chain.get_properties();
             MsgResponse::GetProperties(props)
         }
-        MsgRequest::GetBlock(height) => match chain.get_block(height) {
+        MsgRequest::GetBlock(height) => match data.chain.get_block(height) {
             Some(block) => MsgResponse::GetBlock(block.as_ref().clone()),
             None => MsgResponse::Error(ErrorKind::InvalidHeight, None),
         },
         MsgRequest::Broadcast(tx) => {
-            // TODO
-            unimplemented!()
+            let res = data.minter.send(minter::PushTx(tx)).wait().unwrap();
+            // TODO create a specific error type
+            match res {
+                Ok(_) => MsgResponse::Broadcast(),
+                Err(e) => MsgResponse::Error(ErrorKind::UnknownError, Some(e.0)),
+            }
         }
     }
 }

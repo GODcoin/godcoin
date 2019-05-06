@@ -126,9 +126,7 @@ impl MsgResponse {
                 block.encode_with_tx(&mut buf);
                 buf
             }
-            MsgResponse::Broadcast() => {
-                vec![MsgType::Broadcast as u8]
-            }
+            MsgResponse::Broadcast() => vec![MsgType::Broadcast as u8],
         }
     }
 

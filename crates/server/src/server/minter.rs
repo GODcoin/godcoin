@@ -7,6 +7,16 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+#[derive(Message)]
+pub struct StartProductionLoop;
+
+#[derive(Message)]
+#[rtype(result = "Result<(), TxValidateError>")]
+pub struct PushTx(pub TxVariant);
+
+#[derive(MessageResponse)]
+pub struct TxValidateError(pub String);
+
 pub struct Minter {
     chain: Arc<Blockchain>,
     minter_key: KeyPair,
@@ -16,13 +26,6 @@ pub struct Minter {
 
 impl Actor for Minter {
     type Context = Context<Self>;
-
-    fn started(&mut self, ctx: &mut Self::Context) {
-        let dur = Duration::from_secs(3);
-        ctx.run_interval(dur, |minter, _| {
-            minter.produce();
-        });
-    }
 }
 
 impl Minter {
@@ -31,12 +34,12 @@ impl Minter {
             chain,
             minter_key,
             wallet_addr,
-            txs: Vec::new(),
+            txs: Vec::with_capacity(1024),
         }
     }
 
     fn produce(&mut self) {
-        let mut transactions = vec![];
+        let mut transactions = Vec::with_capacity(1024);
         mem::swap(&mut transactions, &mut self.txs);
 
         let timestamp = SystemTime::now()
@@ -67,5 +70,29 @@ impl Minter {
             "Produced block at height {} with {} {}",
             height, tx_len, txs
         );
+    }
+}
+
+impl Handler<StartProductionLoop> for Minter {
+    type Result = ();
+
+    fn handle(&mut self, _: StartProductionLoop, ctx: &mut Self::Context) -> Self::Result {
+        let dur = Duration::from_secs(3);
+        ctx.run_interval(dur, |minter, _| {
+            minter.produce();
+        });
+    }
+}
+
+impl Handler<PushTx> for Minter {
+    type Result = Result<(), TxValidateError>;
+
+    fn handle(&mut self, msg: PushTx, _: &mut Self::Context) -> Self::Result {
+        let tx = msg.0;
+        self.chain
+            .verify_tx(&tx, &self.txs, false)
+            .map_err(|e| TxValidateError(e))?;
+        self.txs.push(tx);
+        Ok(())
     }
 }
