@@ -89,6 +89,7 @@ impl Wallet {
             "decode_tx" => cmd::decode_tx(self, args),
             "sign_tx" => cmd::sign_tx(self, args),
             "unsign_tx" => cmd::unsign_tx(self, args),
+            "broadcast" => cmd::broadcast(self, args),
             "build_mint_tx" => cmd::build_mint_tx(self, args),
             "get_properties" => cmd::get_properties(self, args),
             "get_block" => cmd::get_block(self, args),
@@ -123,6 +124,7 @@ impl Wallet {
             "unsign_tx <sig_pos> <tx_hex>",
             "Removes a signature from a raw transaction",
         ]);
+        cmds.push(["broadcast <tx_hex>", "Broadcasts a transaction to the network"]);
         cmds.push([
             "build_mint_tx <timestamp_offset> <gold_asset> <silver_asset> <owner_script>",
             "Builds a mint transaction",

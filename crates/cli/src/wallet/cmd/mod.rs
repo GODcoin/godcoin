@@ -133,6 +133,18 @@ pub fn unsign_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, S
     Ok(true)
 }
 
+pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+    check_args!(args, 1);
+    let tx_bytes = hex_to_bytes!(args[1])?;
+    let tx = {
+        let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
+        TxVariant::decode_with_sigs(cursor).ok_or("Failed to decode tx")?
+    };
+
+    send_print_rpc_req!(wallet, net::MsgRequest::Broadcast(tx));
+    Ok(true)
+}
+
 pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
     check_args!(args, 4);
     let timestamp: u64 = {
