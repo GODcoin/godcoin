@@ -166,6 +166,38 @@ impl PartialEq for Tx {
 }
 
 #[derive(Clone, Debug)]
+pub struct OwnerTx {
+    pub base: Tx,
+    pub minter: PublicKey,  // Key that signs blocks
+    pub wallet: ScriptHash, // Hot wallet that receives rewards
+    pub script: Script,     // Hot wallet previous script
+}
+
+impl EncodeTx for OwnerTx {
+    fn encode(&self, v: &mut Vec<u8>) {
+        self.encode_base(v);
+        v.push_pub_key(&self.minter);
+        v.push_script_hash(&self.wallet);
+        v.push_bytes(&self.script);
+    }
+}
+
+impl DecodeTx<OwnerTx> for OwnerTx {
+    fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<OwnerTx> {
+        assert_eq!(tx.tx_type, TxType::OWNER);
+        let minter = cur.take_pub_key().ok()?;
+        let wallet = cur.take_script_hash().ok()?;
+        let script = cur.take_bytes().ok()?.into();
+        Some(OwnerTx {
+            base: tx,
+            minter,
+            wallet,
+            script,
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct MintTx {
     pub base: Tx,
     pub to: ScriptHash,
@@ -231,38 +263,6 @@ impl DecodeTx<RewardTx> for RewardTx {
             base: tx,
             to: key,
             rewards,
-        })
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct OwnerTx {
-    pub base: Tx,
-    pub minter: PublicKey,  // Key that signs blocks
-    pub wallet: ScriptHash, // Hot wallet that receives rewards
-    pub script: Script,     // Hot wallet previous script
-}
-
-impl EncodeTx for OwnerTx {
-    fn encode(&self, v: &mut Vec<u8>) {
-        self.encode_base(v);
-        v.push_pub_key(&self.minter);
-        v.push_script_hash(&self.wallet);
-        v.push_bytes(&self.script);
-    }
-}
-
-impl DecodeTx<OwnerTx> for OwnerTx {
-    fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<OwnerTx> {
-        assert_eq!(tx.tx_type, TxType::OWNER);
-        let minter = cur.take_pub_key().ok()?;
-        let wallet = cur.take_script_hash().ok()?;
-        let script = cur.take_bytes().ok()?.into();
-        Some(OwnerTx {
-            base: tx,
-            minter,
-            wallet,
-            script,
         })
     }
 }
