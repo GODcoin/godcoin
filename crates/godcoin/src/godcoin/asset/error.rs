@@ -1,6 +1,6 @@
 use std::error::Error;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AssetErrorKind {
     InvalidFormat,
     InvalidAssetType,
@@ -8,7 +8,7 @@ pub enum AssetErrorKind {
     StrTooLarge,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AssetError {
     pub kind: AssetErrorKind,
 }

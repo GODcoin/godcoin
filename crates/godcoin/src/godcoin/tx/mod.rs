@@ -28,7 +28,7 @@ pub trait SignTx {
     fn append_sign(&mut self, key_pair: &KeyPair);
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub enum TxVariant {
     OwnerTx(OwnerTx),
     MintTx(MintTx),
@@ -121,7 +121,7 @@ impl<'a> Into<Cow<'a, TxVariant>> for &'a TxVariant {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Tx {
     pub tx_type: TxType,
     pub timestamp: u64,
@@ -226,7 +226,7 @@ impl DecodeTx<RewardTx> for RewardTx {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct OwnerTx {
     pub base: Tx,
     pub minter: PublicKey,  // Key that signs blocks
@@ -258,7 +258,7 @@ impl DecodeTx<OwnerTx> for OwnerTx {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct TransferTx {
     pub base: Tx,
     pub from: ScriptHash,

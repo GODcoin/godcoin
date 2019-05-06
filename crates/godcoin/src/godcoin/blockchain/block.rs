@@ -6,7 +6,7 @@ use crate::crypto::{self, double_sha256, Digest, KeyPair};
 use crate::serializer::*;
 use crate::tx::*;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Block {
     pub previous_hash: Digest,
     pub height: u64,
@@ -81,7 +81,7 @@ impl Block {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct SignedBlock {
     pub base: Block,
     pub sig_pair: crypto::SigPair,

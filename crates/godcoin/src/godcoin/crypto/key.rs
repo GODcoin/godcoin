@@ -111,7 +111,7 @@ impl fmt::Debug for PublicKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PrivateKey {
     seed: sign::Seed,
     key: sign::SecretKey,
@@ -172,7 +172,7 @@ impl Wif<KeyPair, PrivateWif> for PrivateKey {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct KeyPair(pub PublicKey, pub PrivateKey);
 
 impl KeyPair {

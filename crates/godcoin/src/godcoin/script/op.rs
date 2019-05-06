@@ -30,7 +30,7 @@ impl From<Operand> for u8 {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(Debug, PartialEq)]
 pub enum OpFrame {
     // Push value
     False,
