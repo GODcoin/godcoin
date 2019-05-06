@@ -156,6 +156,15 @@ impl Tx {
     }
 }
 
+impl PartialEq for Tx {
+    fn eq(&self, other: &Self) -> bool {
+        self.tx_type == other.tx_type
+            && self.timestamp == other.timestamp
+            && self.fee.eq(&other.fee).unwrap_or(false)
+            && self.signature_pairs == other.signature_pairs
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct MintTx {
     pub base: Tx,
@@ -463,6 +472,43 @@ mod tests {
         assert_eq!(transfer_tx.script, vec![1, 2, 3, 4].into());
         assert_eq!(transfer_tx.amount.to_string(), dec.amount.to_string());
         assert_eq!(transfer_tx.memo, dec.memo);
+    }
+
+    #[test]
+    fn test_tx_equality() {
+        let tx_a = Tx {
+            tx_type: TxType::MINT,
+            timestamp: 1000,
+            fee: "10 GOLD".parse().unwrap(),
+            signature_pairs: vec![KeyPair::gen_keypair().sign(b"hello world")],
+        };
+        let tx_b = tx_a.clone();
+        assert_eq!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.fee = "10.0 GOLD".parse().unwrap();
+        assert_eq!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.tx_type = TxType::OWNER;
+        assert_ne!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.timestamp = tx_b.timestamp + 1;
+        assert_ne!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.fee = "10 SILVER".parse().unwrap();
+        assert_ne!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.fee = "1.0 GOLD".parse().unwrap();
+        assert_ne!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.signature_pairs
+            .push(KeyPair::gen_keypair().sign(b"hello world"));
+        assert_ne!(tx_a, tx_b);
     }
 
     fn get_asset(s: &str) -> Asset {
