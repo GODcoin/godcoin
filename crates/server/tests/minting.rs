@@ -1,6 +1,5 @@
 use actix::prelude::*;
 use godcoin::prelude::*;
-use godcoin_server::handle_request;
 
 mod common;
 
@@ -21,7 +20,7 @@ fn get_block() {
     System::run(|| {
         let minter = TestMinter::new();
 
-        let res = handle_request(minter.data(), MsgRequest::GetBlock(0));
+        let res = minter.request(MsgRequest::GetBlock(0));
         match res {
             MsgResponse::Error(kind, msg) => {
                 assert_eq!(kind, net::ErrorKind::InvalidHeight);
@@ -30,7 +29,7 @@ fn get_block() {
             _ => panic!("Unexpected response: {:?}", res),
         }
 
-        let res = handle_request(minter.data(), MsgRequest::GetBlock(0));
+        let res = minter.request(MsgRequest::GetBlock(1));
         match res {
             MsgResponse::Error(kind, msg) => {
                 assert_eq!(kind, net::ErrorKind::InvalidHeight);

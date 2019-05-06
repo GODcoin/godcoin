@@ -1,7 +1,6 @@
 use actix::prelude::*;
 use godcoin::prelude::*;
-use godcoin_server::prelude::*;
-use godcoin_server::ServerData;
+use godcoin_server::{handle_request, prelude::*, ServerData};
 use sodiumoxide::randombytes;
 use std::{env, fs, ops::Drop, path::PathBuf, sync::Arc};
 
@@ -33,8 +32,8 @@ impl TestMinter {
         &self.0.chain
     }
 
-    pub fn data(&self) -> &ServerData {
-        &self.0
+    pub fn request(&self, req: MsgRequest) -> MsgResponse {
+        handle_request(&self.0, req)
     }
 }
 
