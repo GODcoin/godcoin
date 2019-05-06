@@ -1,4 +1,3 @@
-use log::info;
 use parking_lot::Mutex;
 use std::path::*;
 use std::sync::Arc;
@@ -337,31 +336,11 @@ impl Blockchain {
         }
     }
 
-    pub fn create_genesis_block(&self, minter_key: &KeyPair) {
+    pub fn create_genesis_block(&self, minter_key: KeyPair) -> GenesisBlockInfo {
         use crate::crypto::Digest;
         use std::time::{SystemTime, UNIX_EPOCH};
 
-        let wallet_key_1 = KeyPair::gen_keypair();
-        let wallet_key_2 = KeyPair::gen_keypair();
-        let wallet_key_3 = KeyPair::gen_keypair();
-        let wallet_key_4 = KeyPair::gen_keypair();
-
-        let script = Builder::new()
-            .push(OpFrame::PubKey(minter_key.0.clone()))
-            .push(OpFrame::OpCheckSigFastFail)
-            .push(OpFrame::PubKey(wallet_key_1.0.clone()))
-            .push(OpFrame::PubKey(wallet_key_2.0.clone()))
-            .push(OpFrame::PubKey(wallet_key_3.0.clone()))
-            .push(OpFrame::PubKey(wallet_key_4.0.clone()))
-            .push(OpFrame::OpCheckMultiSig(2, 4))
-            .build();
-
-        info!("=> Generating new block chain");
-        info!("=> {:?}", script);
-        info!("=> Wallet key 1: {}", wallet_key_1.1.to_wif());
-        info!("=> Wallet key 2: {}", wallet_key_2.1.to_wif());
-        info!("=> Wallet key 3: {}", wallet_key_3.1.to_wif());
-        info!("=> Wallet key 4: {}", wallet_key_4.1.to_wif());
+        let info = GenesisBlockInfo::new(minter_key);
 
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -375,8 +354,8 @@ impl Blockchain {
                 timestamp,
                 signature_pairs: Vec::new(),
             },
-            minter: minter_key.0.clone(),
-            wallet: script.into(),
+            minter: info.minter_key.0.clone(),
+            wallet: (&info.script).into(),
             script: Builder::new().push(OpFrame::False).build(),
         };
 
@@ -387,9 +366,44 @@ impl Blockchain {
             timestamp,
             transactions: vec![TxVariant::OwnerTx(owner_tx.clone())],
         })
-        .sign(&minter_key);
+        .sign(&info.minter_key);
 
         self.store.lock().insert_genesis(block);
         self.indexer.set_owner(&owner_tx);
+
+        info
+    }
+}
+
+pub struct GenesisBlockInfo {
+    pub minter_key: KeyPair,
+    pub wallet_keys: [KeyPair; 4],
+    pub script: Script,
+}
+
+impl GenesisBlockInfo {
+    pub fn new(minter_key: KeyPair) -> Self {
+        let wallet_keys = [
+            KeyPair::gen_keypair(),
+            KeyPair::gen_keypair(),
+            KeyPair::gen_keypair(),
+            KeyPair::gen_keypair(),
+        ];
+
+        let script = Builder::new()
+            .push(OpFrame::PubKey(minter_key.0.clone()))
+            .push(OpFrame::OpCheckSigFastFail)
+            .push(OpFrame::PubKey(wallet_keys[0].0.clone()))
+            .push(OpFrame::PubKey(wallet_keys[1].0.clone()))
+            .push(OpFrame::PubKey(wallet_keys[2].0.clone()))
+            .push(OpFrame::PubKey(wallet_keys[3].0.clone()))
+            .push(OpFrame::OpCheckMultiSig(2, 4))
+            .build();
+
+        Self {
+            minter_key,
+            wallet_keys,
+            script,
+        }
     }
 }

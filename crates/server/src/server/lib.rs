@@ -34,7 +34,12 @@ pub fn start(config: ServerConfig) {
     );
 
     if blockchain.get_block(0).is_none() {
-        blockchain.create_genesis_block(&config.minter_key);
+        let info = blockchain.create_genesis_block(config.minter_key.clone());
+        info!("=> Generated new block chain");
+        info!("=> {:?}", info.script);
+        for (index, key) in info.wallet_keys.iter().enumerate() {
+            info!("=> Wallet key {}: {}", index + 1, key.1.to_wif());
+        }
     }
 
     let wallet_addr = blockchain.get_owner().wallet;
