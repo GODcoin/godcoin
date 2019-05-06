@@ -8,8 +8,12 @@ use common::TestMinter;
 
 #[test]
 fn empty_blockchain() {
-    let minter = TestMinter::new();
-    assert!(minter.chain().get_block(0).is_none());
+    System::run(|| {
+        let minter = TestMinter::new();
+        assert!(minter.chain().get_block(0).is_none());
+        System::current().stop();
+    })
+    .unwrap();
 }
 
 #[test]
