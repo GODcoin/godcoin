@@ -255,6 +255,12 @@ pub struct Balance {
     silver: Asset,
 }
 
+impl PartialEq for Balance {
+    fn eq(&self, other: &Self) -> bool {
+        self.gold.eq(&other.gold).unwrap() && self.silver.eq(&other.silver).unwrap()
+    }
+}
+
 macro_rules! agnostic_op {
     ($op:ident) => {
         impl Balance {
@@ -439,6 +445,21 @@ mod tests {
         assert!(a.sub(b).is_none());
         assert!(a.div(b, 8).is_none());
         assert!(a.mul(b, 8).is_none());
+    }
+
+    #[test]
+    fn test_balance_eq() {
+        let bal_a = Balance::from(get_asset("10 GOLD"), get_asset("100 SILVER")).unwrap();
+        let bal_b = bal_a.clone();
+        assert_eq!(bal_a, bal_b);
+
+        let mut bal_b = bal_a.clone();
+        bal_b.add(&get_asset("1 GOLD")).unwrap();
+        assert_ne!(bal_a, bal_b);
+
+        let mut bal_b = bal_a.clone();
+        bal_b.add(&get_asset("1 SILVER")).unwrap();
+        assert_ne!(bal_a, bal_b);
     }
 
     fn get_asset(s: &str) -> Asset {

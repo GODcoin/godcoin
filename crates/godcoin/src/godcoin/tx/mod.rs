@@ -475,18 +475,18 @@ mod tests {
     }
 
     #[test]
-    fn test_tx_equality() {
+    fn test_tx_eq() {
         let tx_a = Tx {
             tx_type: TxType::MINT,
             timestamp: 1000,
-            fee: "10 GOLD".parse().unwrap(),
+            fee: get_asset("10 GOLD"),
             signature_pairs: vec![KeyPair::gen_keypair().sign(b"hello world")],
         };
         let tx_b = tx_a.clone();
         assert_eq!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.fee = "10.0 GOLD".parse().unwrap();
+        tx_b.fee = get_asset("10.0 GOLD");
         assert_eq!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
@@ -498,11 +498,11 @@ mod tests {
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.fee = "10 SILVER".parse().unwrap();
+        tx_b.fee = get_asset("10 SILVER");
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.fee = "1.0 GOLD".parse().unwrap();
+        tx_b.fee = get_asset("1.0 GOLD");
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
