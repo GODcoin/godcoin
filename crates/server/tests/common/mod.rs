@@ -1,10 +1,10 @@
 use actix::prelude::*;
-use godcoin::prelude::*;
+use godcoin::{blockchain::GenesisBlockInfo, prelude::*};
 use godcoin_server::{handle_request, prelude::*, ServerData};
 use sodiumoxide::randombytes;
 use std::{env, fs, path::PathBuf, sync::Arc};
 
-pub struct TestMinter(ServerData, PathBuf);
+pub struct TestMinter(ServerData, GenesisBlockInfo, PathBuf);
 
 impl TestMinter {
     pub fn new() -> Self {
@@ -20,16 +20,20 @@ impl TestMinter {
         fs::create_dir(&tmp_dir).expect(&format!("Could not create temp dir {:?}", &tmp_dir));
 
         let chain = Arc::new(Blockchain::new(&tmp_dir));
-
         let minter_key = KeyPair::gen_keypair();
-        let minter_wallet = (&minter_key.0).into();
-        let minter = Minter::new(Arc::clone(&chain), minter_key, minter_wallet).start();
+        let info = chain.create_genesis_block(minter_key.clone());
+
+        let minter = Minter::new(Arc::clone(&chain), minter_key, (&info.script).into()).start();
         let data = ServerData { chain, minter };
-        Self(data, tmp_dir)
+        Self(data, info, tmp_dir)
     }
 
     pub fn chain(&self) -> &Blockchain {
         &self.0.chain
+    }
+
+    pub fn genesis_info(&self) -> &GenesisBlockInfo {
+        &self.1
     }
 
     pub fn request(&self, req: MsgRequest) -> MsgResponse {
@@ -39,6 +43,6 @@ impl TestMinter {
 
 impl Drop for TestMinter {
     fn drop(&mut self) {
-        fs::remove_dir_all(&self.1).expect("Failed to rm dir");
+        fs::remove_dir_all(&self.2).expect("Failed to rm dir");
     }
 }
