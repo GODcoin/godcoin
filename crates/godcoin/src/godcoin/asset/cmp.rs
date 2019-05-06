@@ -58,8 +58,21 @@ mod tests {
         assert!(get_asset("5.0 GOLD").leq(&get_asset("10 GOLD")).unwrap());
 
         assert!(get_asset("1 GOLD").eq(&get_asset("1 GOLD")).unwrap());
+        assert!(get_asset("1.0 GOLD").eq(&get_asset("1 GOLD")).unwrap());
+        assert!(get_asset("1.0 GOLD").eq(&get_asset("1.0 GOLD")).unwrap());
+        assert!(get_asset("1 GOLD").eq(&get_asset("1.00 GOLD")).unwrap());
+        assert!(get_asset("1 GOLD").eq(&get_asset("1.0 GOLD")).unwrap());
+        assert!(get_asset("1.0 GOLD").eq(&get_asset("1.00 GOLD")).unwrap());
+
         assert!(!get_asset("1 GOLD").gt(&get_asset("1 GOLD")).unwrap());
+        assert!(!get_asset("1.0 GOLD").gt(&get_asset("1 GOLD")).unwrap());
+        assert!(!get_asset("1 GOLD").gt(&get_asset("1.0 GOLD")).unwrap());
+
+        assert!(get_asset("-1 GOLD").lt(&get_asset("1 GOLD")).unwrap());
         assert!(!get_asset("1 GOLD").lt(&get_asset("1 GOLD")).unwrap());
+        assert!(!get_asset("1 GOLD").lt(&get_asset("1.0 GOLD")).unwrap());
+        assert!(!get_asset("1.0 GOLD").lt(&get_asset("1 GOLD")).unwrap());
+        assert!(!get_asset("1 GOLD").lt(&get_asset("-1 GOLD")).unwrap());
     }
 
     #[test]
