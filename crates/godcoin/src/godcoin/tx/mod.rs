@@ -233,7 +233,7 @@ impl DecodeTx<MintTx> for MintTx {
 pub struct RewardTx {
     pub base: Tx,
     pub to: ScriptHash,
-    pub rewards: Vec<Asset>,
+    pub rewards: Balance,
 }
 
 impl EncodeTx for RewardTx {
@@ -241,10 +241,7 @@ impl EncodeTx for RewardTx {
         debug_assert_eq!(self.base.signature_pairs.len(), 0);
         self.encode_base(v);
         v.push_script_hash(&self.to);
-        v.push_u32(self.rewards.len() as u32);
-        for r in &self.rewards {
-            v.push_asset(r)
-        }
+        v.push_balance(&self.rewards);
     }
 }
 
@@ -252,12 +249,7 @@ impl DecodeTx<RewardTx> for RewardTx {
     fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<RewardTx> {
         assert_eq!(tx.tx_type, TxType::REWARD);
         let key = cur.take_script_hash().ok()?;
-
-        let len = cur.take_u32().ok()?;
-        let mut rewards = Vec::with_capacity(len as usize);
-        for _ in 0..len {
-            rewards.push(cur.take_asset().ok()?);
-        }
+        let rewards = cur.take_balance().ok()?;
 
         Some(RewardTx {
             base: tx,
@@ -340,7 +332,7 @@ mod tests {
                 signature_pairs: vec![],
             },
             to: to.0.into(),
-            rewards: vec![get_asset("1.50 GOLD"), get_asset("1.0 SILVER")],
+            rewards: Balance::from(get_asset("1.50 GOLD"), get_asset("1.0 SILVER")).unwrap(),
         });
 
         let mut v = vec![];
@@ -424,7 +416,7 @@ mod tests {
                 signature_pairs: vec![],
             },
             to: to.0.into(),
-            rewards: vec![get_asset("1.50 GOLD"), get_asset("1.0 SILVER")],
+            rewards: Balance::from(get_asset("1.50 GOLD"), get_asset("1.0 SILVER")).unwrap(),
         };
 
         let mut v = vec![];
@@ -436,9 +428,7 @@ mod tests {
 
         cmp_base_tx!(dec, TxType::REWARD, 123, "123 GOLD");
         assert_eq!(reward_tx.to, dec.to);
-        assert_eq!(reward_tx.rewards.len(), dec.rewards.len());
-        assert_eq!(reward_tx.rewards[0].to_string(), dec.rewards[0].to_string());
-        assert_eq!(reward_tx.rewards[1].to_string(), dec.rewards[1].to_string());
+        assert_eq!(reward_tx.rewards, dec.rewards);
     }
 
     #[test]

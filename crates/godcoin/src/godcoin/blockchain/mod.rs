@@ -158,9 +158,8 @@ impl Blockchain {
                 }
                 TxVariant::RewardTx(tx) => {
                     if &tx.to == hash {
-                        for reward in &tx.rewards {
-                            bal.add(&reward)?;
-                        }
+                        bal.add(tx.rewards.gold())?;
+                        bal.add(tx.rewards.silver())?;
                     }
                 }
                 TxVariant::TransferTx(tx) => {
@@ -318,9 +317,8 @@ impl Blockchain {
             }
             TxVariant::RewardTx(tx) => {
                 let mut bal = self.get_balance(&tx.to);
-                for r in &tx.rewards {
-                    bal.add(r).unwrap();
-                }
+                bal.add(tx.rewards.gold()).unwrap();
+                bal.add(tx.rewards.silver()).unwrap();
                 self.indexer.set_balance(&tx.to, &bal);
             }
             TxVariant::TransferTx(tx) => {

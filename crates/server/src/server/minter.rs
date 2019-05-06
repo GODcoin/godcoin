@@ -55,7 +55,7 @@ impl Minter {
                 signature_pairs: Vec::new(),
             },
             to: self.wallet_addr.clone(),
-            rewards: vec![],
+            rewards: Balance::default(),
         }));
 
         let head = self.chain.get_chain_head();

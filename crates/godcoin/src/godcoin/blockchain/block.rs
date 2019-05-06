@@ -2,9 +2,11 @@ use std::io::Cursor;
 use std::ops::Deref;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::crypto::{self, double_sha256, Digest, KeyPair};
-use crate::serializer::*;
-use crate::tx::*;
+use crate::{
+    crypto::{self, double_sha256, Digest, KeyPair},
+    serializer::*,
+    tx::*,
+};
 
 #[derive(Clone, Debug)]
 pub struct Block {
@@ -140,7 +142,7 @@ impl Deref for SignedBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::KeyPair;
+    use crate::{asset::Balance, crypto::KeyPair};
 
     #[test]
     fn test_serialize_block() {
@@ -155,7 +157,7 @@ mod tests {
                     signature_pairs: Vec::new(),
                 },
                 to: keys.0.clone().into(),
-                rewards: Vec::new(),
+                rewards: Balance::default(),
             }));
             vec
         };
