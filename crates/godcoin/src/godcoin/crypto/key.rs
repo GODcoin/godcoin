@@ -32,7 +32,7 @@ impl std::ops::Deref for PrivateWif {
     }
 }
 
-impl std::ops::Drop for PrivateWif {
+impl Drop for PrivateWif {
     fn drop(&mut self) {
         let bytes = unsafe { self.0.as_bytes_mut() };
         sodiumoxide::utils::memzero(bytes);

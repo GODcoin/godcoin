@@ -2,7 +2,7 @@ use actix::prelude::*;
 use godcoin::prelude::*;
 use godcoin_server::{handle_request, prelude::*, ServerData};
 use sodiumoxide::randombytes;
-use std::{env, fs, ops::Drop, path::PathBuf, sync::Arc};
+use std::{env, fs, path::PathBuf, sync::Arc};
 
 pub struct TestMinter(ServerData, PathBuf);
 

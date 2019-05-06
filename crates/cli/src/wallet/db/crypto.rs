@@ -2,7 +2,7 @@ use sodiumoxide::crypto::secretbox;
 
 pub struct Password(pub Vec<u8>);
 
-impl std::ops::Drop for Password {
+impl Drop for Password {
     fn drop(&mut self) {
         sodiumoxide::utils::memzero(&mut self.0);
     }
