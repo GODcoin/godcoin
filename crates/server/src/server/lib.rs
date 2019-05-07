@@ -54,14 +54,12 @@ pub fn start(config: ServerConfig) {
             })
             .wrap(middleware::Logger::new(r#"%a "%r" %s %T"#))
             .service(
-                web::resource("/").route(
-                    web::post()
-                        .data({
-                            // Limit 64 KiB
-                            web::PayloadConfig::default().limit(65536)
-                        })
-                        .to(index),
-                ),
+                web::resource("/")
+                    .data({
+                        // Limit 64 KiB
+                        web::PayloadConfig::default().limit(65536)
+                    })
+                    .route(web::post().to(index)),
             )
     })
     .bind(config.bind_addr)

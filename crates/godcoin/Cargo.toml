@@ -16,6 +16,6 @@ faster-hex = "0.3.1"
 log = "0.4.6"
 num-bigint = "0.2.2"
 num-traits = "0.2.6"
-parking_lot = "0.7.1"
-rocksdb = "0.12.1"
+parking_lot = "0.8.0"
+rocksdb = "0.12.2"
 sodiumoxide = { version = "0.2.1", default-features = false, features = ["std"] }

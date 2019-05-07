@@ -13,7 +13,7 @@ godcoin = { path = "../godcoin" }
 log = "0.4.6"
 
 [dependencies.actix-web]
-version = "1.0.0-beta.2"
+version = "1.0.0-beta.3"
 default-features = false
 
 [dev-dependencies]
