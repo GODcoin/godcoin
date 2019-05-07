@@ -152,8 +152,8 @@ impl Blockchain {
                 TxVariant::OwnerTx(_) => {}
                 TxVariant::MintTx(tx) => {
                     if &tx.to == hash {
-                        bal.add(tx.balance.gold())?;
-                        bal.add(tx.balance.silver())?;
+                        bal.add(tx.amount.gold())?;
+                        bal.add(tx.amount.silver())?;
                     }
                 }
                 TxVariant::RewardTx(tx) => {
@@ -311,8 +311,8 @@ impl Blockchain {
             }
             TxVariant::MintTx(tx) => {
                 let mut supply = self.indexer.get_token_supply();
-                supply.add(tx.balance.gold()).unwrap();
-                supply.add(tx.balance.silver()).unwrap();
+                supply.add(tx.amount.gold()).unwrap();
+                supply.add(tx.amount.silver()).unwrap();
                 self.indexer.set_token_supply(&supply);
             }
             TxVariant::RewardTx(tx) => {

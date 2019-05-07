@@ -201,7 +201,7 @@ impl DecodeTx<OwnerTx> for OwnerTx {
 pub struct MintTx {
     pub base: Tx,
     pub to: ScriptHash,
-    pub balance: Balance,
+    pub amount: Balance,
     pub script: Script,
 }
 
@@ -209,7 +209,7 @@ impl EncodeTx for MintTx {
     fn encode(&self, v: &mut Vec<u8>) {
         self.encode_base(v);
         v.push_script_hash(&self.to);
-        v.push_balance(&self.balance);
+        v.push_balance(&self.amount);
         v.push_bytes(&self.script);
     }
 }
@@ -218,12 +218,12 @@ impl DecodeTx<MintTx> for MintTx {
     fn decode(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<Self> {
         assert_eq!(tx.tx_type, TxType::MINT);
         let to = cur.take_script_hash().ok()?;
-        let balance = cur.take_balance().ok()?;
+        let amount = cur.take_balance().ok()?;
         let script = Script::from(cur.take_bytes().ok()?);
         Some(Self {
             base: tx,
             to,
-            balance,
+            amount,
             script,
         })
     }
@@ -381,7 +381,7 @@ mod tests {
                 signature_pairs: vec![],
             },
             to: wallet.0.clone().into(),
-            balance: Balance::from("10 GOLD".parse().unwrap(), "100 SILVER".parse().unwrap())
+            amount: Balance::from("10 GOLD".parse().unwrap(), "100 SILVER".parse().unwrap())
                 .unwrap(),
             script: wallet.0.into(),
         };
@@ -395,14 +395,7 @@ mod tests {
 
         cmp_base_tx!(dec, TxType::MINT, 1234, "123 GOLD");
         assert_eq!(mint_tx.to, dec.to);
-        assert_eq!(
-            mint_tx.balance.gold().to_string(),
-            dec.balance.gold().to_string()
-        );
-        assert_eq!(
-            mint_tx.balance.silver().to_string(),
-            dec.balance.silver().to_string()
-        );
+        assert_eq!(mint_tx.amount, dec.amount);
     }
 
     #[test]

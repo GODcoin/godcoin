@@ -157,7 +157,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
             .as_millis() as u64
     };
 
-    let balance = {
+    let amount = {
         let gold: Asset = args[2].parse().map_err(|_| "Failed to parse gold asset")?;
         let silver: Asset = args[3]
             .parse()
@@ -187,7 +187,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
             fee: "0 GOLD".parse().unwrap(),
         },
         to: owner.wallet,
-        balance,
+        amount,
         script,
     });
     let mut buf = Vec::with_capacity(4096);
