@@ -23,6 +23,17 @@ pub struct Properties {
     pub network_fee: Balance,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct VerifyConfig {
+    skip_reward: bool,
+}
+
+impl VerifyConfig {
+    pub const fn strict() -> Self {
+        VerifyConfig { skip_reward: false }
+    }
+}
+
 pub struct Blockchain {
     indexer: Arc<Indexer>,
     store: Mutex<BlockStore>,
@@ -177,7 +188,8 @@ impl Blockchain {
     }
 
     pub fn insert_block(&self, block: SignedBlock) -> Result<(), String> {
-        self.verify_block(&block, &self.get_chain_head())?;
+        static CONFIG: VerifyConfig = VerifyConfig { skip_reward: true };
+        self.verify_block(&block, &self.get_chain_head(), CONFIG)?;
         for tx in &block.transactions {
             self.index_tx(tx);
         }
@@ -186,7 +198,12 @@ impl Blockchain {
         Ok(())
     }
 
-    fn verify_block(&self, block: &SignedBlock, prev_block: &SignedBlock) -> Result<(), String> {
+    fn verify_block(
+        &self,
+        block: &SignedBlock,
+        prev_block: &SignedBlock,
+        config: VerifyConfig,
+    ) -> Result<(), String> {
         if prev_block.height + 1 != block.height {
             return Err("invalid block height".to_owned());
         } else if !block.verify_tx_merkle_root() {
@@ -206,7 +223,7 @@ impl Blockchain {
         for i in 0..len {
             let tx = &block.transactions[i];
             let txs = &block.transactions[0..i];
-            if let Err(s) = self.verify_tx(tx, txs, true) {
+            if let Err(s) = self.verify_tx(tx, txs, config) {
                 return Err(format!("tx verification failed: {}", s));
             }
         }
@@ -218,7 +235,7 @@ impl Blockchain {
         &self,
         tx: &TxVariant,
         additional_txs: &[TxVariant],
-        skip_reward_verification: bool,
+        config: VerifyConfig,
     ) -> Result<(), String> {
         macro_rules! check_amt {
             ($asset:expr, $name:expr) => {
@@ -269,7 +286,7 @@ impl Blockchain {
                 }
             }
             TxVariant::RewardTx(tx) => {
-                if !skip_reward_verification {
+                if !config.skip_reward {
                     return Err("reward transactions are prohibited".to_owned());
                 } else if !tx.signature_pairs.is_empty() {
                     return Err("reward transaction must not be signed".to_owned());

@@ -88,9 +88,10 @@ impl Handler<PushTx> for Minter {
     type Result = Result<(), TxValidateError>;
 
     fn handle(&mut self, msg: PushTx, _: &mut Self::Context) -> Self::Result {
+        static CONFIG: VerifyConfig = VerifyConfig::strict();
         let tx = msg.0;
         self.chain
-            .verify_tx(&tx, &self.txs, false)
+            .verify_tx(&tx, &self.txs, CONFIG)
             .map_err(TxValidateError)?;
         self.txs.push(tx);
         Ok(())
