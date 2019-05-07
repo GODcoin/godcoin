@@ -113,7 +113,7 @@ impl MsgResponse {
                 buf.push_u64(props.height);
                 {
                     let mut tx_buf = Vec::with_capacity(4096);
-                    TxVariant::OwnerTx(props.owner).encode_with_sigs(&mut tx_buf);
+                    TxVariant::OwnerTx(*props.owner).encode_with_sigs(&mut tx_buf);
                     buf.extend_from_slice(&tx_buf);
                 }
                 buf.push_balance(&props.network_fee);
@@ -152,7 +152,7 @@ impl MsgResponse {
                         Error::new(io::ErrorKind::InvalidData, "failed to deserialize owner tx")
                     })?;
                     match var {
-                        TxVariant::OwnerTx(tx) => tx,
+                        TxVariant::OwnerTx(tx) => Box::new(tx),
                         _ => {
                             return Err(Error::new(io::ErrorKind::InvalidData, "expected owner tx"))
                         }

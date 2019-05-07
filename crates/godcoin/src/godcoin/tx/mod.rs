@@ -322,7 +322,10 @@ tx_sign!(TransferTx);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{crypto, script::{Builder, OpFrame}};
+    use crate::{
+        crypto,
+        script::{Builder, OpFrame},
+    };
 
     macro_rules! cmp_base_tx {
         ($id:ident, $ty:expr, $ts:expr, $fee:expr) => {

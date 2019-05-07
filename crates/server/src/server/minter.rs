@@ -91,7 +91,7 @@ impl Handler<PushTx> for Minter {
         let tx = msg.0;
         self.chain
             .verify_tx(&tx, &self.txs, false)
-            .map_err(|e| TxValidateError(e))?;
+            .map_err(TxValidateError)?;
         self.txs.push(tx);
         Ok(())
     }

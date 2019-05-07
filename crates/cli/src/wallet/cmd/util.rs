@@ -46,8 +46,7 @@ macro_rules! send_print_rpc_req {
 macro_rules! hex_to_bytes {
     ($string:expr) => {{
         let len = $string.len() / 2;
-        let mut dst = Vec::with_capacity(len);
-        dst.resize(len, 0);
+        let mut dst = vec![0; len];
         let res = faster_hex::hex_decode($string.as_bytes(), &mut dst);
         match res {
             Ok(_) => Ok(dst),
