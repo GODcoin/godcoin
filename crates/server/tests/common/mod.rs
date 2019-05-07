@@ -2,7 +2,12 @@ use actix::prelude::*;
 use godcoin::{blockchain::GenesisBlockInfo, prelude::*};
 use godcoin_server::{handle_request, prelude::*, ServerData};
 use sodiumoxide::randombytes;
-use std::{env, fs, path::PathBuf, sync::Arc};
+use std::{
+    env, fs,
+    path::PathBuf,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 pub struct TestMinter(ServerData, GenesisBlockInfo, PathBuf);
 
@@ -44,5 +49,18 @@ impl TestMinter {
 impl Drop for TestMinter {
     fn drop(&mut self) {
         fs::remove_dir_all(&self.2).expect("Failed to rm dir");
+    }
+}
+
+pub fn create_tx(tx_type: TxType, fee: &str) -> Tx {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    Tx {
+        tx_type,
+        timestamp,
+        fee: fee.parse().unwrap(),
+        signature_pairs: Vec::with_capacity(8),
     }
 }

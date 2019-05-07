@@ -3,7 +3,7 @@ use godcoin::prelude::*;
 
 mod common;
 
-pub use common::TestMinter;
+pub use common::*;
 
 #[test]
 fn get_block() {
