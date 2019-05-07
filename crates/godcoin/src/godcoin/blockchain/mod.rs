@@ -90,8 +90,7 @@ impl Blockchain {
     pub fn get_total_fee(&self, hash: &ScriptHash) -> Option<Balance> {
         let net_fee = self.get_network_fee()?;
         let mut addr_fee = self.get_address_fee(hash)?;
-        addr_fee.add(net_fee.gold())?;
-        addr_fee.add(net_fee.silver())?;
+        addr_fee.add_bal(&net_fee)?;
         Some(addr_fee)
     }
 
@@ -163,14 +162,12 @@ impl Blockchain {
                 TxVariant::OwnerTx(_) => {}
                 TxVariant::MintTx(tx) => {
                     if &tx.to == hash {
-                        bal.add(tx.amount.gold())?;
-                        bal.add(tx.amount.silver())?;
+                        bal.add_bal(&tx.amount)?;
                     }
                 }
                 TxVariant::RewardTx(tx) => {
                     if &tx.to == hash {
-                        bal.add(tx.rewards.gold())?;
-                        bal.add(tx.rewards.silver())?;
+                        bal.add_bal(&tx.rewards)?;
                     }
                 }
                 TxVariant::TransferTx(tx) => {
@@ -328,14 +325,12 @@ impl Blockchain {
             }
             TxVariant::MintTx(tx) => {
                 let mut supply = self.indexer.get_token_supply();
-                supply.add(tx.amount.gold()).unwrap();
-                supply.add(tx.amount.silver()).unwrap();
+                supply.add_bal(&tx.amount).unwrap();
                 self.indexer.set_token_supply(&supply);
             }
             TxVariant::RewardTx(tx) => {
                 let mut bal = self.get_balance(&tx.to);
-                bal.add(tx.rewards.gold()).unwrap();
-                bal.add(tx.rewards.silver()).unwrap();
+                bal.add_bal(&tx.rewards).unwrap();
                 self.indexer.set_balance(&tx.to, &bal);
             }
             TxVariant::TransferTx(tx) => {

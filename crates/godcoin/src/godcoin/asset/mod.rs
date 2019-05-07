@@ -262,7 +262,7 @@ impl PartialEq for Balance {
 }
 
 macro_rules! agnostic_op {
-    ($op:ident) => {
+    ($op:ident, $op_bal:ident) => {
         impl Balance {
             #[inline]
             #[must_use = "operation can fail"]
@@ -277,12 +277,24 @@ macro_rules! agnostic_op {
                 }
                 Some(self)
             }
+
+            #[inline]
+            #[must_use = "operation can fail"]
+            pub fn $op_bal(&mut self, other: &Balance) -> Option<&mut Balance> {
+                // Perform the operation ensuring we can rollback if any operation fails
+                let gold = self.gold.$op(&other.gold)?;
+                let silver = self.silver.$op(&other.silver)?;
+                // Now apply the new values
+                self.gold = gold;
+                self.silver = silver;
+                Some(self)
+            }
         }
     };
 }
 
-agnostic_op!(add);
-agnostic_op!(sub);
+agnostic_op!(add, add_bal);
+agnostic_op!(sub, sub_bal);
 
 impl Balance {
     #[inline]
