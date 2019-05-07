@@ -299,6 +299,17 @@ impl DecodeTx<TransferTx> for TransferTx {
     }
 }
 
+impl PartialEq for TransferTx {
+    fn eq(&self, other: &Self) -> bool {
+        self.base == other.base
+            && self.from == other.from
+            && self.to == other.to
+            && self.script == other.script
+            && self.amount.eq(&other.amount).unwrap_or(false)
+            && self.memo == other.memo
+    }
+}
+
 tx_deref!(OwnerTx);
 tx_deref!(MintTx);
 tx_deref!(RewardTx);
@@ -311,7 +322,7 @@ tx_sign!(TransferTx);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto;
+    use crate::{crypto, script::{Builder, OpFrame}};
 
     macro_rules! cmp_base_tx {
         ($id:ident, $ty:expr, $ts:expr, $fee:expr) => {
@@ -469,16 +480,16 @@ mod tests {
         assert_eq!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.fee = get_asset("10.0 GOLD");
-        assert_eq!(tx_a, tx_b);
-
-        let mut tx_b = tx_a.clone();
         tx_b.tx_type = TxType::OWNER;
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
         tx_b.timestamp = tx_b.timestamp + 1;
         assert_ne!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.fee = get_asset("10.0 GOLD");
+        assert_eq!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
         tx_b.fee = get_asset("10 SILVER");
@@ -491,6 +502,50 @@ mod tests {
         let mut tx_b = tx_a.clone();
         tx_b.signature_pairs
             .push(KeyPair::gen_keypair().sign(b"hello world"));
+        assert_ne!(tx_a, tx_b);
+    }
+
+    #[test]
+    fn test_transfer_tx_eq() {
+        let tx_a = TransferTx {
+            base: Tx {
+                tx_type: TxType::TRANSFER,
+                timestamp: 1000,
+                fee: get_asset("10 GOLD"),
+                signature_pairs: vec![KeyPair::gen_keypair().sign(b"hello world")],
+            },
+            from: KeyPair::gen_keypair().0.into(),
+            to: KeyPair::gen_keypair().0.into(),
+            script: Builder::new().push(OpFrame::True).build(),
+            amount: get_asset("1.0 GOLD"),
+            memo: vec![1, 2, 3],
+        };
+
+        let tx_b = tx_a.clone();
+        assert_eq!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.base.fee = get_asset("1.0 GOLD");
+        assert_ne!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.from = KeyPair::gen_keypair().0.into();
+        assert_ne!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.to = KeyPair::gen_keypair().0.into();
+        assert_ne!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.script = Builder::new().push(OpFrame::False).build();
+        assert_ne!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.amount = get_asset("10 GOLD");
+        assert_ne!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.memo = vec![1, 2, 3, 4];
         assert_ne!(tx_a, tx_b);
     }
 
