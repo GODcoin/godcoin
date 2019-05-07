@@ -87,6 +87,13 @@ pub enum MsgResponse {
 }
 
 impl MsgResponse {
+    pub fn is_err(&self) -> bool {
+        match self {
+            MsgResponse::Error(..) => true,
+            _ => false
+        }
+    }
+
     pub fn serialize(self) -> Vec<u8> {
         use std::mem;
 

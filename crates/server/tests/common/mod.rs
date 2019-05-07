@@ -52,6 +52,12 @@ impl Drop for TestMinter {
     }
 }
 
+pub fn get_balance(gold: &str, silver: &str) -> Balance {
+    let gold = gold.parse().unwrap();
+    let silver = silver.parse().unwrap();
+    Balance::from(gold, silver).unwrap()
+}
+
 pub fn create_tx(tx_type: TxType, fee: &str) -> Tx {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
