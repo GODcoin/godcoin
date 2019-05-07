@@ -401,8 +401,6 @@ impl GenesisBlockInfo {
         ];
 
         let script = Builder::new()
-            .push(OpFrame::PubKey(minter_key.0.clone()))
-            .push(OpFrame::OpCheckSigFastFail)
             .push(OpFrame::PubKey(wallet_keys[0].0.clone()))
             .push(OpFrame::PubKey(wallet_keys[1].0.clone()))
             .push(OpFrame::PubKey(wallet_keys[2].0.clone()))
