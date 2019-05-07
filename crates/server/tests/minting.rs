@@ -36,6 +36,8 @@ fn get_block() {
         match res {
             MsgResponse::GetBlock(block) => {
                 assert_eq!(block.height, 0);
+                let other = minter.chain().get_block(0).unwrap();
+                assert_eq!(&block, other.as_ref());
             }
             _ => panic!("Unexpected response: {:?}", res),
         }
