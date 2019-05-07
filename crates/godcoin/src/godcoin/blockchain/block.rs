@@ -8,7 +8,7 @@ use crate::{
     tx::*,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Block {
     pub previous_hash: Digest,
     pub height: u64,
@@ -83,7 +83,7 @@ impl Block {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SignedBlock {
     pub base: Block,
     pub sig_pair: crypto::SigPair,
@@ -189,5 +189,7 @@ mod tests {
         assert_eq!(block.tx_merkle_root, dec.tx_merkle_root);
         assert_eq!(block.transactions.len(), dec.transactions.len());
         assert_eq!(block.sig_pair, dec.sig_pair);
+
+        assert_eq!(block, dec);
     }
 }
