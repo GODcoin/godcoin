@@ -9,6 +9,7 @@ actix = "0.8.1"
 bytes = "0.4.12"
 dirs = "1.0.5"
 env_logger = "0.6.1"
+futures = "0.1.26"
 godcoin = { path = "../godcoin" }
 log = "0.4.6"
 

@@ -1,5 +1,6 @@
 use actix::prelude::*;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use futures::{future::ok, Future};
 use godcoin::{net::*, prelude::*};
 use log::{error, info};
 use std::{io::Cursor, path::PathBuf, sync::Arc};
@@ -59,7 +60,7 @@ pub fn start(config: ServerConfig) {
                         // Limit 64 KiB
                         web::PayloadConfig::default().limit(65536)
                     })
-                    .route(web::post().to(index)),
+                    .route(web::post().to_async(index)),
             )
     })
     .bind(config.bind_addr)
@@ -67,35 +68,45 @@ pub fn start(config: ServerConfig) {
     .start();
 }
 
-fn index(data: web::Data<ServerData>, body: bytes::Bytes) -> HttpResponse {
+fn index(
+    data: web::Data<ServerData>,
+    body: bytes::Bytes,
+) -> Box<Future<Item = HttpResponse, Error = ()>> {
     match MsgRequest::deserialize(&mut Cursor::new(&body)) {
-        Ok(msg_req) => handle_request(&data, msg_req).into_res(),
+        Ok(msg_req) => Box::new(handle_request(&data, msg_req).map(IntoHttpResponse::into_res)),
         Err(e) => match e.kind() {
             _ => {
                 error!("Unknown error occurred during deserialization: {:?}", e);
-                MsgResponse::Error(ErrorKind::UnknownError, None).into_res()
+                Box::new(ok(
+                    MsgResponse::Error(ErrorKind::UnknownError, None).into_res()
+                ))
             }
         },
     }
 }
 
-pub fn handle_request(data: &ServerData, req: MsgRequest) -> MsgResponse {
+pub fn handle_request(
+    data: &ServerData,
+    req: MsgRequest,
+) -> Box<Future<Item = MsgResponse, Error = ()> + Send> {
     match req {
         MsgRequest::GetProperties => {
             let props = data.chain.get_properties();
-            MsgResponse::GetProperties(props)
+            Box::new(ok(MsgResponse::GetProperties(props)))
         }
         MsgRequest::GetBlock(height) => match data.chain.get_block(height) {
-            Some(block) => MsgResponse::GetBlock(block.as_ref().clone()),
-            None => MsgResponse::Error(ErrorKind::InvalidHeight, None),
+            Some(block) => Box::new(ok(MsgResponse::GetBlock(block.as_ref().clone()))),
+            None => Box::new(ok(MsgResponse::Error(ErrorKind::InvalidHeight, None))),
         },
         MsgRequest::Broadcast(tx) => {
-            let res = data.minter.send(minter::PushTx(tx)).wait().unwrap();
             // TODO create a specific error type
-            match res {
-                Ok(_) => MsgResponse::Broadcast(),
-                Err(e) => MsgResponse::Error(ErrorKind::UnknownError, Some(e.0)),
-            }
+            let fut = data.minter.send(minter::PushTx(tx)).then(|res| {
+                Ok(match res.unwrap() {
+                    Ok(_) => MsgResponse::Broadcast(),
+                    Err(e) => MsgResponse::Error(ErrorKind::UnknownError, Some(e.0)),
+                })
+            });
+            Box::new(fut)
         }
     }
 }

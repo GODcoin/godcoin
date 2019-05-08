@@ -90,7 +90,7 @@ impl MsgResponse {
     pub fn is_err(&self) -> bool {
         match self {
             MsgResponse::Error(..) => true,
-            _ => false
+            _ => false,
         }
     }
 
