@@ -1,4 +1,4 @@
-use rocksdb::{ColumnFamilyDescriptor, Options, DB};
+use rocksdb::{ColumnFamilyDescriptor, DBRecoveryMode, Options, DB};
 use std::io::Cursor;
 use std::mem;
 use std::path::Path;
@@ -24,6 +24,7 @@ impl Indexer {
         let mut db_opts = Options::default();
         db_opts.create_missing_column_families(true);
         db_opts.create_if_missing(true);
+        db_opts.set_wal_recovery_mode(DBRecoveryMode::AbsoluteConsistency);
 
         let col_families = vec![
             ColumnFamilyDescriptor::new(CF_BLOCK_BYTE_POS, Options::default()),
