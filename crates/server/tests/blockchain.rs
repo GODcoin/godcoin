@@ -32,7 +32,7 @@ fn mint_tx_verification() {
     System::run(|| {
         let minter = TestMinter::new();
         let chain = minter.chain();
-        let config = VerifyConfig::strict();
+        let config = verify::Config::strict();
 
         let mut tx = MintTx {
             base: create_tx(TxType::MINT, "0 GOLD"),

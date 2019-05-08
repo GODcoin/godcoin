@@ -5,6 +5,7 @@ use std::sync::Arc;
 pub mod block;
 pub mod index;
 pub mod store;
+pub mod verify;
 
 pub use self::block::*;
 pub use self::index::Indexer;
@@ -21,17 +22,6 @@ pub struct Properties {
     pub owner: Box<OwnerTx>,
     pub token_supply: Balance,
     pub network_fee: Balance,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct VerifyConfig {
-    skip_reward: bool,
-}
-
-impl VerifyConfig {
-    pub const fn strict() -> Self {
-        VerifyConfig { skip_reward: false }
-    }
 }
 
 pub struct Blockchain {
@@ -185,7 +175,7 @@ impl Blockchain {
     }
 
     pub fn insert_block(&self, block: SignedBlock) -> Result<(), String> {
-        static CONFIG: VerifyConfig = VerifyConfig { skip_reward: true };
+        static CONFIG: verify::Config = verify::Config { skip_reward: true };
         self.verify_block(&block, &self.get_chain_head(), CONFIG)?;
         for tx in &block.transactions {
             self.index_tx(tx);
@@ -199,7 +189,7 @@ impl Blockchain {
         &self,
         block: &SignedBlock,
         prev_block: &SignedBlock,
-        config: VerifyConfig,
+        config: verify::Config,
     ) -> Result<(), String> {
         if prev_block.height + 1 != block.height {
             return Err("invalid block height".to_owned());
@@ -232,7 +222,7 @@ impl Blockchain {
         &self,
         tx: &TxVariant,
         additional_txs: &[TxVariant],
-        config: VerifyConfig,
+        config: verify::Config,
     ) -> Result<(), String> {
         macro_rules! check_amt {
             ($asset:expr, $name:expr) => {
