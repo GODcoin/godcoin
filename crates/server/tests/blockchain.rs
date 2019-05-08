@@ -78,8 +78,13 @@ fn mint_tx_updates_balances() {
             })
             .then(|res| {
                 let minter = res.unwrap();
-                let props = minter.chain().get_properties();
-                assert_eq!(props.token_supply, get_balance("10 GOLD", "1000 SILVER"));
+                let chain = minter.chain();
+                let props = chain.get_properties();
+                let expected_bal = get_balance("10 GOLD", "1000 SILVER");
+                assert_eq!(props.token_supply, expected_bal);
+
+                let bal = chain.get_balance(&(&minter.genesis_info().script).into());
+                assert_eq!(bal, expected_bal);
 
                 System::current().stop();
                 Ok(())

@@ -327,6 +327,10 @@ impl Blockchain {
                 let mut supply = self.indexer.get_token_supply();
                 supply.add_bal(&tx.amount).unwrap();
                 self.indexer.set_token_supply(&supply);
+
+                let mut bal = self.get_balance(&tx.to);
+                bal.add_bal(&tx.amount).unwrap();
+                self.indexer.set_balance(&tx.to, &bal);
             }
             TxVariant::RewardTx(tx) => {
                 let mut bal = self.get_balance(&tx.to);
