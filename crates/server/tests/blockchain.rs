@@ -44,8 +44,11 @@ fn mint_tx_verification() {
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
         tx.append_sign(&minter.genesis_info().wallet_keys[3]);
 
-        let tx = TxVariant::MintTx(tx);
+        let mut tx = TxVariant::MintTx(tx);
         assert!(chain.verify_tx(&tx, &[], config).is_ok());
+
+        tx.fee = "1 GOLD".parse().unwrap();
+        assert!(chain.verify_tx(&tx, &[], config).is_err());
 
         System::current().stop();
     })
