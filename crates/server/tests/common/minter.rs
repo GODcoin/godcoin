@@ -36,6 +36,13 @@ impl TestMinter {
         &self.1
     }
 
+    pub fn produce_block(&self) -> impl Future<Item = (), Error = ()> {
+        self.0
+            .minter
+            .send(ForceProduceBlock)
+            .map_err(|e| panic!("{}", e))
+    }
+
     pub fn request(&self, req: MsgRequest) -> impl Future<Item = MsgResponse, Error = ()> {
         handle_request(&self.0, req)
     }

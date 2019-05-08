@@ -53,7 +53,6 @@ fn mint_tx_verification() {
 }
 
 #[test]
-#[ignore]
 fn mint_tx_updates_balances() {
     System::run(|| {
         let minter = TestMinter::new();
@@ -66,18 +65,26 @@ fn mint_tx_updates_balances() {
         };
 
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-        tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+        tx.append_sign(&minter.genesis_info().wallet_keys[1]);
 
         let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
-        System::current().arbiter().send(fut.and_then(move |res| {
-            assert!(!res.is_err(), format!("{:?}", res));
-            let props = minter.chain().get_properties();
-            assert_eq!(props.token_supply, get_balance("10 GOLD", "1000 SILVER"));
+        System::current().arbiter().send(
+            fut.then(move |res| {
+                let res = res.unwrap();
+                assert!(!res.is_err(), format!("{:?}", res));
 
-            System::current().stop();
-            Ok(())
-        }));
+                minter.produce_block().map(|_| minter)
+            })
+            .then(|res| {
+                let minter = res.unwrap();
+                let props = minter.chain().get_properties();
+                assert_eq!(props.token_supply, get_balance("10 GOLD", "1000 SILVER"));
+
+                System::current().stop();
+                Ok(())
+            }),
+        );
     })
     .unwrap();
 }

@@ -1,6 +1,6 @@
 use actix::prelude::*;
 use godcoin::prelude::*;
-use log::info;
+use log::{info, warn};
 use std::{
     mem,
     sync::Arc,
@@ -9,6 +9,9 @@ use std::{
 
 #[derive(Message)]
 pub struct StartProductionLoop;
+
+#[derive(Message)]
+pub struct ForceProduceBlock;
 
 #[derive(Message)]
 #[rtype(result = "Result<(), TxValidateError>")]
@@ -81,6 +84,15 @@ impl Handler<StartProductionLoop> for Minter {
         ctx.run_interval(dur, |minter, _| {
             minter.produce();
         });
+    }
+}
+
+impl Handler<ForceProduceBlock> for Minter {
+    type Result = ();
+
+    fn handle(&mut self, _: ForceProduceBlock, _: &mut Self::Context) -> Self::Result {
+        warn!("Forcing produced block...");
+        self.produce();
     }
 }
 
