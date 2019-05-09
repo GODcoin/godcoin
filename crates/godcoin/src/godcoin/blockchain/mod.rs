@@ -271,6 +271,17 @@ impl Blockchain {
                 if !success {
                     return Err("script returned false".to_owned());
                 }
+
+                // Sanity check to ensure too many new coins can't be minted
+                self.get_balance_with_txs(&mint_tx.to, additional_txs)
+                    .ok_or_else(|| "failed to get balance")?
+                    .add_bal(&mint_tx.amount)
+                    .ok_or_else(|| "failed to add balance")?;
+
+                self.indexer
+                    .get_token_supply()
+                    .add_bal(&mint_tx.amount)
+                    .ok_or_else(|| "failed to add balance")?;
             }
             TxVariant::RewardTx(tx) => {
                 if !config.skip_reward {
