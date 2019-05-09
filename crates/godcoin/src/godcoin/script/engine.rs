@@ -20,6 +20,9 @@ pub struct ScriptEngine<'a> {
 }
 
 impl<'a> ScriptEngine<'a> {
+    /// Initializes the scripting engine with a transaction and script.
+    ///
+    /// Returns `None` if the script is too large.
     pub fn checked_new<T, S>(tx: T, script: S) -> Option<Self>
     where
         T: Into<Cow<'a, TxVariant>>,
