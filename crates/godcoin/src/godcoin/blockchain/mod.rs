@@ -173,7 +173,7 @@ impl Blockchain {
         Some(bal)
     }
 
-    pub fn insert_block(&self, block: SignedBlock) -> Result<(), String> {
+    pub fn insert_block(&self, block: SignedBlock) -> Result<(), verify::BlockError> {
         static CONFIG: verify::Config = verify::Config { skip_reward: true };
         self.verify_block(&block, &self.get_chain_head(), CONFIG)?;
         for tx in &block.transactions {
@@ -189,28 +189,28 @@ impl Blockchain {
         block: &SignedBlock,
         prev_block: &SignedBlock,
         config: verify::Config,
-    ) -> Result<(), String> {
+    ) -> Result<(), verify::BlockError> {
         if prev_block.height + 1 != block.height {
-            return Err("invalid block height".to_owned());
+            return Err(verify::BlockError::InvalidBlockHeight);
         } else if !block.verify_tx_merkle_root() {
-            return Err("invalid merkle root".to_owned());
+            return Err(verify::BlockError::InvalidMerkleRoot);
         } else if !block.verify_previous_hash(prev_block) {
-            return Err("invalid previous hash".to_owned());
+            return Err(verify::BlockError::InvalidPrevHash);
         }
 
         let owner = self.get_owner();
         if !block.sig_pair.verify(block.calc_hash().as_ref()) {
-            return Err("invalid block signature".to_owned());
+            return Err(verify::BlockError::InvalidHash);
         } else if block.sig_pair.pub_key != owner.minter {
-            return Err("invalid owner signature".to_owned());
+            return Err(verify::BlockError::InvalidSignature);
         }
 
         let len = block.transactions.len();
         for i in 0..len {
             let tx = &block.transactions[i];
             let txs = &block.transactions[0..i];
-            if let Err(s) = self.verify_tx(tx, txs, config) {
-                return Err(format!("tx verification failed: {}", s));
+            if let Err(e) = self.verify_tx(tx, txs, config) {
+                return Err(verify::BlockError::Tx(e));
             }
         }
 
@@ -222,95 +222,90 @@ impl Blockchain {
         tx: &TxVariant,
         additional_txs: &[TxVariant],
         config: verify::Config,
-    ) -> Result<(), String> {
-        macro_rules! check_amt {
-            ($asset:expr, $name:expr) => {
-                if $asset.amount < 0 {
-                    return Err(format!("{} must be greater than 0", $name));
-                }
-            };
-        }
-
+    ) -> Result<(), verify::TxErr> {
         macro_rules! check_suf_bal {
             ($asset:expr) => {
                 if $asset.amount < 0 {
-                    return Err("insufficient balance".to_owned());
+                    return Err(verify::TxErr::InsufficientBalance);
                 }
             };
         }
 
         if !(tx.tx_type == TxType::OWNER || tx.tx_type == TxType::MINT) {
-            check_amt!(tx.fee, "fee");
+            if tx.fee.amount < 0 {
+                return Err(verify::TxErr::InsufficientFeeAmount);
+            }
         }
 
         match tx {
             TxVariant::OwnerTx(new_owner) => {
                 let owner = self.get_owner();
                 if owner.wallet != (&new_owner.script).into() {
-                    return Err("script hash does not match previous wallet address".to_owned());
+                    return Err(verify::TxErr::ScriptHashMismatch);
                 }
 
                 let success = ScriptEngine::checked_new(tx, &new_owner.script)
-                    .ok_or_else(|| "failed to initialize script engine")?
+                    .ok_or_else(|| verify::TxErr::ScriptTooLarge)?
                     .eval()
-                    .map_err(|e| format!("{}: {:?}", e.pos, e.err))?;
+                    .map_err(verify::TxErr::ScriptEval)?;
                 if !success {
-                    return Err("script returned false".to_owned());
+                    return Err(verify::TxErr::ScriptRetFalse);
                 }
             }
             TxVariant::MintTx(mint_tx) => {
                 let owner = self.get_owner();
                 if owner.wallet != (&mint_tx.script).into() {
-                    return Err("script hash does not match current wallet address".to_owned());
+                    return Err(verify::TxErr::ScriptHashMismatch);
                 }
                 let success = ScriptEngine::checked_new(tx, &mint_tx.script)
-                    .ok_or_else(|| "failed to initialize script engine")?
+                    .ok_or_else(|| verify::TxErr::ScriptTooLarge)?
                     .eval()
-                    .map_err(|e| format!("{}: {:?}", e.pos, e.err))?;
+                    .map_err(verify::TxErr::ScriptEval)?;
                 if !success {
-                    return Err("script returned false".to_owned());
+                    return Err(verify::TxErr::ScriptRetFalse);
                 }
 
                 // Sanity check to ensure too many new coins can't be minted
                 self.get_balance_with_txs(&mint_tx.to, additional_txs)
-                    .ok_or_else(|| "failed to get balance")?
+                    .ok_or(verify::TxErr::Arithmetic)?
                     .add_bal(&mint_tx.amount)
-                    .ok_or_else(|| "failed to add balance")?;
+                    .ok_or(verify::TxErr::Arithmetic)?;
 
                 self.indexer
                     .get_token_supply()
                     .add_bal(&mint_tx.amount)
-                    .ok_or_else(|| "failed to add balance")?;
+                    .ok_or(verify::TxErr::Arithmetic)?;
             }
             TxVariant::RewardTx(tx) => {
                 if !config.skip_reward {
-                    return Err("reward transactions are prohibited".to_owned());
+                    return Err(verify::TxErr::TxProhibited);
                 } else if !tx.signature_pairs.is_empty() {
-                    return Err("reward transaction must not be signed".to_owned());
+                    // Reward transactions are internally generated, thus should panic on failure
+                    panic!("reward transaction must not be signed");
                 }
             }
             TxVariant::TransferTx(transfer) => {
                 if transfer.fee.symbol != transfer.amount.symbol {
-                    return Err("symbol mismatch between fee and amount".to_owned());
+                    return Err(verify::TxErr::SymbolMismatch);
                 } else if transfer.from != (&transfer.script).into() {
-                    return Err("from and script hash mismatch".to_owned());
+                    return Err(verify::TxErr::ScriptHashMismatch);
                 }
 
                 let success = ScriptEngine::checked_new(tx, &transfer.script)
-                    .ok_or_else(|| "failed to initialize script engine")?
+                    .ok_or_else(|| verify::TxErr::ScriptTooLarge)?
                     .eval()
-                    .map_err(|e| format!("{}: {:?}", e.pos, e.err))?;
+                    .map_err(verify::TxErr::ScriptEval)?;
                 if !success {
-                    return Err("script returned false".to_owned());
+                    return Err(verify::TxErr::ScriptRetFalse);
                 }
 
                 let mut bal = self
                     .get_balance_with_txs(&transfer.from, additional_txs)
-                    .ok_or_else(|| "failed to get balance")?;
+                    .ok_or(verify::TxErr::Arithmetic)?;
                 bal.sub(&transfer.fee)
-                    .ok_or("failed to subtract fee")?
+                    .ok_or(verify::TxErr::Arithmetic)?
                     .sub(&transfer.amount)
-                    .ok_or("failed to subtract amount")?;
+                    .ok_or(verify::TxErr::Arithmetic)?;
                 check_suf_bal!(bal.gold());
                 check_suf_bal!(bal.silver());
             }

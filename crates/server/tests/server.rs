@@ -9,7 +9,6 @@ pub use common::*;
 fn get_block() {
     System::run(|| {
         let minter = TestMinter::new();
-
         let fut = minter.request(MsgRequest::GetBlock(0));
         Arbiter::current().send(
             fut.then(move |res| {
@@ -30,9 +29,8 @@ fn get_block() {
                 let res = res.unwrap();
                 assert!(res.is_err());
                 match res {
-                    MsgResponse::Error(kind, msg) => {
+                    MsgResponse::Error(kind) => {
                         assert_eq!(kind, net::ErrorKind::InvalidHeight);
-                        assert_eq!(msg, None);
                     }
                     _ => panic!("Unexpected response: {:?}", res),
                 }

@@ -1,20 +1,17 @@
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct EvalErr {
     pub pos: u32,
     pub err: EvalErrType,
 }
 
 impl EvalErr {
-    pub fn new(pos: usize, err: EvalErrType) -> EvalErr {
-        EvalErr {
-            pos: pos as u32,
-            err,
-        }
+    pub fn new(pos: u32, err: EvalErrType) -> EvalErr {
+        EvalErr { pos, err }
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
-#[derive(Clone, Debug, PartialEq)]
 pub enum EvalErrType {
     UnexpectedEOF,
     UnknownOp,

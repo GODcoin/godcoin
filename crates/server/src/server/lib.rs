@@ -77,9 +77,7 @@ fn index(
         Err(e) => match e.kind() {
             _ => {
                 error!("Unknown error occurred during deserialization: {:?}", e);
-                Box::new(ok(
-                    MsgResponse::Error(ErrorKind::UnknownError, None).into_res()
-                ))
+                Box::new(ok(MsgResponse::Error(ErrorKind::Io).into_res()))
             }
         },
     }
@@ -96,14 +94,13 @@ pub fn handle_request(
         }
         MsgRequest::GetBlock(height) => match data.chain.get_block(height) {
             Some(block) => Box::new(ok(MsgResponse::GetBlock(block.as_ref().clone()))),
-            None => Box::new(ok(MsgResponse::Error(ErrorKind::InvalidHeight, None))),
+            None => Box::new(ok(MsgResponse::Error(ErrorKind::InvalidHeight))),
         },
         MsgRequest::Broadcast(tx) => {
-            // TODO create a specific error type
             let fut = data.minter.send(minter::PushTx(tx)).then(|res| {
                 Ok(match res.unwrap() {
                     Ok(_) => MsgResponse::Broadcast(),
-                    Err(e) => MsgResponse::Error(ErrorKind::UnknownError, Some(e.0)),
+                    Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e.0)),
                 })
             });
             Box::new(fut)

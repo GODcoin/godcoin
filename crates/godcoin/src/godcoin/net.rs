@@ -1,8 +1,7 @@
 use crate::{
-    prelude::{Properties, SignedBlock, TxVariant},
+    prelude::{verify::TxErr, Properties, SignedBlock, TxVariant},
     serializer::*,
 };
-use std::convert::{TryFrom, TryInto};
 use std::io::{self, Cursor, Error};
 
 #[repr(u8)]
@@ -60,27 +59,43 @@ impl MsgRequest {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-#[repr(u16)]
 pub enum ErrorKind {
-    UnknownError = 0,
-    InvalidHeight = 1,
+    Io,
+    InvalidHeight,
+    TxValidation(TxErr),
 }
 
-impl TryFrom<u16> for ErrorKind {
-    type Error = Error;
-
-    fn try_from(value: u16) -> Result<ErrorKind, Error> {
-        match value {
-            e if e == ErrorKind::UnknownError as u16 => Ok(ErrorKind::UnknownError),
-            e if e == ErrorKind::InvalidHeight as u16 => Ok(ErrorKind::InvalidHeight),
-            _ => Err(Error::new(io::ErrorKind::InvalidData, "unknown error kind")),
+impl ErrorKind {
+    fn serialize(self, buf: &mut Vec<u8>) {
+        match self {
+            ErrorKind::Io => buf.push(0),
+            ErrorKind::InvalidHeight => buf.push(1),
+            ErrorKind::TxValidation(err) => {
+                buf.push(2);
+                err.serialize(buf);
+            }
         }
+    }
+
+    fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
+        let tag = cursor.take_u8()?;
+        Ok(match tag {
+            0 => ErrorKind::Io,
+            1 => ErrorKind::InvalidHeight,
+            2 => ErrorKind::TxValidation(TxErr::deserialize(cursor)?),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "failed to deserialize ErrorKind",
+                ))
+            }
+        })
     }
 }
 
 #[derive(Clone, Debug)]
 pub enum MsgResponse {
-    Error(ErrorKind, Option<String>), // code, message
+    Error(ErrorKind),
     GetProperties(Properties),
     GetBlock(SignedBlock),
     Broadcast(),
@@ -98,22 +113,11 @@ impl MsgResponse {
         use std::mem;
 
         match self {
-            MsgResponse::Error(code, msg) => match msg {
-                Some(msg) => {
-                    let mut buf = Vec::with_capacity(3 + msg.len());
-                    buf.push(MsgType::Error as u8);
-                    buf.push_u16(code as u16);
-                    buf.push_bytes(msg.as_bytes());
-                    buf
-                }
-                None => {
-                    let mut buf = Vec::with_capacity(7);
-                    buf.push(MsgType::Error as u8);
-                    buf.push_u16(code as u16);
-                    buf.push_bytes(&[]);
-                    buf
-                }
-            },
+            MsgResponse::Error(err) => {
+                let mut buf = Vec::with_capacity(2048);
+                err.serialize(&mut buf);
+                buf
+            }
             MsgResponse::GetProperties(props) => {
                 let mut buf = Vec::with_capacity(4096 + mem::size_of::<Properties>());
                 buf.push(MsgType::GetProperties as u8);
@@ -141,16 +145,8 @@ impl MsgResponse {
         let tag = cursor.take_u8()?;
         match tag {
             t if t == MsgType::Error as u8 => {
-                let kind = cursor.take_u16()?.try_into()?;
-                let msg = {
-                    let buf = cursor.take_bytes()?;
-                    if buf.is_empty() {
-                        None
-                    } else {
-                        Some(String::from_utf8_lossy(&buf).into_owned())
-                    }
-                };
-                Ok(MsgResponse::Error(kind, msg))
+                let err = ErrorKind::deserialize(cursor)?;
+                Ok(MsgResponse::Error(err))
             }
             t if t == MsgType::GetProperties as u8 => {
                 let height = cursor.take_u64()?;

@@ -18,7 +18,7 @@ pub struct ForceProduceBlock;
 pub struct PushTx(pub TxVariant);
 
 #[derive(MessageResponse)]
-pub struct TxValidateError(pub String);
+pub struct TxValidateError(pub verify::TxErr);
 
 pub struct Minter {
     chain: Arc<Blockchain>,

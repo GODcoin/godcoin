@@ -266,7 +266,7 @@ impl<'a> ScriptEngine<'a> {
     }
 
     fn new_err(&self, err: EvalErrType) -> EvalErr {
-        EvalErr::new(self.pos, err)
+        EvalErr::new(self.pos as u32, err)
     }
 }
 
