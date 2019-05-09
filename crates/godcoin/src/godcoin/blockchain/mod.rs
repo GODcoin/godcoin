@@ -1,20 +1,19 @@
 use parking_lot::Mutex;
-use std::path::*;
-use std::sync::Arc;
+use std::{path::*, sync::Arc};
 
 pub mod block;
 pub mod index;
 pub mod store;
 pub mod verify;
 
-pub use self::block::*;
-pub use self::index::Indexer;
-pub use self::store::BlockStore;
+pub use self::{block::*, index::Indexer, store::BlockStore};
 
-use crate::asset::{self, Balance};
-use crate::crypto::*;
-use crate::script::*;
-use crate::tx::*;
+use crate::{
+    asset::{self, Balance},
+    crypto::*,
+    script::*,
+    tx::*,
+};
 
 #[derive(Clone, Debug)]
 pub struct Properties {
