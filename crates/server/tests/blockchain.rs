@@ -41,8 +41,8 @@ fn mint_tx_verification() {
             script: minter.genesis_info().script.clone(),
         };
 
-        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
         tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
         let mut tx = TxVariant::MintTx(tx);
         assert!(chain.verify_tx(&tx, &[], config).is_ok());
@@ -67,8 +67,8 @@ fn mint_tx_updates_balances() {
             script: minter.genesis_info().script.clone(),
         };
 
-        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
         tx.append_sign(&minter.genesis_info().wallet_keys[1]);
+        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
         let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));

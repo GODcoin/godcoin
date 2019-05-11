@@ -1,10 +1,8 @@
 use sodiumoxide::crypto::sign;
 use std::borrow::Cow;
 
-use super::stack::*;
-use super::*;
-use crate::crypto::PublicKey;
-use crate::tx::TxVariant;
+use super::{stack::*, *};
+use crate::{crypto::PublicKey, tx::TxVariant};
 
 macro_rules! map_err_type {
     ($self:expr, $var:expr) => {
@@ -17,6 +15,7 @@ pub struct ScriptEngine<'a> {
     tx: Cow<'a, TxVariant>,
     pos: usize,
     stack: Stack,
+    sig_pair_pos: usize,
 }
 
 impl<'a> ScriptEngine<'a> {
@@ -38,6 +37,7 @@ impl<'a> ScriptEngine<'a> {
             tx,
             pos: 0,
             stack: Stack::new(),
+            sig_pair_pos: 0,
         })
     }
 
@@ -233,10 +233,10 @@ impl<'a> ScriptEngine<'a> {
         }
     }
 
-    fn check_sigs(&self, threshold: usize, keys: &[PublicKey]) -> bool {
+    fn check_sigs(&mut self, threshold: usize, keys: &[PublicKey]) -> bool {
         if threshold == 0 {
             return true;
-        } else if threshold > keys.len() {
+        } else if threshold > keys.len() || self.sig_pair_pos >= self.tx.signature_pairs.len() {
             return false;
         }
 
@@ -244,25 +244,25 @@ impl<'a> ScriptEngine<'a> {
         self.tx.encode(&mut buf);
 
         let mut valid_threshold = 0;
-        let mut success = true;
-        'key_loop: for key in keys {
-            for pair in &self.tx.signature_pairs {
+        let mut key_iter = keys.iter();
+        'pair_loop: for pair in &self.tx.signature_pairs[self.sig_pair_pos..] {
+            self.sig_pair_pos += 1;
+            while let Some(key) = key_iter.next() {
                 if key == &pair.pub_key {
-                    let sig_verified = key.verify(&buf, &pair.signature);
-                    if sig_verified {
+                    if key.verify(&buf, &pair.signature) {
                         valid_threshold += 1;
-                        continue 'key_loop;
+                        if valid_threshold >= threshold {
+                            return true;
+                        }
+                        continue 'pair_loop;
                     } else {
-                        success = false;
-                        break 'key_loop;
+                        break 'pair_loop;
                     }
                 }
             }
         }
-        if success {
-            success = valid_threshold >= threshold;
-        }
-        success
+
+        false
     }
 
     fn new_err(&self, err: EvalErrType) -> EvalErr {
@@ -519,7 +519,7 @@ mod tests {
         let key_3 = KeyPair::gen_keypair();
 
         let mut engine = new_engine_with_signers(
-            &[key_1.clone(), key_2.clone(), KeyPair::gen_keypair()],
+            &[key_2.clone(), key_1.clone(), KeyPair::gen_keypair()],
             Builder::new()
                 .push(OpFrame::PubKey(key_1.0.clone()))
                 .push(OpFrame::PubKey(key_2.0.clone()))
@@ -574,7 +574,7 @@ mod tests {
         // Test threshold is met and tx is signed with key_0
         #[rustfmt::skip]
         let mut engine = new_engine_with_signers(
-            &[key_0.clone(), key_1.clone(), key_2.clone()],
+            &[key_0.clone(), key_2.clone(), key_1.clone()],
             Builder::new()
                 .push(OpFrame::PubKey(key_0.0.clone()))
                 .push(OpFrame::OpCheckSig)
@@ -636,7 +636,7 @@ mod tests {
         // Test threshold is met and tx is signed with key_0
         #[rustfmt::skip]
         let mut engine = new_engine_with_signers(
-            &[key_0.clone(), key_1.clone(), key_2.clone()],
+            &[key_0.clone(), key_2.clone(), key_1.clone()],
             Builder::new()
                 .push(OpFrame::PubKey(key_0.0.clone()))
                 .push(OpFrame::OpCheckSig)
