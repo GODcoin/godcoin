@@ -222,63 +222,61 @@ impl Blockchain {
         tx: &TxVariant,
         additional_txs: &[TxVariant],
         config: verify::Config,
-    ) -> Result<(), verify::TxErr> {
+    ) -> Result<(), TxErr> {
         macro_rules! check_suf_bal {
             ($asset:expr) => {
                 if $asset.amount < 0 {
-                    return Err(verify::TxErr::InsufficientBalance);
+                    return Err(TxErr::InsufficientBalance);
                 }
             };
         }
 
-        if !(tx.tx_type == TxType::OWNER || tx.tx_type == TxType::MINT) {
-            if tx.fee.amount < 0 {
-                return Err(verify::TxErr::InsufficientFeeAmount);
-            }
+        if !(tx.tx_type == TxType::OWNER || tx.tx_type == TxType::MINT) && tx.fee.amount < 0 {
+            return Err(TxErr::InsufficientFeeAmount);
         }
 
         match tx {
             TxVariant::OwnerTx(new_owner) => {
                 let owner = self.get_owner();
                 if owner.wallet != (&new_owner.script).into() {
-                    return Err(verify::TxErr::ScriptHashMismatch);
+                    return Err(TxErr::ScriptHashMismatch);
                 }
 
                 let success = ScriptEngine::checked_new(tx, &new_owner.script)
                     .map_err(TxErr::from)?
                     .eval()
-                    .map_err(verify::TxErr::ScriptEval)?;
+                    .map_err(TxErr::ScriptEval)?;
                 if !success {
-                    return Err(verify::TxErr::ScriptRetFalse);
+                    return Err(TxErr::ScriptRetFalse);
                 }
             }
             TxVariant::MintTx(mint_tx) => {
                 let owner = self.get_owner();
                 if owner.wallet != (&mint_tx.script).into() {
-                    return Err(verify::TxErr::ScriptHashMismatch);
+                    return Err(TxErr::ScriptHashMismatch);
                 }
                 let success = ScriptEngine::checked_new(tx, &mint_tx.script)
                     .map_err(TxErr::from)?
                     .eval()
-                    .map_err(verify::TxErr::ScriptEval)?;
+                    .map_err(TxErr::ScriptEval)?;
                 if !success {
-                    return Err(verify::TxErr::ScriptRetFalse);
+                    return Err(TxErr::ScriptRetFalse);
                 }
 
                 // Sanity check to ensure too many new coins can't be minted
                 self.get_balance_with_txs(&mint_tx.to, additional_txs)
-                    .ok_or(verify::TxErr::Arithmetic)?
+                    .ok_or(TxErr::Arithmetic)?
                     .add_bal(&mint_tx.amount)
-                    .ok_or(verify::TxErr::Arithmetic)?;
+                    .ok_or(TxErr::Arithmetic)?;
 
                 self.indexer
                     .get_token_supply()
                     .add_bal(&mint_tx.amount)
-                    .ok_or(verify::TxErr::Arithmetic)?;
+                    .ok_or(TxErr::Arithmetic)?;
             }
             TxVariant::RewardTx(tx) => {
                 if !config.skip_reward {
-                    return Err(verify::TxErr::TxProhibited);
+                    return Err(TxErr::TxProhibited);
                 } else if !tx.signature_pairs.is_empty() {
                     // Reward transactions are internally generated, thus should panic on failure
                     panic!("reward transaction must not be signed");
@@ -286,26 +284,26 @@ impl Blockchain {
             }
             TxVariant::TransferTx(transfer) => {
                 if transfer.fee.symbol != transfer.amount.symbol {
-                    return Err(verify::TxErr::SymbolMismatch);
+                    return Err(TxErr::SymbolMismatch);
                 } else if transfer.from != (&transfer.script).into() {
-                    return Err(verify::TxErr::ScriptHashMismatch);
+                    return Err(TxErr::ScriptHashMismatch);
                 }
 
                 let success = ScriptEngine::checked_new(tx, &transfer.script)
                     .map_err(TxErr::from)?
                     .eval()
-                    .map_err(verify::TxErr::ScriptEval)?;
+                    .map_err(TxErr::ScriptEval)?;
                 if !success {
-                    return Err(verify::TxErr::ScriptRetFalse);
+                    return Err(TxErr::ScriptRetFalse);
                 }
 
                 let mut bal = self
                     .get_balance_with_txs(&transfer.from, additional_txs)
-                    .ok_or(verify::TxErr::Arithmetic)?;
+                    .ok_or(TxErr::Arithmetic)?;
                 bal.sub(&transfer.fee)
-                    .ok_or(verify::TxErr::Arithmetic)?
+                    .ok_or(TxErr::Arithmetic)?
                     .sub(&transfer.amount)
-                    .ok_or(verify::TxErr::Arithmetic)?;
+                    .ok_or(TxErr::Arithmetic)?;
                 check_suf_bal!(bal.gold());
                 check_suf_bal!(bal.silver());
             }
