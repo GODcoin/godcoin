@@ -542,14 +542,15 @@ mod tests {
         let key_1 = KeyPair::gen_keypair();
         let key_2 = KeyPair::gen_keypair();
         let key_3 = KeyPair::gen_keypair();
+        let builder = Builder::new()
+            .push(OpFrame::PubKey(key_1.0.clone()))
+            .push(OpFrame::PubKey(key_2.0.clone()))
+            .push(OpFrame::PubKey(key_3.0.clone()))
+            .push(OpFrame::OpCheckMultiSig(2, 3));
 
         let mut engine = new_engine_with_signers(
             &[key_2.clone(), key_1.clone(), KeyPair::gen_keypair()],
-            Builder::new()
-                .push(OpFrame::PubKey(key_1.0.clone()))
-                .push(OpFrame::PubKey(key_2.0.clone()))
-                .push(OpFrame::PubKey(key_3.0.clone()))
-                .push(OpFrame::OpCheckMultiSig(2, 3)),
+            builder.clone(),
         );
         // This should evaluate to true as the threshold is met, any other invalid signatures are
         // no longer relevant. There is no incentive to inject fake signatures unless the
@@ -558,12 +559,7 @@ mod tests {
 
         let mut engine = {
             let to = KeyPair::gen_keypair();
-            let script = Builder::new()
-                .push(OpFrame::PubKey(key_1.0.clone()))
-                .push(OpFrame::PubKey(key_2.0.clone()))
-                .push(OpFrame::PubKey(key_3.0.clone()))
-                .push(OpFrame::OpCheckMultiSig(2, 3))
-                .build();
+            let script = builder.build();
 
             let mut tx = TransferTx {
                 base: Tx {
@@ -595,59 +591,32 @@ mod tests {
         let key_1 = KeyPair::gen_keypair();
         let key_2 = KeyPair::gen_keypair();
         let key_3 = KeyPair::gen_keypair();
+        #[rustfmt::skip]
+        let builder = Builder::new()
+            .push(OpFrame::PubKey(key_0.0.clone()))
+            .push(OpFrame::OpCheckSig)
+            .push(OpFrame::OpIf)
+                .push(OpFrame::PubKey(key_1.0.clone()))
+                .push(OpFrame::PubKey(key_2.0.clone()))
+                .push(OpFrame::PubKey(key_3.0.clone()))
+                .push(OpFrame::OpCheckMultiSig(2, 3))
+                .push(OpFrame::OpReturn)
+            .push(OpFrame::OpEndIf)
+            .push(OpFrame::False);
 
         // Test threshold is met and tx is signed with key_0
-        #[rustfmt::skip]
         let mut engine = new_engine_with_signers(
             &[key_0.clone(), key_2.clone(), key_1.clone()],
-            Builder::new()
-                .push(OpFrame::PubKey(key_0.0.clone()))
-                .push(OpFrame::OpCheckSig)
-                .push(OpFrame::OpIf)
-                    .push(OpFrame::PubKey(key_1.0.clone()))
-                    .push(OpFrame::PubKey(key_2.0.clone()))
-                    .push(OpFrame::PubKey(key_3.0.clone()))
-                    .push(OpFrame::OpCheckMultiSig(2, 3))
-                    .push(OpFrame::OpReturn)
-                .push(OpFrame::OpEndIf)
-                .push(OpFrame::False),
+            builder.clone(),
         );
         assert!(engine.eval().unwrap());
 
         // Test tx must be signed with key_0 but threshold is met
-        #[rustfmt::skip]
-        let mut engine = new_engine_with_signers(
-            &[key_1.clone(), key_2.clone()],
-            Builder::new()
-                .push(OpFrame::PubKey(key_0.0.clone()))
-                .push(OpFrame::OpCheckSig)
-                .push(OpFrame::OpIf)
-                    .push(OpFrame::PubKey(key_1.0.clone()))
-                    .push(OpFrame::PubKey(key_2.0.clone()))
-                    .push(OpFrame::PubKey(key_3.0.clone()))
-                    .push(OpFrame::OpCheckMultiSig(2, 3))
-                    .push(OpFrame::OpReturn)
-                .push(OpFrame::OpEndIf)
-                .push(OpFrame::False),
-        );
+        let mut engine = new_engine_with_signers(&[key_1.clone(), key_2.clone()], builder.clone());
         assert!(!engine.eval().unwrap());
 
         // Test multisig threshold not met
-        #[rustfmt::skip]
-        let mut engine = new_engine_with_signers(
-            &[key_0.clone(), key_1.clone()],
-            Builder::new()
-                .push(OpFrame::PubKey(key_0.0.clone()))
-                .push(OpFrame::OpCheckSig)
-                .push(OpFrame::OpIf)
-                    .push(OpFrame::PubKey(key_1.0.clone()))
-                    .push(OpFrame::PubKey(key_2.0.clone()))
-                    .push(OpFrame::PubKey(key_3.0.clone()))
-                    .push(OpFrame::OpCheckMultiSig(2, 3))
-                    .push(OpFrame::OpReturn)
-                .push(OpFrame::OpEndIf)
-                .push(OpFrame::False),
-        );
+        let mut engine = new_engine_with_signers(&[key_0.clone(), key_1.clone()], builder);
         assert!(!engine.eval().unwrap());
     }
 
@@ -657,62 +626,33 @@ mod tests {
         let key_1 = KeyPair::gen_keypair();
         let key_2 = KeyPair::gen_keypair();
         let key_3 = KeyPair::gen_keypair();
+        #[rustfmt::skip]
+        let builder = Builder::new()
+            .push(OpFrame::PubKey(key_0.0.clone()))
+            .push(OpFrame::OpCheckSig)
+            .push(OpFrame::OpNot)
+            .push(OpFrame::OpIf)
+                .push(OpFrame::False)
+                .push(OpFrame::OpReturn)
+            .push(OpFrame::OpEndIf)
+            .push(OpFrame::PubKey(key_1.0.clone()))
+            .push(OpFrame::PubKey(key_2.0.clone()))
+            .push(OpFrame::PubKey(key_3.0.clone()))
+            .push(OpFrame::OpCheckMultiSig(2, 3));
 
         // Test threshold is met and tx is signed with key_0
-        #[rustfmt::skip]
         let mut engine = new_engine_with_signers(
             &[key_0.clone(), key_2.clone(), key_1.clone()],
-            Builder::new()
-                .push(OpFrame::PubKey(key_0.0.clone()))
-                .push(OpFrame::OpCheckSig)
-                .push(OpFrame::OpNot)
-                .push(OpFrame::OpIf)
-                    .push(OpFrame::False)
-                    .push(OpFrame::OpReturn)
-                .push(OpFrame::OpEndIf)
-                .push(OpFrame::PubKey(key_1.0.clone()))
-                .push(OpFrame::PubKey(key_2.0.clone()))
-                .push(OpFrame::PubKey(key_3.0.clone()))
-                .push(OpFrame::OpCheckMultiSig(2, 3))
+            builder.clone(),
         );
         assert!(engine.eval().unwrap());
 
         // Test tx must be signed with key_0 but threshold is met
-        #[rustfmt::skip]
-        let mut engine = new_engine_with_signers(
-            &[key_1.clone(), key_2.clone()],
-            Builder::new()
-                .push(OpFrame::PubKey(key_0.0.clone()))
-                .push(OpFrame::OpCheckSig)
-                .push(OpFrame::OpNot)
-                .push(OpFrame::OpIf)
-                    .push(OpFrame::False)
-                    .push(OpFrame::OpReturn)
-                .push(OpFrame::OpEndIf)
-                .push(OpFrame::PubKey(key_1.0.clone()))
-                .push(OpFrame::PubKey(key_2.0.clone()))
-                .push(OpFrame::PubKey(key_3.0.clone()))
-                .push(OpFrame::OpCheckMultiSig(2, 3))
-        );
+        let mut engine = new_engine_with_signers(&[key_1.clone(), key_2.clone()], builder.clone());
         assert!(!engine.eval().unwrap());
 
         // Test multisig threshold not met
-        #[rustfmt::skip]
-        let mut engine = new_engine_with_signers(
-            &[key_0.clone(), key_1.clone()],
-            Builder::new()
-                .push(OpFrame::PubKey(key_0.0.clone()))
-                .push(OpFrame::OpCheckSig)
-                .push(OpFrame::OpNot)
-                .push(OpFrame::OpIf)
-                    .push(OpFrame::False)
-                    .push(OpFrame::OpReturn)
-                .push(OpFrame::OpEndIf)
-                .push(OpFrame::PubKey(key_1.0.clone()))
-                .push(OpFrame::PubKey(key_2.0.clone()))
-                .push(OpFrame::PubKey(key_3.0.clone()))
-                .push(OpFrame::OpCheckMultiSig(2, 3))
-        );
+        let mut engine = new_engine_with_signers(&[key_0.clone(), key_1.clone()], builder);
         assert!(!engine.eval().unwrap());
     }
 
@@ -765,7 +705,6 @@ mod tests {
 
     fn new_transfer_tx(script: Script, keys: &[KeyPair]) -> TransferTx {
         let to = KeyPair::gen_keypair();
-
         let mut tx = TransferTx {
             base: Tx {
                 tx_type: TxType::TRANSFER,
@@ -779,10 +718,7 @@ mod tests {
             script: script.clone(),
             memo: vec![],
         };
-        for key in keys {
-            tx.append_sign(&key);
-        }
-
+        keys.iter().for_each(|key| tx.append_sign(key));
         tx
     }
 }
