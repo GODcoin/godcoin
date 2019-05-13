@@ -59,6 +59,9 @@ pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
     let script = script_builder::build(&args[1..]);
     match script {
         Ok(script) => {
+            if script.len() > script::MAX_BYTE_SIZE {
+                println!("WARNING: Script exceeds the max byte size {}", script::MAX_BYTE_SIZE);
+            }
             println!("{:?}", script);
             println!("P2SH address => {}", ScriptHash::from(script).to_wif());
         }
@@ -66,6 +69,17 @@ pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
             println!("{:?}", e);
         }
     }
+    Ok(true)
+}
+
+pub fn check_script_size(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+    check_args!(args, 1);
+    let script = Script::new(hex_to_bytes!(args[1])?);
+    if script.len() > script::MAX_BYTE_SIZE {
+        println!("WARNING: Script exceeds the max byte size {}", script::MAX_BYTE_SIZE);
+    }
+    let word = if script.len() == 1 { "byte" } else { "bytes" };
+    println!("Script is {} {}", script.len(), word);
     Ok(true)
 }
 
