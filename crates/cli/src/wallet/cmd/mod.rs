@@ -60,12 +60,20 @@ pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
     match script {
         Ok(script) => {
             println!("{:?}", script);
-            println!("P2SH Address => {}", ScriptHash::from(script).to_wif());
+            println!("P2SH address => {}", ScriptHash::from(script).to_wif());
         }
         Err(e) => {
             println!("{:?}", e);
         }
     }
+    Ok(true)
+}
+
+pub fn script_to_p2sh(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+    check_args!(args, 1);
+    let hash: ScriptHash = Script::new(hex_to_bytes!(args[1])?).into();
+    println!("P2SH address => {}", hash.to_wif());
+
     Ok(true)
 }
 

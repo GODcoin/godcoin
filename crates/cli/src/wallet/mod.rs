@@ -86,6 +86,7 @@ impl Wallet {
             "delete_account" => cmd::account::delete(self, args),
             "list_accounts" => cmd::account::list(self, args),
             "build_script" => cmd::build_script(self, args),
+            "script_to_p2sh" => cmd::script_to_p2sh(self, args),
             "decode_tx" => cmd::decode_tx(self, args),
             "sign_tx" => cmd::sign_tx(self, args),
             "unsign_tx" => cmd::unsign_tx(self, args),
@@ -115,6 +116,10 @@ impl Wallet {
         cmds.push(["get_account <account>", "Retrieve account information"]);
         cmds.push(["list_accounts", "List all accounts"]);
         cmds.push(["build_script <...op>", "Builds a script"]);
+        cmds.push([
+            "script_to_p2sh <raw_hex>",
+            "Converts a script to a payable P2SH address",
+        ]);
         cmds.push([
             "decode_tx <tx_hex>",
             "Decodes a transaction and prints it to console",
