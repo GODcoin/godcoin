@@ -6,7 +6,7 @@ pub mod index;
 pub mod store;
 pub mod verify;
 
-pub use self::{block::*, index::Indexer, store::BlockStore};
+pub use self::{block::*, index::Indexer, store::BlockStore, verify::TxErr};
 
 use crate::{
     asset::{self, Balance},
@@ -245,7 +245,7 @@ impl Blockchain {
                 }
 
                 let success = ScriptEngine::checked_new(tx, &new_owner.script)
-                    .ok_or_else(|| verify::TxErr::ScriptTooLarge)?
+                    .map_err(TxErr::from)?
                     .eval()
                     .map_err(verify::TxErr::ScriptEval)?;
                 if !success {
@@ -258,7 +258,7 @@ impl Blockchain {
                     return Err(verify::TxErr::ScriptHashMismatch);
                 }
                 let success = ScriptEngine::checked_new(tx, &mint_tx.script)
-                    .ok_or_else(|| verify::TxErr::ScriptTooLarge)?
+                    .map_err(TxErr::from)?
                     .eval()
                     .map_err(verify::TxErr::ScriptEval)?;
                 if !success {
@@ -292,7 +292,7 @@ impl Blockchain {
                 }
 
                 let success = ScriptEngine::checked_new(tx, &transfer.script)
-                    .ok_or_else(|| verify::TxErr::ScriptTooLarge)?
+                    .map_err(TxErr::from)?
                     .eval()
                     .map_err(verify::TxErr::ScriptEval)?;
                 if !success {

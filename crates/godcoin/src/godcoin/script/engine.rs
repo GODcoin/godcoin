@@ -10,6 +10,12 @@ macro_rules! map_err_type {
     };
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum InitErr {
+    ScriptTooLarge,
+    TooManySignatures,
+}
+
 pub struct ScriptEngine<'a> {
     script: Cow<'a, Script>,
     tx: Cow<'a, TxVariant>,
@@ -19,10 +25,7 @@ pub struct ScriptEngine<'a> {
 }
 
 impl<'a> ScriptEngine<'a> {
-    /// Initializes the scripting engine with a transaction and script.
-    ///
-    /// Returns `None` if the script is too large.
-    pub fn checked_new<T, S>(tx: T, script: S) -> Option<Self>
+    pub fn checked_new<T, S>(tx: T, script: S) -> Result<Self, InitErr>
     where
         T: Into<Cow<'a, TxVariant>>,
         S: Into<Cow<'a, Script>>,
@@ -30,9 +33,11 @@ impl<'a> ScriptEngine<'a> {
         let script = script.into();
         let tx = tx.into();
         if script.len() > MAX_BYTE_SIZE {
-            return None;
+            return Err(InitErr::ScriptTooLarge);
+        } else if tx.signature_pairs.len() > MAX_SIGNATURES {
+            return Err(InitErr::TooManySignatures);
         }
-        Some(Self {
+        Ok(Self {
             script,
             tx,
             pos: 0,

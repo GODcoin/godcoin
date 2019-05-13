@@ -1,5 +1,5 @@
 use crate::{
-    script::{EvalErr, EvalErrType},
+    script::{EvalErr, EvalErrType, InitErr},
     serializer::*,
 };
 use std::io::{self, Cursor};
@@ -35,6 +35,7 @@ pub enum TxErr {
     SymbolMismatch,
     InsufficientBalance,
     InsufficientFeeAmount,
+    TooManySignatures,
     TxProhibited,
 }
 
@@ -53,7 +54,8 @@ impl TxErr {
             TxErr::SymbolMismatch => buf.push(5),
             TxErr::InsufficientBalance => buf.push(6),
             TxErr::InsufficientFeeAmount => buf.push(7),
-            TxErr::TxProhibited => buf.push(8),
+            TxErr::TooManySignatures => buf.push(8),
+            TxErr::TxProhibited => buf.push(9),
         }
     }
 
@@ -86,7 +88,8 @@ impl TxErr {
             5 => TxErr::SymbolMismatch,
             6 => TxErr::InsufficientBalance,
             7 => TxErr::InsufficientFeeAmount,
-            8 => TxErr::TxProhibited,
+            8 => TxErr::TooManySignatures,
+            9 => TxErr::TxProhibited,
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -94,5 +97,14 @@ impl TxErr {
                 ))
             }
         })
+    }
+}
+
+impl From<InitErr> for TxErr {
+    fn from(err: InitErr) -> Self {
+        match err {
+            InitErr::ScriptTooLarge => TxErr::ScriptTooLarge,
+            InitErr::TooManySignatures => TxErr::TooManySignatures,
+        }
     }
 }
