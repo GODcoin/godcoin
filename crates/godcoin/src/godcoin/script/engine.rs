@@ -16,6 +16,7 @@ pub enum InitErr {
     TooManySignatures,
 }
 
+#[derive(Debug)]
 pub struct ScriptEngine<'a> {
     script: Cow<'a, Script>,
     tx: Cow<'a, TxVariant>,
@@ -280,6 +281,25 @@ mod tests {
     use super::*;
     use crate::crypto::{KeyPair, SigPair, Signature};
     use crate::tx::{SignTx, TransferTx, Tx, TxType};
+
+    #[test]
+    fn script_too_large_err() {
+        let script = Script((0..=MAX_BYTE_SIZE).map(|_| 0).collect());
+        let tx = new_transfer_tx(script.clone(), &[]);
+        let engine = ScriptEngine::checked_new(TxVariant::TransferTx(tx), script);
+        assert_eq!(engine.unwrap_err(), InitErr::ScriptTooLarge);
+    }
+
+    #[test]
+    fn tx_too_many_signatures_err() {
+        let script = Builder::new().build();
+        let keys: Vec<KeyPair> = (0..=MAX_SIGNATURES)
+            .map(|_| KeyPair::gen_keypair())
+            .collect();
+        let tx = new_transfer_tx(script.clone(), &keys);
+        let engine = ScriptEngine::checked_new(TxVariant::TransferTx(tx), script);
+        assert_eq!(engine.unwrap_err(), InitErr::TooManySignatures);
+    }
 
     #[test]
     fn true_only_script() {
@@ -738,8 +758,13 @@ mod tests {
     }
 
     fn new_engine_with_signers<'a>(keys: &[KeyPair], b: Builder) -> ScriptEngine<'a> {
-        let to = KeyPair::gen_keypair();
         let script = b.build();
+        let tx = new_transfer_tx(script.clone(), keys);
+        ScriptEngine::checked_new(TxVariant::TransferTx(tx), script).unwrap()
+    }
+
+    fn new_transfer_tx(script: Script, keys: &[KeyPair]) -> TransferTx {
+        let to = KeyPair::gen_keypair();
 
         let mut tx = TransferTx {
             base: Tx {
@@ -748,7 +773,7 @@ mod tests {
                 fee: "1 GOLD".parse().unwrap(),
                 signature_pairs: vec![],
             },
-            from: keys[0].clone().0.into(),
+            from: to.clone().0.into(),
             to: to.clone().0.into(),
             amount: "10 GOLD".parse().unwrap(),
             script: script.clone(),
@@ -758,6 +783,6 @@ mod tests {
             tx.append_sign(&key);
         }
 
-        ScriptEngine::checked_new(TxVariant::TransferTx(tx), script).unwrap()
+        tx
     }
 }
