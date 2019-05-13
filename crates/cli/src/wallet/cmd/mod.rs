@@ -60,7 +60,7 @@ pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
     match script {
         Ok(script) => {
             println!("{:?}", script);
-            println!("{:?}", ScriptHash::from(script));
+            println!("P2SH Address => {}", ScriptHash::from(script).to_wif());
         }
         Err(e) => {
             println!("{:?}", e);
