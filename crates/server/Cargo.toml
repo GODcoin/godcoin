@@ -5,16 +5,19 @@ authors = ["Samuel Grenier <samrg472@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-actix = "0.8.1"
 bytes = "0.4.12"
 dirs = "1.0.5"
 env_logger = "0.6.1"
-futures = "0.1.26"
+futures = "0.1.27"
 godcoin = { path = "../godcoin" }
 log = "0.4.6"
 
+[dependencies.actix]
+version = "0.8.2"
+default-features = false
+
 [dependencies.actix-web]
-version = "1.0.0-beta.3"
+version = "1.0.0-beta.5"
 default-features = false
 
 [dev-dependencies]
