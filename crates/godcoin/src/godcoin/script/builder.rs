@@ -1,6 +1,6 @@
 use super::{op::*, Script, MAX_BYTE_SIZE};
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Builder {
     byte_code: Vec<u8>,
 }
