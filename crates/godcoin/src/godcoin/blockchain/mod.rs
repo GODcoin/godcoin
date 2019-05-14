@@ -223,6 +223,14 @@ impl Blockchain {
         additional_txs: &[TxVariant],
         config: verify::Config,
     ) -> Result<(), TxErr> {
+        macro_rules! check_zero_fee {
+            ($asset:expr) => {
+                if $asset.amount != 0 {
+                    return Err(TxErr::InsufficientFeeAmount);
+                }
+            };
+        }
+
         macro_rules! check_suf_bal {
             ($asset:expr) => {
                 if $asset.amount < 0 {
@@ -231,12 +239,10 @@ impl Blockchain {
             };
         }
 
-        if !(tx.tx_type == TxType::OWNER || tx.tx_type == TxType::MINT) && tx.fee.amount < 0 {
-            return Err(TxErr::InsufficientFeeAmount);
-        }
-
         match tx {
             TxVariant::OwnerTx(new_owner) => {
+                check_zero_fee!(tx.fee);
+
                 let owner = self.get_owner();
                 if owner.wallet != (&new_owner.script).into() {
                     return Err(TxErr::ScriptHashMismatch);
@@ -251,6 +257,8 @@ impl Blockchain {
                 }
             }
             TxVariant::MintTx(mint_tx) => {
+                check_zero_fee!(tx.fee);
+
                 let owner = self.get_owner();
                 if owner.wallet != (&mint_tx.script).into() {
                     return Err(TxErr::ScriptHashMismatch);
@@ -277,12 +285,19 @@ impl Blockchain {
             TxVariant::RewardTx(tx) => {
                 if !config.skip_reward {
                     return Err(TxErr::TxProhibited);
-                } else if !tx.signature_pairs.is_empty() {
+                }
+                check_zero_fee!(tx.fee);
+                if !tx.signature_pairs.is_empty() {
                     // Reward transactions are internally generated, thus should panic on failure
                     panic!("reward transaction must not be signed");
                 }
             }
             TxVariant::TransferTx(transfer) => {
+                // TODO check against required address fee amount
+                if tx.fee.amount < 0 {
+                    return Err(TxErr::InsufficientFeeAmount);
+                }
+
                 if transfer.fee.symbol != transfer.amount.symbol {
                     return Err(TxErr::SymbolMismatch);
                 } else if transfer.from != (&transfer.script).into() {

@@ -34,21 +34,42 @@ fn mint_tx_verification() {
         let chain = minter.chain();
         let config = verify::Config::strict();
 
-        let mut tx = MintTx {
-            base: create_tx(TxType::MINT, "0 GOLD"),
-            to: (&minter.genesis_info().script).into(),
-            amount: Balance::default(),
-            script: minter.genesis_info().script.clone(),
+        let create_tx = |fee: &str| {
+            let mut tx = MintTx {
+                base: create_tx(TxType::MINT, fee),
+                to: (&minter.genesis_info().script).into(),
+                amount: Balance::default(),
+                script: minter.genesis_info().script.clone(),
+            };
+            tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+            tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+            TxVariant::MintTx(tx)
         };
 
-        tx.append_sign(&minter.genesis_info().wallet_keys[3]);
-        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-
-        let mut tx = TxVariant::MintTx(tx);
+        let tx = create_tx("0 GOLD");
         assert!(chain.verify_tx(&tx, &[], config).is_ok());
 
-        tx.fee = "1 GOLD".parse().unwrap();
-        assert!(chain.verify_tx(&tx, &[], config).is_err());
+        let tx = create_tx("1 GOLD");
+        assert_eq!(
+            chain.verify_tx(&tx, &[], config).unwrap_err(),
+            verify::TxErr::InsufficientFeeAmount
+        );
+
+        let mut tx = create_tx("0 GOLD");
+        tx.signature_pairs.remove(1);
+        assert!(check_sigs(&tx));
+        assert_eq!(
+            chain.verify_tx(&tx, &[], config).unwrap_err(),
+            verify::TxErr::ScriptRetFalse
+        );
+
+        let mut tx = create_tx("0 GOLD");
+        tx.signature_pairs.clear();
+        assert!(check_sigs(&tx));
+        assert_eq!(
+            chain.verify_tx(&tx, &[], config).unwrap_err(),
+            verify::TxErr::ScriptRetFalse
+        );
 
         System::current().stop();
     })
