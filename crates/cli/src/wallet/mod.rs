@@ -117,7 +117,10 @@ impl Wallet {
         cmds.push(["get_account <account>", "Retrieve account information"]);
         cmds.push(["list_accounts", "List all accounts"]);
         cmds.push(["build_script <...op>", "Builds a script"]);
-        cmds.push(["check_script_size <raw_hex>", "Checks if the script is too large and prints the size in bytes"]);
+        cmds.push([
+            "check_script_size <raw_hex>",
+            "Checks if the script is too large and prints the size in bytes",
+        ]);
         cmds.push([
             "script_to_p2sh <raw_hex>",
             "Converts a script to a payable P2SH address",

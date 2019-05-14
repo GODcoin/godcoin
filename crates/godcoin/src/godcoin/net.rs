@@ -31,7 +31,7 @@ impl MsgRequest {
             MsgRequest::Broadcast(tx) => {
                 let mut buf = Vec::with_capacity(4096);
                 buf.push(MsgType::Broadcast as u8);
-                tx.encode_with_sigs(&mut buf);
+                tx.serialize_with_sigs(&mut buf);
                 buf
             }
         }
@@ -46,7 +46,7 @@ impl MsgRequest {
                 Ok(MsgRequest::GetBlock(height))
             }
             t if t == MsgType::Broadcast as u8 => {
-                let tx = TxVariant::decode_with_sigs(cursor)
+                let tx = TxVariant::deserialize_with_sigs(cursor)
                     .ok_or_else(|| Error::new(io::ErrorKind::InvalidData, "failed to decode tx"))?;
                 Ok(MsgRequest::Broadcast(tx))
             }
@@ -124,7 +124,7 @@ impl MsgResponse {
                 buf.push_u64(props.height);
                 {
                     let mut tx_buf = Vec::with_capacity(4096);
-                    TxVariant::OwnerTx(*props.owner).encode_with_sigs(&mut tx_buf);
+                    TxVariant::OwnerTx(*props.owner).serialize_with_sigs(&mut tx_buf);
                     buf.extend_from_slice(&tx_buf);
                 }
                 buf.push_balance(&props.network_fee);
@@ -134,7 +134,7 @@ impl MsgResponse {
             MsgResponse::GetBlock(block) => {
                 let mut buf = Vec::with_capacity(1_048_576);
                 buf.push(MsgType::GetBlock as u8);
-                block.encode_with_tx(&mut buf);
+                block.serialize_with_tx(&mut buf);
                 buf
             }
             MsgResponse::Broadcast() => vec![MsgType::Broadcast as u8],
@@ -151,7 +151,7 @@ impl MsgResponse {
             t if t == MsgType::GetProperties as u8 => {
                 let height = cursor.take_u64()?;
                 let owner = {
-                    let var = TxVariant::decode_with_sigs(cursor).ok_or_else(|| {
+                    let var = TxVariant::deserialize_with_sigs(cursor).ok_or_else(|| {
                         Error::new(io::ErrorKind::InvalidData, "failed to deserialize owner tx")
                     })?;
                     match var {
@@ -171,7 +171,7 @@ impl MsgResponse {
                 }))
             }
             t if t == MsgType::GetBlock as u8 => {
-                let block = SignedBlock::decode_with_tx(cursor)
+                let block = SignedBlock::deserialize_with_tx(cursor)
                     .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
                 Ok(MsgResponse::GetBlock(block))
             }

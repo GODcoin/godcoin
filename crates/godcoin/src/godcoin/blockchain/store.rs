@@ -115,7 +115,10 @@ impl BlockStore {
         };
 
         let mut cursor = Cursor::<&[u8]>::new(&block_vec);
-        Some(SignedBlock::decode_with_tx(&mut cursor).expect("failed to decode block from disk"))
+        Some(
+            SignedBlock::deserialize_with_tx(&mut cursor)
+                .expect("failed to decode block from disk"),
+        )
     }
 
     pub fn insert(&mut self, block: SignedBlock) {
@@ -152,7 +155,7 @@ impl BlockStore {
 
     fn write_to_disk(&mut self, block: &SignedBlock) {
         let vec = &mut Vec::with_capacity(1_048_576);
-        block.encode_with_tx(vec);
+        block.serialize_with_tx(vec);
         let len = vec.len() as u32;
         let crc = crc32c(vec);
 

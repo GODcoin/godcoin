@@ -247,7 +247,7 @@ impl<'a> ScriptEngine<'a> {
         }
 
         let mut buf = Vec::with_capacity(4096);
-        self.tx.encode(&mut buf);
+        self.tx.serialize(&mut buf);
 
         let mut valid_threshold = 0;
         let mut key_iter = keys.iter();

@@ -26,16 +26,16 @@ impl Block {
         }
     }
 
-    pub fn encode_with_tx(&self, vec: &mut Vec<u8>) {
-        self.encode(vec);
+    pub fn serialize_with_tx(&self, vec: &mut Vec<u8>) {
+        self.serialize(vec);
 
         vec.push_u32(self.transactions.len() as u32);
         for tx in &self.transactions {
-            tx.encode_with_sigs(vec)
+            tx.serialize_with_sigs(vec)
         }
     }
 
-    pub fn decode_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
+    pub fn deserialize_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
         let previous_hash = Digest::from_slice(&cur.take_bytes().ok()?)?;
         let height = cur.take_u64().ok()?;
         let timestamp = cur.take_u64().ok()?;
@@ -44,7 +44,7 @@ impl Block {
         let len = cur.take_u32().ok()?;
         let mut transactions = Vec::<TxVariant>::with_capacity(len as usize);
         for _ in 0..len {
-            transactions.push(TxVariant::decode_with_sigs(cur)?);
+            transactions.push(TxVariant::deserialize_with_sigs(cur)?);
         }
 
         Some(Self {
@@ -56,7 +56,7 @@ impl Block {
         })
     }
 
-    fn encode(&self, vec: &mut Vec<u8>) {
+    fn serialize(&self, vec: &mut Vec<u8>) {
         vec.push_bytes(self.previous_hash.as_ref());
         vec.push_u64(self.height);
         vec.push_u64(self.timestamp);
@@ -66,7 +66,7 @@ impl Block {
     pub fn verify_tx_merkle_root(&self) -> bool {
         let mut buf = Vec::with_capacity(4096 * self.transactions.len());
         for tx in &self.transactions {
-            tx.encode_with_sigs(&mut buf)
+            tx.serialize_with_sigs(&mut buf)
         }
         let digest = double_sha256(&buf);
         self.tx_merkle_root == digest
@@ -74,7 +74,7 @@ impl Block {
 
     pub fn calc_hash(&self) -> Digest {
         let mut buf = Vec::with_capacity(1024);
-        self.encode(&mut buf);
+        self.serialize(&mut buf);
         double_sha256(&buf)
     }
 
@@ -93,13 +93,13 @@ impl SignedBlock {
     pub fn new_child(&self, txs: Vec<TxVariant>) -> Block {
         let previous_hash = {
             let mut buf = Vec::with_capacity(1024);
-            self.base.encode(&mut buf);
+            self.base.serialize(&mut buf);
             double_sha256(&buf)
         };
         let tx_merkle_root = {
             let mut buf = Vec::with_capacity(4096 * txs.len());
             for tx in &txs {
-                tx.encode_with_sigs(&mut buf)
+                tx.serialize_with_sigs(&mut buf)
             }
             double_sha256(&buf)
         };
@@ -116,13 +116,13 @@ impl SignedBlock {
         }
     }
 
-    pub fn encode_with_tx(&self, vec: &mut Vec<u8>) {
-        self.base.encode_with_tx(vec);
+    pub fn serialize_with_tx(&self, vec: &mut Vec<u8>) {
+        self.base.serialize_with_tx(vec);
         vec.push_sig_pair(&self.sig_pair);
     }
 
-    pub fn decode_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
-        let block = Block::decode_with_tx(cur)?;
+    pub fn deserialize_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
+        let block = Block::deserialize_with_tx(cur)?;
         let sig_pair = cur.take_sig_pair().ok()?;
         Some(Self {
             base: block,
@@ -164,7 +164,7 @@ mod tests {
         let tx_merkle_root = {
             let mut buf = Vec::new();
             for tx in &transactions {
-                tx.encode_with_sigs(&mut buf)
+                tx.serialize_with_sigs(&mut buf)
             }
             double_sha256(&buf)
         };
@@ -178,10 +178,10 @@ mod tests {
         .sign(&keys);
 
         let mut buf = Vec::new();
-        block.encode_with_tx(&mut buf);
+        block.serialize_with_tx(&mut buf);
 
         let mut cur = Cursor::<&[u8]>::new(&buf);
-        let dec = SignedBlock::decode_with_tx(&mut cur).unwrap();
+        let dec = SignedBlock::deserialize_with_tx(&mut cur).unwrap();
 
         assert_eq!(block.previous_hash, dec.previous_hash);
         assert_eq!(block.height, dec.height);
