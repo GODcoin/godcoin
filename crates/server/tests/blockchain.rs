@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use godcoin::prelude::*;
+use godcoin::{prelude::*, crypto::Signature};
 
 mod common;
 
@@ -66,6 +66,18 @@ fn mint_tx_verification() {
         let mut tx = create_tx("0 GOLD");
         tx.signature_pairs.clear();
         assert!(check_sigs(&tx));
+        assert_eq!(
+            chain.verify_tx(&tx, &[], config).unwrap_err(),
+            verify::TxErr::ScriptRetFalse
+        );
+
+        let mut tx = create_tx("0 GOLD");
+        tx.signature_pairs.clear();
+        tx.signature_pairs.push(SigPair {
+            pub_key: minter.genesis_info().wallet_keys[0].0.clone(),
+            signature: Signature::from_slice(&[0; 64]).unwrap(),
+        });
+        assert!(!check_sigs(&tx));
         assert_eq!(
             chain.verify_tx(&tx, &[], config).unwrap_err(),
             verify::TxErr::ScriptRetFalse
