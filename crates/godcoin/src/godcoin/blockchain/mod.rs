@@ -359,7 +359,6 @@ impl Blockchain {
     }
 
     pub fn create_genesis_block(&self, minter_key: KeyPair) -> GenesisBlockInfo {
-        use crate::crypto::Digest;
         use std::time::{SystemTime, UNIX_EPOCH};
 
         let info = GenesisBlockInfo::new(minter_key);

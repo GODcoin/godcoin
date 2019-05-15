@@ -29,7 +29,6 @@ fn main() {
     } else if matches.subcommand_matches("wallet").is_some() {
         let home: PathBuf = {
             let home = {
-                use dirs;
                 match env::var("GODCOIN_HOME") {
                     Ok(s) => PathBuf::from(s),
                     Err(_) => Path::join(&dirs::data_local_dir().unwrap(), "godcoin"),
