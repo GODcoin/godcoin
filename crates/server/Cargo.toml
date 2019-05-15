@@ -26,6 +26,7 @@ sodiumoxide = { version = "0.2.1", default-features = false, features = ["std"] 
 [lib]
 name = "godcoin_server"
 path = "src/server/lib.rs"
+doctest = false
 
 [[bin]]
 name = "godcoin-server"
