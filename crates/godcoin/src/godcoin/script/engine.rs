@@ -252,23 +252,25 @@ impl<'a> ScriptEngine<'a> {
         let mut valid_threshold = 0;
         let mut key_iter = keys.iter();
         'pair_loop: for pair in &self.tx.signature_pairs[self.sig_pair_pos..] {
-            self.sig_pair_pos += 1;
-            while let Some(key) = key_iter.next() {
-                if key == &pair.pub_key {
-                    if key.verify(&buf, &pair.signature) {
-                        valid_threshold += 1;
-                        if valid_threshold >= threshold {
-                            return true;
+            loop {
+                match key_iter.next() {
+                    Some(key) => {
+                        if key == &pair.pub_key {
+                            self.sig_pair_pos += 1;
+                            if key.verify(&buf, &pair.signature) {
+                                valid_threshold += 1;
+                                continue 'pair_loop;
+                            } else {
+                                return false;
+                            }
                         }
-                        continue 'pair_loop;
-                    } else {
-                        break 'pair_loop;
                     }
+                    None => break 'pair_loop,
                 }
             }
         }
 
-        false
+        valid_threshold >= threshold
     }
 
     fn new_err(&self, err: EvalErrType) -> EvalErr {
@@ -538,7 +540,7 @@ mod tests {
     }
 
     #[test]
-    fn checkmultisig_invalid_sig() {
+    fn checkmultisig_return_true() {
         let key_1 = KeyPair::gen_keypair();
         let key_2 = KeyPair::gen_keypair();
         let key_3 = KeyPair::gen_keypair();
@@ -552,10 +554,44 @@ mod tests {
             &[key_2.clone(), key_1.clone(), KeyPair::gen_keypair()],
             builder.clone(),
         );
-        // This should evaluate to true as the threshold is met, any other invalid signatures are
-        // no longer relevant. There is no incentive to inject fake signatures unless the
-        // broadcaster wants to pay more in fees.
+        // This should evaluate to true as the threshold is met, and the trailing signatures are
+        // ignored by the script.
         assert!(engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signers(&[key_3.clone(), key_1.clone()], builder.clone());
+        assert!(engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signers(&[key_2.clone(), key_1.clone()], builder.clone());
+        assert!(engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signers(
+            &[key_3.clone(), key_2.clone(), key_1.clone()],
+            builder.clone(),
+        );
+        assert!(engine.eval().unwrap());
+    }
+
+    #[test]
+    fn checkmultisig_return_false() {
+        let key_1 = KeyPair::gen_keypair();
+        let key_2 = KeyPair::gen_keypair();
+        let key_3 = KeyPair::gen_keypair();
+        let builder = Builder::new()
+            .push(OpFrame::PubKey(key_1.0.clone()))
+            .push(OpFrame::PubKey(key_2.0.clone()))
+            .push(OpFrame::PubKey(key_3.0.clone()))
+            .push(OpFrame::OpCheckMultiSig(2, 3));
+
+        let mut engine = new_engine_with_signers(
+            &[
+                KeyPair::gen_keypair(),
+                key_3.clone(),
+                key_2.clone(),
+                key_1.clone(),
+            ],
+            builder.clone(),
+        );
+        assert!(!engine.eval().unwrap());
 
         let mut engine = {
             let to = KeyPair::gen_keypair();
@@ -568,7 +604,7 @@ mod tests {
                     fee: "1 GOLD".parse().unwrap(),
                     signature_pairs: vec![SigPair {
                         // Test valid key with invalid signature
-                        pub_key: key_2.0.clone(),
+                        pub_key: key_3.0.clone(),
                         signature: Signature(sign::Signature([0; sign::SIGNATUREBYTES])),
                     }],
                 },
@@ -578,11 +614,117 @@ mod tests {
                 script: script.clone(),
                 memo: vec![],
             };
+            tx.append_sign(&key_2);
             tx.append_sign(&key_1);
 
             ScriptEngine::checked_new(TxVariant::TransferTx(tx), script).unwrap()
         };
         assert!(!engine.eval().unwrap());
+    }
+
+    #[test]
+    fn checkmultisig_with_trailing_sig_fastfail() {
+        let key_0 = KeyPair::gen_keypair();
+        let key_1 = KeyPair::gen_keypair();
+        let key_2 = KeyPair::gen_keypair();
+        let key_3 = KeyPair::gen_keypair();
+        let key_4 = KeyPair::gen_keypair();
+        #[rustfmt::skip]
+        let builder = Builder::new()
+            .push(OpFrame::PubKey(key_1.0.clone()))
+            .push(OpFrame::PubKey(key_2.0.clone()))
+            .push(OpFrame::PubKey(key_3.0.clone()))
+            .push(OpFrame::PubKey(key_4.0.clone()))
+            .push(OpFrame::OpCheckMultiSigFastFail(2, 4))
+            .push(OpFrame::PubKey(key_0.0.clone()))
+            .push(OpFrame::OpCheckSig);
+
+        let mut engine = new_engine_with_signers(
+            &[key_3.clone(), key_2.clone(), key_1.clone(), key_0.clone()],
+            builder.clone(),
+        );
+        assert!(engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signers(
+            &[key_3.clone(), key_1.clone(), key_0.clone()],
+            builder.clone(),
+        );
+        assert!(engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signers(
+            &[key_4.clone(), key_1.clone(), key_0.clone()],
+            builder.clone(),
+        );
+        assert!(engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signers(
+            &[key_3.clone(), key_2.clone(), key_0.clone()],
+            builder.clone(),
+        );
+        assert!(engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signers(
+            &[key_2.clone(), key_1.clone(), key_0.clone()],
+            builder.clone(),
+        );
+        assert!(engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signers(&[key_2.clone(), key_1.clone()], builder.clone());
+        assert!(!engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signers(
+            &[key_4.clone(), key_3.clone(), key_2.clone(), key_1.clone()],
+            builder.clone(),
+        );
+        assert!(!engine.eval().unwrap());
+
+        let mut engine = new_engine_with_signers(&[key_4.clone(), key_0.clone()], builder.clone());
+        assert!(!engine.eval().unwrap());
+
+        let mut engine = new_engine(builder.clone());
+        assert!(!engine.eval().unwrap());
+    }
+
+    #[test]
+    fn checkmultisig_with_trailing_sig_ignore_multisig_res() {
+        let key_0 = KeyPair::gen_keypair();
+        let key_1 = KeyPair::gen_keypair();
+        let key_2 = KeyPair::gen_keypair();
+        let key_3 = KeyPair::gen_keypair();
+        let key_4 = KeyPair::gen_keypair();
+        #[rustfmt::skip]
+        let builder = Builder::new()
+            .push(OpFrame::PubKey(key_1.0.clone()))
+            .push(OpFrame::PubKey(key_2.0.clone()))
+            .push(OpFrame::PubKey(key_3.0.clone()))
+            .push(OpFrame::PubKey(key_4.0.clone()))
+            .push(OpFrame::OpCheckMultiSig(3, 4))
+            .push(OpFrame::PubKey(key_0.0.clone()))
+            .push(OpFrame::OpCheckSig);
+
+        let mut engine = new_engine_with_signers(
+            &[key_2.clone(), key_1.clone(), key_0.clone()],
+            builder.clone(),
+        );
+        assert!(engine.eval().unwrap());
+        assert!(!engine.stack.pop_bool().unwrap());
+        assert!(engine.stack.is_empty());
+
+        let mut engine = new_engine_with_signers(&[key_2.clone(), key_0.clone()], builder.clone());
+        assert!(engine.eval().unwrap());
+        assert!(!engine.stack.pop_bool().unwrap());
+        assert!(engine.stack.is_empty());
+
+        let mut engine =
+            new_engine_with_signers(&[key_0.clone(), KeyPair::gen_keypair()], builder.clone());
+        assert!(engine.eval().unwrap());
+        assert!(!engine.stack.pop_bool().unwrap());
+        assert!(engine.stack.is_empty());
+
+        let mut engine = new_engine_with_signers(&[key_0.clone()], builder.clone());
+        assert!(engine.eval().unwrap());
+        assert!(!engine.stack.pop_bool().unwrap());
+        assert!(engine.stack.is_empty());
     }
 
     #[test]

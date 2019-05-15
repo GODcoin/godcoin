@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use godcoin::{prelude::*, crypto::Signature};
+use godcoin::{crypto::Signature, prelude::*};
 
 mod common;
 
