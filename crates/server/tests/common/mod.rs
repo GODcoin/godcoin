@@ -19,7 +19,7 @@ pub fn create_tx(tx_type: TxType, fee: &str) -> Tx {
         tx_type,
         timestamp,
         fee: fee.parse().unwrap(),
-        signature_pairs: Vec::with_capacity(8),
+        signature_pairs: Vec::with_capacity(script::MAX_SIGNATURES),
     }
 }
 

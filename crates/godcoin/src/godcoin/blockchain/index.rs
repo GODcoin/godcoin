@@ -36,23 +36,14 @@ impl Indexer {
 
     pub fn get_block_byte_pos(&self, height: u64) -> Option<u64> {
         let cf = self.db.cf_handle(CF_BLOCK_BYTE_POS).unwrap();
-        let buf = self
-            .db
-            .get_cf(cf, &{
-                let mut key = Vec::with_capacity(8);
-                key.push_u64(height);
-                key
-            })
-            .unwrap()?;
+        let buf = self.db.get_cf(cf, height.to_be_bytes()).unwrap()?;
 
         Some(u64_from_buf!(buf))
     }
 
     pub fn set_block_byte_pos(&self, height: u64, pos: u64) {
-        let mut key = Vec::with_capacity(8);
-        key.push_u64(height);
-        let mut val = Vec::with_capacity(8);
-        val.push_u64(pos);
+        let key = height.to_be_bytes();
+        let val = pos.to_be_bytes();
 
         let cf = self.db.cf_handle(CF_BLOCK_BYTE_POS).unwrap();
         self.db.put_cf(cf, &key, &val).unwrap();
@@ -66,9 +57,7 @@ impl Indexer {
     }
 
     pub fn set_chain_height(&self, height: u64) {
-        let mut val = Vec::with_capacity(8);
-        val.push_u64(height);
-        self.db.put(KEY_CHAIN_HEIGHT, &val).unwrap();
+        self.db.put(KEY_CHAIN_HEIGHT, height.to_be_bytes()).unwrap();
     }
 
     pub fn get_owner(&self) -> Option<OwnerTx> {
@@ -83,7 +72,7 @@ impl Indexer {
 
     pub fn set_owner(&self, owner: &OwnerTx) {
         let val = {
-            let mut vec = Vec::with_capacity(2048);
+            let mut vec = Vec::with_capacity(4096);
             TxVariant::OwnerTx(owner.clone()).serialize_with_sigs(&mut vec);
             vec
         };
