@@ -31,7 +31,7 @@ impl Block {
 
         buf.push_u32(self.transactions.len() as u32);
         for tx in &self.transactions {
-            tx.serialize_with_sigs(buf)
+            tx.serialize(buf)
         }
     }
 
@@ -44,7 +44,7 @@ impl Block {
         let len = cur.take_u32().ok()?;
         let mut transactions = Vec::<TxVariant>::with_capacity(len as usize);
         for _ in 0..len {
-            transactions.push(TxVariant::deserialize_with_sigs(cur)?);
+            transactions.push(TxVariant::deserialize(cur)?);
         }
 
         Some(Self {
@@ -66,7 +66,7 @@ impl Block {
     pub fn verify_tx_merkle_root(&self) -> bool {
         let mut buf = Vec::with_capacity(4096 * self.transactions.len());
         for tx in &self.transactions {
-            tx.serialize_with_sigs(&mut buf)
+            tx.serialize(&mut buf)
         }
         let digest = double_sha256(&buf);
         self.tx_merkle_root == digest
@@ -99,7 +99,7 @@ impl SignedBlock {
         let tx_merkle_root = {
             let mut buf = Vec::with_capacity(4096 * txs.len());
             for tx in &txs {
-                tx.serialize_with_sigs(&mut buf)
+                tx.serialize(&mut buf)
             }
             double_sha256(&buf)
         };
@@ -164,7 +164,7 @@ mod tests {
         let tx_merkle_root = {
             let mut buf = Vec::new();
             for tx in &transactions {
-                tx.serialize_with_sigs(&mut buf)
+                tx.serialize(&mut buf)
             }
             double_sha256(&buf)
         };

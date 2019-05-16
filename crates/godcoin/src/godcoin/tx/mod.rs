@@ -37,16 +37,16 @@ pub enum TxVariant {
 }
 
 impl TxVariant {
-    pub fn serialize(&self, v: &mut Vec<u8>) {
+    pub fn serialize_without_sigs(&self, buf: &mut Vec<u8>) {
         match self {
-            TxVariant::OwnerTx(tx) => tx.serialize(v),
-            TxVariant::MintTx(tx) => tx.serialize(v),
-            TxVariant::RewardTx(tx) => tx.serialize(v),
-            TxVariant::TransferTx(tx) => tx.serialize(v),
+            TxVariant::OwnerTx(tx) => tx.serialize(buf),
+            TxVariant::MintTx(tx) => tx.serialize(buf),
+            TxVariant::RewardTx(tx) => tx.serialize(buf),
+            TxVariant::TransferTx(tx) => tx.serialize(buf),
         };
     }
 
-    pub fn serialize_with_sigs(&self, v: &mut Vec<u8>) {
+    pub fn serialize(&self, v: &mut Vec<u8>) {
         macro_rules! serialize_sigs {
             ($name:expr, $vec:expr) => {{
                 $vec.push_u16($name.signature_pairs.len() as u16);
@@ -65,7 +65,7 @@ impl TxVariant {
         };
     }
 
-    pub fn deserialize_with_sigs(cur: &mut Cursor<&[u8]>) -> Option<TxVariant> {
+    pub fn deserialize(cur: &mut Cursor<&[u8]>) -> Option<TxVariant> {
         let sigs = {
             let len = cur.take_u16().ok()?;
             let mut vec = Vec::with_capacity(len as usize);
@@ -350,10 +350,10 @@ mod tests {
         });
 
         let mut v = vec![];
-        reward_tx.serialize_with_sigs(&mut v);
+        reward_tx.serialize(&mut v);
 
         let mut c = Cursor::<&[u8]>::new(&v);
-        TxVariant::deserialize_with_sigs(&mut c).unwrap();
+        TxVariant::deserialize(&mut c).unwrap();
     }
 
     #[test]

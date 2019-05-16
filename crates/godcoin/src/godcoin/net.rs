@@ -31,7 +31,7 @@ impl MsgRequest {
             MsgRequest::Broadcast(tx) => {
                 let mut buf = Vec::with_capacity(4096);
                 buf.push(MsgType::Broadcast as u8);
-                tx.serialize_with_sigs(&mut buf);
+                tx.serialize(&mut buf);
                 buf
             }
         }
@@ -46,7 +46,7 @@ impl MsgRequest {
                 Ok(MsgRequest::GetBlock(height))
             }
             t if t == MsgType::Broadcast as u8 => {
-                let tx = TxVariant::deserialize_with_sigs(cursor)
+                let tx = TxVariant::deserialize(cursor)
                     .ok_or_else(|| Error::new(io::ErrorKind::InvalidData, "failed to decode tx"))?;
                 Ok(MsgRequest::Broadcast(tx))
             }
@@ -124,7 +124,7 @@ impl MsgResponse {
                 buf.push_u64(props.height);
                 {
                     let mut tx_buf = Vec::with_capacity(4096);
-                    TxVariant::OwnerTx(*props.owner).serialize_with_sigs(&mut tx_buf);
+                    TxVariant::OwnerTx(*props.owner).serialize(&mut tx_buf);
                     buf.extend_from_slice(&tx_buf);
                 }
                 buf.push_balance(&props.network_fee);
@@ -151,7 +151,7 @@ impl MsgResponse {
             t if t == MsgType::GetProperties as u8 => {
                 let height = cursor.take_u64()?;
                 let owner = {
-                    let var = TxVariant::deserialize_with_sigs(cursor).ok_or_else(|| {
+                    let var = TxVariant::deserialize(cursor).ok_or_else(|| {
                         Error::new(io::ErrorKind::InvalidData, "failed to deserialize owner tx")
                     })?;
                     match var {

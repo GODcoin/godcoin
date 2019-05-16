@@ -102,7 +102,7 @@ pub fn decode_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, S
 
     let tx_bytes = hex_to_bytes!(args[1])?;
     let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
-    let tx = TxVariant::deserialize_with_sigs(cursor).ok_or("Failed to decode tx")?;
+    let tx = TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?;
     println!("{:#?}", tx);
 
     Ok(true)
@@ -120,7 +120,7 @@ pub fn sign_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, Stri
     let mut tx_bytes = hex_to_bytes!(args[2])?;
     let mut tx = {
         let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
-        TxVariant::deserialize_with_sigs(cursor).ok_or("Failed to decode tx")?
+        TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?
     };
 
     match &mut tx {
@@ -132,7 +132,7 @@ pub fn sign_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, Stri
 
     tx_bytes.clear();
     tx_bytes.reserve(128);
-    tx.serialize_with_sigs(&mut tx_bytes);
+    tx.serialize(&mut tx_bytes);
     println!("{}", faster_hex::hex_string(&tx_bytes).unwrap());
 
     Ok(true)
@@ -147,7 +147,7 @@ pub fn unsign_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, S
     let mut tx_bytes = hex_to_bytes!(args[2])?;
     let mut tx = {
         let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
-        TxVariant::deserialize_with_sigs(cursor).ok_or("Failed to decode tx")?
+        TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?
     };
 
     if sig_pos < tx.signature_pairs.len() {
@@ -155,7 +155,7 @@ pub fn unsign_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, S
     }
 
     tx_bytes.clear();
-    tx.serialize_with_sigs(&mut tx_bytes);
+    tx.serialize(&mut tx_bytes);
     println!("{}", faster_hex::hex_string(&tx_bytes).unwrap());
 
     Ok(true)
@@ -166,7 +166,7 @@ pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, St
     let tx_bytes = hex_to_bytes!(args[1])?;
     let tx = {
         let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
-        TxVariant::deserialize_with_sigs(cursor).ok_or("Failed to decode tx")?
+        TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?
     };
 
     send_print_rpc_req!(wallet, net::MsgRequest::Broadcast(tx));
@@ -219,7 +219,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
         script,
     });
     let mut buf = Vec::with_capacity(4096);
-    mint_tx.serialize_with_sigs(&mut buf);
+    mint_tx.serialize(&mut buf);
     println!("{}", faster_hex::hex_string(&buf).unwrap());
 
     Ok(true)

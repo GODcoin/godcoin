@@ -25,7 +25,7 @@ pub fn create_tx(tx_type: TxType, fee: &str) -> Tx {
 
 pub fn check_sigs(tx: &TxVariant) -> bool {
     let mut buf = Vec::with_capacity(4096);
-    tx.serialize(&mut buf);
+    tx.serialize_without_sigs(&mut buf);
     for sig_pair in &tx.signature_pairs {
         if !sig_pair.verify(&buf) {
             return false;

@@ -63,7 +63,7 @@ impl Indexer {
     pub fn get_owner(&self) -> Option<OwnerTx> {
         let tx_buf = self.db.get(KEY_NET_OWNER).unwrap()?;
         let cur = &mut Cursor::<&[u8]>::new(&tx_buf);
-        let tx = TxVariant::deserialize_with_sigs(cur).unwrap();
+        let tx = TxVariant::deserialize(cur).unwrap();
         match tx {
             TxVariant::OwnerTx(owner) => Some(owner),
             _ => panic!("expected owner transaction"),
@@ -73,7 +73,7 @@ impl Indexer {
     pub fn set_owner(&self, owner: &OwnerTx) {
         let val = {
             let mut vec = Vec::with_capacity(4096);
-            TxVariant::OwnerTx(owner.clone()).serialize_with_sigs(&mut vec);
+            TxVariant::OwnerTx(owner.clone()).serialize(&mut vec);
             vec
         };
 
