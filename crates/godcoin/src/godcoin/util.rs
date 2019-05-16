@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 macro_rules! u64_from_buf {
     ($buf:expr, $offset:expr) => {
         (u64::from($buf[$offset]) << 56)
@@ -24,4 +26,11 @@ macro_rules! u32_from_buf {
     ($buf:expr) => {
         u32_from_buf!($buf, 0)
     };
+}
+
+pub fn get_epoch_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
 }

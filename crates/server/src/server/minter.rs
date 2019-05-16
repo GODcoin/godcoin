@@ -1,11 +1,7 @@
 use actix::prelude::*;
 use godcoin::prelude::*;
 use log::{info, warn};
-use std::{
-    mem,
-    sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::{mem, sync::Arc, time::Duration};
 
 #[derive(Message)]
 pub struct StartProductionLoop;
@@ -45,10 +41,7 @@ impl Minter {
         let mut transactions = Vec::with_capacity(1024);
         mem::swap(&mut transactions, &mut self.txs);
 
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let timestamp = util::get_epoch_ms();
 
         transactions.push(TxVariant::RewardTx(RewardTx {
             base: Tx {

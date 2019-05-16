@@ -295,9 +295,7 @@ mod tests {
     #[test]
     fn tx_too_many_signatures_err() {
         let script = Builder::new().build();
-        let keys: Vec<KeyPair> = (0..=MAX_SIGNATURES)
-            .map(|_| KeyPair::gen())
-            .collect();
+        let keys: Vec<KeyPair> = (0..=MAX_SIGNATURES).map(|_| KeyPair::gen()).collect();
         let tx = new_transfer_tx(script.clone(), &keys);
         let engine = ScriptEngine::checked_new(TxVariant::TransferTx(tx), script);
         assert_eq!(engine.unwrap_err(), InitErr::TooManySignatures);
@@ -583,12 +581,7 @@ mod tests {
             .push(OpFrame::OpCheckMultiSig(2, 3));
 
         let mut engine = new_engine_with_signers(
-            &[
-                KeyPair::gen(),
-                key_3.clone(),
-                key_2.clone(),
-                key_1.clone(),
-            ],
+            &[KeyPair::gen(), key_3.clone(), key_2.clone(), key_1.clone()],
             builder.clone(),
         );
         assert!(!engine.eval().unwrap());
@@ -715,8 +708,7 @@ mod tests {
         assert!(!engine.stack.pop_bool().unwrap());
         assert!(engine.stack.is_empty());
 
-        let mut engine =
-            new_engine_with_signers(&[key_0.clone(), KeyPair::gen()], builder.clone());
+        let mut engine = new_engine_with_signers(&[key_0.clone(), KeyPair::gen()], builder.clone());
         assert!(engine.eval().unwrap());
         assert!(!engine.stack.pop_bool().unwrap());
         assert!(engine.stack.is_empty());

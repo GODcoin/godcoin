@@ -1,10 +1,7 @@
 use super::{db::Password, *};
 use godcoin::prelude::*;
 use reqwest::Client;
-use std::{
-    io::{Cursor, Read},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::io::{Cursor, Read};
 
 #[macro_use]
 pub mod util;
@@ -179,10 +176,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
         let ts: u64 = args[1]
             .parse()
             .map_err(|_| "Failed to parse timestamp offset".to_owned())?;
-        ts + SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64
+        ts + godcoin::util::get_epoch_ms()
     };
 
     let amount = {

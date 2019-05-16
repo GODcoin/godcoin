@@ -359,14 +359,8 @@ impl Blockchain {
     }
 
     pub fn create_genesis_block(&self, minter_key: KeyPair) -> GenesisBlockInfo {
-        use std::time::{SystemTime, UNIX_EPOCH};
-
         let info = GenesisBlockInfo::new(minter_key);
-
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let timestamp = crate::util::get_epoch_ms();
 
         let owner_tx = OwnerTx {
             base: Tx {

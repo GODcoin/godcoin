@@ -1,6 +1,5 @@
 use std::io::Cursor;
 use std::ops::Deref;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
     crypto::{self, double_sha256, Digest, KeyPair},
@@ -103,10 +102,7 @@ impl SignedBlock {
             }
             double_sha256(&buf)
         };
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let timestamp = crate::util::get_epoch_ms();
         Block {
             previous_hash,
             height: self.height + 1,
