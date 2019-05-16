@@ -74,7 +74,7 @@ impl TxVariant {
             }
             vec
         };
-        let mut base = Tx::deserialize_base(cur)?;
+        let mut base = Tx::deserialize_header(cur)?;
         base.signature_pairs = sigs;
         match base.tx_type {
             TxType::OWNER => Some(TxVariant::OwnerTx(OwnerTx::deserialize(cur, base)?)),
@@ -130,13 +130,13 @@ pub struct Tx {
 }
 
 impl Tx {
-    fn serialize_base(&self, v: &mut Vec<u8>) {
+    fn serialize_header(&self, v: &mut Vec<u8>) {
         v.push(self.tx_type as u8);
         v.push_u64(self.timestamp);
         v.push_asset(&self.fee);
     }
 
-    fn deserialize_base(cur: &mut Cursor<&[u8]>) -> Option<Tx> {
+    fn deserialize_header(cur: &mut Cursor<&[u8]>) -> Option<Tx> {
         let tx_type = match cur.take_u8().ok()? {
             t if t == TxType::OWNER as u8 => TxType::OWNER,
             t if t == TxType::MINT as u8 => TxType::MINT,
@@ -175,7 +175,7 @@ pub struct OwnerTx {
 
 impl SerializeTx for OwnerTx {
     fn serialize(&self, v: &mut Vec<u8>) {
-        self.serialize_base(v);
+        self.serialize_header(v);
         v.push_pub_key(&self.minter);
         v.push_script_hash(&self.wallet);
         v.push_bytes(&self.script);
@@ -207,7 +207,7 @@ pub struct MintTx {
 
 impl SerializeTx for MintTx {
     fn serialize(&self, v: &mut Vec<u8>) {
-        self.serialize_base(v);
+        self.serialize_header(v);
         v.push_script_hash(&self.to);
         v.push_balance(&self.amount);
         v.push_bytes(&self.script);
@@ -239,7 +239,7 @@ pub struct RewardTx {
 impl SerializeTx for RewardTx {
     fn serialize(&self, v: &mut Vec<u8>) {
         debug_assert_eq!(self.base.signature_pairs.len(), 0);
-        self.serialize_base(v);
+        self.serialize_header(v);
         v.push_script_hash(&self.to);
         v.push_balance(&self.rewards);
     }
@@ -271,7 +271,7 @@ pub struct TransferTx {
 
 impl SerializeTx for TransferTx {
     fn serialize(&self, v: &mut Vec<u8>) {
-        self.serialize_base(v);
+        self.serialize_header(v);
         v.push_script_hash(&self.from);
         v.push_script_hash(&self.to);
         v.push_bytes(&self.script);
@@ -376,7 +376,7 @@ mod tests {
         owner_tx.serialize(&mut v);
 
         let mut c = Cursor::<&[u8]>::new(&v);
-        let base = Tx::deserialize_base(&mut c).unwrap();
+        let base = Tx::deserialize_header(&mut c).unwrap();
         let dec = OwnerTx::deserialize(&mut c, base).unwrap();
 
         cmp_base_tx!(dec, TxType::OWNER, 1230, "123 GOLD");
@@ -404,7 +404,7 @@ mod tests {
         mint_tx.serialize(&mut v);
 
         let mut c = Cursor::<&[u8]>::new(&v);
-        let base = Tx::deserialize_base(&mut c).unwrap();
+        let base = Tx::deserialize_header(&mut c).unwrap();
         let dec = MintTx::deserialize(&mut c, base).unwrap();
 
         cmp_base_tx!(dec, TxType::MINT, 1234, "123 GOLD");
@@ -430,7 +430,7 @@ mod tests {
         reward_tx.serialize(&mut v);
 
         let mut c = Cursor::<&[u8]>::new(&v);
-        let base = Tx::deserialize_base(&mut c).unwrap();
+        let base = Tx::deserialize_header(&mut c).unwrap();
         let dec = RewardTx::deserialize(&mut c, base).unwrap();
 
         cmp_base_tx!(dec, TxType::REWARD, 123, "123 GOLD");
@@ -460,7 +460,7 @@ mod tests {
         transfer_tx.serialize(&mut v);
 
         let mut c = Cursor::<&[u8]>::new(&v);
-        let base = Tx::deserialize_base(&mut c).unwrap();
+        let base = Tx::deserialize_header(&mut c).unwrap();
         let dec = TransferTx::deserialize(&mut c, base).unwrap();
 
         cmp_base_tx!(dec, TxType::TRANSFER, 1234567890, "1.23 GOLD");
