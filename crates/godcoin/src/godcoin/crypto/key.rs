@@ -189,7 +189,7 @@ impl KeyPair {
         PublicKey::verify(&self.0, msg, sig)
     }
 
-    pub fn gen_keypair() -> KeyPair {
+    pub fn gen() -> KeyPair {
         let mut raw_seed: [u8; sign::SEEDBYTES] = [0; sign::SEEDBYTES];
         randombytes::randombytes_into(&mut raw_seed);
         let seed = sign::Seed::from_slice(&raw_seed).unwrap();
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_create_and_recover_keys() {
-        let kp = KeyPair::gen_keypair();
+        let kp = KeyPair::gen();
 
         let pk = &*kp.0.to_wif();
         assert_eq!(&*PublicKey::from_wif(pk).unwrap().to_wif(), pk);
@@ -284,7 +284,7 @@ mod tests {
     #[test]
     fn test_sign_message() {
         let msg = "Hello world!".as_bytes();
-        let kp = KeyPair::gen_keypair();
+        let kp = KeyPair::gen();
 
         let sig = kp.1.sign(msg);
         assert!(kp.0.verify(msg, &sig));
@@ -296,7 +296,7 @@ mod tests {
         assert!(pair.verify(msg));
 
         // Test bad keys
-        let kp = KeyPair::gen_keypair();
+        let kp = KeyPair::gen();
         assert!(!kp.verify(msg, &sig));
     }
 }

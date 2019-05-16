@@ -405,10 +405,10 @@ pub struct GenesisBlockInfo {
 impl GenesisBlockInfo {
     pub fn new(minter_key: KeyPair) -> Self {
         let wallet_keys = [
-            KeyPair::gen_keypair(),
-            KeyPair::gen_keypair(),
-            KeyPair::gen_keypair(),
-            KeyPair::gen_keypair(),
+            KeyPair::gen(),
+            KeyPair::gen(),
+            KeyPair::gen(),
+            KeyPair::gen(),
         ];
 
         let script = Builder::new()

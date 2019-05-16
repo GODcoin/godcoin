@@ -337,7 +337,7 @@ mod tests {
 
     #[test]
     fn test_serialize_tx_with_sigs() {
-        let to = crypto::KeyPair::gen_keypair();
+        let to = crypto::KeyPair::gen();
         let reward_tx = TxVariant::RewardTx(RewardTx {
             base: Tx {
                 tx_type: TxType::REWARD,
@@ -358,8 +358,8 @@ mod tests {
 
     #[test]
     fn test_serialize_owner() {
-        let minter = crypto::KeyPair::gen_keypair();
-        let wallet = crypto::KeyPair::gen_keypair();
+        let minter = crypto::KeyPair::gen();
+        let wallet = crypto::KeyPair::gen();
         let owner_tx = OwnerTx {
             base: Tx {
                 tx_type: TxType::OWNER,
@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn test_serialize_mint() {
-        let wallet = crypto::KeyPair::gen_keypair();
+        let wallet = crypto::KeyPair::gen();
         let mint_tx = MintTx {
             base: Tx {
                 tx_type: TxType::MINT,
@@ -414,7 +414,7 @@ mod tests {
 
     #[test]
     fn test_serialize_reward() {
-        let to = crypto::KeyPair::gen_keypair();
+        let to = crypto::KeyPair::gen();
         let reward_tx = RewardTx {
             base: Tx {
                 tx_type: TxType::REWARD,
@@ -440,8 +440,8 @@ mod tests {
 
     #[test]
     fn test_serialize_transfer() {
-        let from = crypto::KeyPair::gen_keypair();
-        let to = crypto::KeyPair::gen_keypair();
+        let from = crypto::KeyPair::gen();
+        let to = crypto::KeyPair::gen();
         let transfer_tx = TransferTx {
             base: Tx {
                 tx_type: TxType::TRANSFER,
@@ -477,7 +477,7 @@ mod tests {
             tx_type: TxType::MINT,
             timestamp: 1000,
             fee: get_asset("10 GOLD"),
-            signature_pairs: vec![KeyPair::gen_keypair().sign(b"hello world")],
+            signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
         };
         let tx_b = tx_a.clone();
         assert_eq!(tx_a, tx_b);
@@ -504,7 +504,7 @@ mod tests {
 
         let mut tx_b = tx_a.clone();
         tx_b.signature_pairs
-            .push(KeyPair::gen_keypair().sign(b"hello world"));
+            .push(KeyPair::gen().sign(b"hello world"));
         assert_ne!(tx_a, tx_b);
     }
 
@@ -515,10 +515,10 @@ mod tests {
                 tx_type: TxType::TRANSFER,
                 timestamp: 1000,
                 fee: get_asset("10 GOLD"),
-                signature_pairs: vec![KeyPair::gen_keypair().sign(b"hello world")],
+                signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
             },
-            from: KeyPair::gen_keypair().0.into(),
-            to: KeyPair::gen_keypair().0.into(),
+            from: KeyPair::gen().0.into(),
+            to: KeyPair::gen().0.into(),
             script: Builder::new().push(OpFrame::True).build(),
             amount: get_asset("1.0 GOLD"),
             memo: vec![1, 2, 3],
@@ -532,11 +532,11 @@ mod tests {
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.from = KeyPair::gen_keypair().0.into();
+        tx_b.from = KeyPair::gen().0.into();
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.to = KeyPair::gen_keypair().0.into();
+        tx_b.to = KeyPair::gen().0.into();
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();

@@ -8,7 +8,7 @@ pub fn create(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, Strin
         println!("Account already exists");
         return Ok(true);
     }
-    let key = KeyPair::gen_keypair();
+    let key = KeyPair::gen();
     wallet.db.set_account(account, &key.1);
     println!("Public key => {}", key.0.to_wif());
     println!("Private key => {}", key.1.to_wif());

@@ -146,7 +146,7 @@ mod tests {
 
     #[test]
     fn test_serialize_block() {
-        let keys = KeyPair::gen_keypair();
+        let keys = KeyPair::gen();
         let transactions = {
             let mut vec = Vec::new();
             vec.push(TxVariant::RewardTx(RewardTx {

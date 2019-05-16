@@ -1,7 +1,7 @@
 use godcoin::prelude::{KeyPair, Wif};
 
 pub fn generate_keypair() {
-    let pair = KeyPair::gen_keypair();
+    let pair = KeyPair::gen();
     println!("~~ Keys have been generated ~~");
     println!("Private key WIF: {}", pair.1.to_wif());
     println!("Public key WIF: {}", pair.0.to_wif());

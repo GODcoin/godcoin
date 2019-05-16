@@ -20,7 +20,7 @@ impl TestMinter {
         fs::create_dir(&tmp_dir).expect(&format!("Could not create temp dir {:?}", &tmp_dir));
 
         let chain = Arc::new(Blockchain::new(&tmp_dir));
-        let minter_key = KeyPair::gen_keypair();
+        let minter_key = KeyPair::gen();
         let info = chain.create_genesis_block(minter_key.clone());
 
         let minter = Minter::new(Arc::clone(&chain), minter_key, (&info.script).into()).start();
