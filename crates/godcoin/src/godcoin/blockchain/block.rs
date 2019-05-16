@@ -26,12 +26,12 @@ impl Block {
         }
     }
 
-    pub fn serialize_with_tx(&self, vec: &mut Vec<u8>) {
-        self.serialize(vec);
+    pub fn serialize_with_tx(&self, buf: &mut Vec<u8>) {
+        self.serialize_header(buf);
 
-        vec.push_u32(self.transactions.len() as u32);
+        buf.push_u32(self.transactions.len() as u32);
         for tx in &self.transactions {
-            tx.serialize_with_sigs(vec)
+            tx.serialize_with_sigs(buf)
         }
     }
 
@@ -56,7 +56,7 @@ impl Block {
         })
     }
 
-    fn serialize(&self, vec: &mut Vec<u8>) {
+    fn serialize_header(&self, vec: &mut Vec<u8>) {
         vec.push_bytes(self.previous_hash.as_ref());
         vec.push_u64(self.height);
         vec.push_u64(self.timestamp);
@@ -74,7 +74,7 @@ impl Block {
 
     pub fn calc_hash(&self) -> Digest {
         let mut buf = Vec::with_capacity(1024);
-        self.serialize(&mut buf);
+        self.serialize_header(&mut buf);
         double_sha256(&buf)
     }
 
@@ -93,7 +93,7 @@ impl SignedBlock {
     pub fn new_child(&self, txs: Vec<TxVariant>) -> Block {
         let previous_hash = {
             let mut buf = Vec::with_capacity(1024);
-            self.base.serialize(&mut buf);
+            self.base.serialize_header(&mut buf);
             double_sha256(&buf)
         };
         let tx_merkle_root = {
