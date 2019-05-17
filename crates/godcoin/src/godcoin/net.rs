@@ -115,6 +115,7 @@ impl MsgResponse {
         match self {
             MsgResponse::Error(err) => {
                 let mut buf = Vec::with_capacity(2048);
+                buf.push(MsgType::Error as u8);
                 err.serialize(&mut buf);
                 buf
             }
