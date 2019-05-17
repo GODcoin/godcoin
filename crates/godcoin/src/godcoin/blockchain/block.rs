@@ -138,7 +138,7 @@ impl Deref for SignedBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{asset::Balance, crypto::KeyPair};
+    use crate::{asset::Asset, crypto::KeyPair};
 
     #[test]
     fn test_serialize_block() {
@@ -148,12 +148,12 @@ mod tests {
             vec.push(TxVariant::RewardTx(RewardTx {
                 base: Tx {
                     tx_type: TxType::REWARD,
-                    fee: "0 GOLD".parse().unwrap(),
+                    fee: "0 GRAEL".parse().unwrap(),
                     timestamp: 1234567890,
                     signature_pairs: Vec::new(),
                 },
                 to: keys.0.clone().into(),
-                rewards: Balance::default(),
+                rewards: Asset::default(),
             }));
             vec
         };

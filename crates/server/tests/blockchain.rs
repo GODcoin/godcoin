@@ -38,7 +38,7 @@ fn mint_tx_verification() {
             let mut tx = MintTx {
                 base: create_tx(TxType::MINT, fee),
                 to: (&minter.genesis_info().script).into(),
-                amount: Balance::default(),
+                amount: Asset::default(),
                 script: minter.genesis_info().script.clone(),
             };
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
@@ -46,16 +46,16 @@ fn mint_tx_verification() {
             TxVariant::MintTx(tx)
         };
 
-        let tx = create_tx("0 GOLD");
+        let tx = create_tx("0 GRAEL");
         assert!(chain.verify_tx(&tx, &[], config).is_ok());
 
-        let tx = create_tx("1 GOLD");
+        let tx = create_tx("1 GRAEL");
         assert_eq!(
             chain.verify_tx(&tx, &[], config).unwrap_err(),
             verify::TxErr::InsufficientFeeAmount
         );
 
-        let mut tx = create_tx("0 GOLD");
+        let mut tx = create_tx("0 GRAEL");
         tx.signature_pairs.remove(1);
         assert!(check_sigs(&tx));
         assert_eq!(
@@ -63,7 +63,7 @@ fn mint_tx_verification() {
             verify::TxErr::ScriptRetFalse
         );
 
-        let mut tx = create_tx("0 GOLD");
+        let mut tx = create_tx("0 GRAEL");
         tx.signature_pairs.clear();
         assert!(check_sigs(&tx));
         assert_eq!(
@@ -71,7 +71,7 @@ fn mint_tx_verification() {
             verify::TxErr::ScriptRetFalse
         );
 
-        let mut tx = create_tx("0 GOLD");
+        let mut tx = create_tx("0 GRAEL");
         tx.signature_pairs.clear();
         tx.signature_pairs.push(SigPair {
             pub_key: minter.genesis_info().wallet_keys[0].0.clone(),
@@ -94,9 +94,9 @@ fn mint_tx_updates_balances() {
         let minter = TestMinter::new();
 
         let mut tx = MintTx {
-            base: create_tx(TxType::MINT, "0 GOLD"),
+            base: create_tx(TxType::MINT, "0 GRAEL"),
             to: (&minter.genesis_info().script).into(),
-            amount: get_balance("10.0 GOLD", "1000 SILVER"),
+            amount: get_asset("10.0 GRAEL"),
             script: minter.genesis_info().script.clone(),
         };
 
@@ -116,7 +116,7 @@ fn mint_tx_updates_balances() {
                 let minter = res.unwrap();
                 let chain = minter.chain();
                 let props = chain.get_properties();
-                let expected_bal = get_balance("10 GOLD", "1000 SILVER");
+                let expected_bal = get_asset("10 GRAEL");
                 assert_eq!(props.token_supply, expected_bal);
 
                 let bal = chain.get_balance(&(&minter.genesis_info().script).into());

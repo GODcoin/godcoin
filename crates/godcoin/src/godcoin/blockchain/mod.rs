@@ -9,7 +9,7 @@ pub mod verify;
 pub use self::{block::*, index::Indexer, store::BlockStore, verify::TxErr};
 
 use crate::{
-    asset::{self, Balance},
+    asset::{self, Asset},
     crypto::*,
     script::*,
     tx::*,
@@ -19,8 +19,8 @@ use crate::{
 pub struct Properties {
     pub height: u64,
     pub owner: Box<OwnerTx>,
-    pub token_supply: Balance,
-    pub network_fee: Balance,
+    pub token_supply: Asset,
+    pub network_fee: Asset,
 }
 
 pub struct Blockchain {
@@ -76,14 +76,13 @@ impl Blockchain {
         store.get(height)
     }
 
-    pub fn get_total_fee(&self, hash: &ScriptHash) -> Option<Balance> {
+    pub fn get_total_fee(&self, hash: &ScriptHash) -> Option<Asset> {
         let net_fee = self.get_network_fee()?;
-        let mut addr_fee = self.get_address_fee(hash)?;
-        addr_fee.add_bal(&net_fee)?;
-        Some(addr_fee)
+        let addr_fee = self.get_address_fee(hash)?;
+        addr_fee.add(&net_fee)
     }
 
-    pub fn get_address_fee(&self, hash: &ScriptHash) -> Option<Balance> {
+    pub fn get_address_fee(&self, hash: &ScriptHash) -> Option<Asset> {
         use crate::constants::*;
 
         let mut tx_count = 1;
@@ -107,12 +106,10 @@ impl Blockchain {
         }
 
         let prec = asset::MAX_PRECISION;
-        let gold = GOLD_FEE_MIN.mul(&GOLD_FEE_MULT.pow(tx_count as u16, prec)?, prec)?;
-        let silver = SILVER_FEE_MIN.mul(&SILVER_FEE_MULT.pow(tx_count as u16, prec)?, prec)?;
-        Balance::from(gold, silver)
+        GRAEL_FEE_MIN.mul(&GRAEL_FEE_MULT.pow(tx_count as u16, prec)?, prec)
     }
 
-    pub fn get_network_fee(&self) -> Option<Balance> {
+    pub fn get_network_fee(&self) -> Option<Asset> {
         // The network fee adjusts every 5 blocks so that users have a bigger time
         // frame to confirm the fee they want to spend without suddenly changing.
         use crate::constants::*;
@@ -134,37 +131,34 @@ impl Blockchain {
         }
 
         let prec = asset::MAX_PRECISION;
-        let gold = GOLD_FEE_MIN.mul(&GOLD_FEE_NET_MULT.pow(tx_count as u16, prec)?, prec)?;
-        let silver = SILVER_FEE_MIN.mul(&SILVER_FEE_NET_MULT.pow(tx_count as u16, prec)?, prec)?;
-
-        Balance::from(gold, silver)
+        GRAEL_FEE_MIN.mul(&GRAEL_FEE_NET_MULT.pow(tx_count as u16, prec)?, prec)
     }
 
-    pub fn get_balance(&self, hash: &ScriptHash) -> Balance {
+    pub fn get_balance(&self, hash: &ScriptHash) -> Asset {
         self.indexer.get_balance(hash).unwrap_or_default()
     }
 
-    pub fn get_balance_with_txs(&self, hash: &ScriptHash, txs: &[TxVariant]) -> Option<Balance> {
+    pub fn get_balance_with_txs(&self, hash: &ScriptHash, txs: &[TxVariant]) -> Option<Asset> {
         let mut bal = self.indexer.get_balance(hash).unwrap_or_default();
         for tx in txs {
             match tx {
                 TxVariant::OwnerTx(_) => {}
                 TxVariant::MintTx(tx) => {
                     if &tx.to == hash {
-                        bal.add_bal(&tx.amount)?;
+                        bal = bal.add(&tx.amount)?;
                     }
                 }
                 TxVariant::RewardTx(tx) => {
                     if &tx.to == hash {
-                        bal.add_bal(&tx.rewards)?;
+                        bal = bal.add(&tx.rewards)?;
                     }
                 }
                 TxVariant::TransferTx(tx) => {
                     if &tx.from == hash {
-                        bal.sub(&tx.fee)?;
-                        bal.sub(&tx.amount)?;
+                        bal = bal.sub(&tx.fee)?;
+                        bal = bal.sub(&tx.amount)?;
                     } else if &tx.to == hash {
-                        bal.add(&tx.amount)?;
+                        bal = bal.add(&tx.amount)?;
                     }
                 }
             }
@@ -274,12 +268,12 @@ impl Blockchain {
                 // Sanity check to ensure too many new coins can't be minted
                 self.get_balance_with_txs(&mint_tx.to, additional_txs)
                     .ok_or(TxErr::Arithmetic)?
-                    .add_bal(&mint_tx.amount)
+                    .add(&mint_tx.amount)
                     .ok_or(TxErr::Arithmetic)?;
 
                 self.indexer
                     .get_token_supply()
-                    .add_bal(&mint_tx.amount)
+                    .add(&mint_tx.amount)
                     .ok_or(TxErr::Arithmetic)?;
             }
             TxVariant::RewardTx(tx) => {
@@ -296,10 +290,6 @@ impl Blockchain {
                 // TODO check against required address fee amount
                 if tx.fee.amount < 0 {
                     return Err(TxErr::InsufficientFeeAmount);
-                }
-
-                if transfer.fee.symbol != transfer.amount.symbol {
-                    return Err(TxErr::SymbolMismatch);
                 } else if transfer.from != (&transfer.script).into() {
                     return Err(TxErr::ScriptHashMismatch);
                 }
@@ -312,15 +302,14 @@ impl Blockchain {
                     return Err(TxErr::ScriptRetFalse);
                 }
 
-                let mut bal = self
+                let bal = self
                     .get_balance_with_txs(&transfer.from, additional_txs)
-                    .ok_or(TxErr::Arithmetic)?;
-                bal.sub(&transfer.fee)
+                    .ok_or(TxErr::Arithmetic)?
+                    .sub(&transfer.fee)
                     .ok_or(TxErr::Arithmetic)?
                     .sub(&transfer.amount)
                     .ok_or(TxErr::Arithmetic)?;
-                check_suf_bal!(bal.gold());
-                check_suf_bal!(bal.silver());
+                check_suf_bal!(bal);
             }
         }
         Ok(())
@@ -332,25 +321,24 @@ impl Blockchain {
                 self.indexer.set_owner(tx);
             }
             TxVariant::MintTx(tx) => {
-                let mut supply = self.indexer.get_token_supply();
-                supply.add_bal(&tx.amount).unwrap();
+                let supply = self.indexer.get_token_supply().add(&tx.amount).unwrap();
                 self.indexer.set_token_supply(&supply);
 
-                let mut bal = self.get_balance(&tx.to);
-                bal.add_bal(&tx.amount).unwrap();
+                let bal = self.get_balance(&tx.to).add(&tx.amount).unwrap();
                 self.indexer.set_balance(&tx.to, &bal);
             }
             TxVariant::RewardTx(tx) => {
-                let mut bal = self.get_balance(&tx.to);
-                bal.add_bal(&tx.rewards).unwrap();
+                let bal = self.get_balance(&tx.to).add(&tx.rewards).unwrap();
                 self.indexer.set_balance(&tx.to, &bal);
             }
             TxVariant::TransferTx(tx) => {
-                let mut from_bal = self.get_balance(&tx.from);
-                let mut to_bal = self.get_balance(&tx.to);
-
-                from_bal.sub(&tx.fee).unwrap().sub(&tx.amount).unwrap();
-                to_bal.add(&tx.amount).unwrap();
+                let from_bal = self
+                    .get_balance(&tx.from)
+                    .sub(&tx.fee)
+                    .unwrap()
+                    .sub(&tx.amount)
+                    .unwrap();
+                let to_bal = self.get_balance(&tx.to).add(&tx.amount).unwrap();
 
                 self.indexer.set_balance(&tx.from, &from_bal);
                 self.indexer.set_balance(&tx.to, &to_bal);
@@ -365,7 +353,7 @@ impl Blockchain {
         let owner_tx = OwnerTx {
             base: Tx {
                 tx_type: TxType::OWNER,
-                fee: "0 GOLD".parse().unwrap(),
+                fee: "0 GRAEL".parse().unwrap(),
                 timestamp,
                 signature_pairs: Vec::new(),
             },

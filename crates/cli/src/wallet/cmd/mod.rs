@@ -171,7 +171,7 @@ pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, St
 }
 
 pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
-    check_args!(args, 4);
+    check_args!(args, 3);
     let timestamp: u64 = {
         let ts: u64 = args[1]
             .parse()
@@ -179,20 +179,8 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
         ts + godcoin::util::get_epoch_ms()
     };
 
-    let amount = {
-        let gold: Asset = args[2].parse().map_err(|_| "Failed to parse gold asset")?;
-        let silver: Asset = args[3]
-            .parse()
-            .map_err(|_| "Failed to parse silver asset")?;
-        if gold.symbol != AssetSymbol::GOLD {
-            return Err("Expected gold asset".to_owned());
-        } else if silver.symbol != AssetSymbol::SILVER {
-            return Err("Expected silver asset".to_owned());
-        }
-        Balance::from(gold, silver).unwrap()
-    };
-
-    let script: Script = hex_to_bytes!(args[4])?.into();
+    let amount = args[2].parse().map_err(|_| "Failed to parse grael asset")?;
+    let script: Script = hex_to_bytes!(args[3])?.into();
 
     let res = send_rpc_req!(wallet, MsgRequest::GetProperties)?;
     let owner = match res {
@@ -206,7 +194,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
             tx_type: TxType::MINT,
             timestamp,
             signature_pairs: vec![],
-            fee: "0 GOLD".parse().unwrap(),
+            fee: "0 GRAEL".parse().unwrap(),
         },
         to: owner.wallet,
         amount,

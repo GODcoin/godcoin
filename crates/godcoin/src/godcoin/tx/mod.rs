@@ -4,10 +4,12 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::asset::{Asset, Balance};
-use crate::crypto::{KeyPair, PublicKey, ScriptHash, SigPair};
-use crate::script::Script;
-use crate::serializer::*;
+use crate::{
+    asset::Asset,
+    crypto::{KeyPair, PublicKey, ScriptHash, SigPair},
+    script::Script,
+    serializer::*,
+};
 
 #[macro_use]
 mod util;
@@ -201,7 +203,7 @@ impl DeserializeTx<OwnerTx> for OwnerTx {
 pub struct MintTx {
     pub base: Tx,
     pub to: ScriptHash,
-    pub amount: Balance,
+    pub amount: Asset,
     pub script: Script,
 }
 
@@ -209,7 +211,7 @@ impl SerializeTx for MintTx {
     fn serialize(&self, v: &mut Vec<u8>) {
         self.serialize_header(v);
         v.push_script_hash(&self.to);
-        v.push_balance(&self.amount);
+        v.push_asset(&self.amount);
         v.push_bytes(&self.script);
     }
 }
@@ -218,7 +220,7 @@ impl DeserializeTx<MintTx> for MintTx {
     fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<Self> {
         assert_eq!(tx.tx_type, TxType::MINT);
         let to = cur.take_script_hash().ok()?;
-        let amount = cur.take_balance().ok()?;
+        let amount = cur.take_asset().ok()?;
         let script = Script::from(cur.take_bytes().ok()?);
         Some(Self {
             base: tx,
@@ -233,7 +235,7 @@ impl DeserializeTx<MintTx> for MintTx {
 pub struct RewardTx {
     pub base: Tx,
     pub to: ScriptHash,
-    pub rewards: Balance,
+    pub rewards: Asset,
 }
 
 impl SerializeTx for RewardTx {
@@ -241,7 +243,7 @@ impl SerializeTx for RewardTx {
         debug_assert_eq!(self.base.signature_pairs.len(), 0);
         self.serialize_header(v);
         v.push_script_hash(&self.to);
-        v.push_balance(&self.rewards);
+        v.push_asset(&self.rewards);
     }
 }
 
@@ -249,7 +251,7 @@ impl DeserializeTx<RewardTx> for RewardTx {
     fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<RewardTx> {
         assert_eq!(tx.tx_type, TxType::REWARD);
         let key = cur.take_script_hash().ok()?;
-        let rewards = cur.take_balance().ok()?;
+        let rewards = cur.take_asset().ok()?;
 
         Some(RewardTx {
             base: tx,
@@ -342,11 +344,11 @@ mod tests {
             base: Tx {
                 tx_type: TxType::REWARD,
                 timestamp: 123,
-                fee: get_asset("123 GOLD"),
+                fee: get_asset("123 GRAEL"),
                 signature_pairs: vec![],
             },
             to: to.0.into(),
-            rewards: Balance::from(get_asset("1.50 GOLD"), get_asset("1.0 SILVER")).unwrap(),
+            rewards: get_asset("1.50 GRAEL"),
         });
 
         let mut v = vec![];
@@ -364,7 +366,7 @@ mod tests {
             base: Tx {
                 tx_type: TxType::OWNER,
                 timestamp: 1230,
-                fee: get_asset("123 GOLD"),
+                fee: get_asset("123 GRAEL"),
                 signature_pairs: vec![],
             },
             minter: minter.0,
@@ -379,7 +381,7 @@ mod tests {
         let base = Tx::deserialize_header(&mut c).unwrap();
         let dec = OwnerTx::deserialize(&mut c, base).unwrap();
 
-        cmp_base_tx!(dec, TxType::OWNER, 1230, "123 GOLD");
+        cmp_base_tx!(dec, TxType::OWNER, 1230, "123 GRAEL");
         assert_eq!(owner_tx.minter, dec.minter);
         assert_eq!(owner_tx.wallet, dec.wallet);
     }
@@ -391,12 +393,11 @@ mod tests {
             base: Tx {
                 tx_type: TxType::MINT,
                 timestamp: 1234,
-                fee: get_asset("123 GOLD"),
+                fee: get_asset("123 GRAEL"),
                 signature_pairs: vec![],
             },
             to: wallet.0.clone().into(),
-            amount: Balance::from("10 GOLD".parse().unwrap(), "100 SILVER".parse().unwrap())
-                .unwrap(),
+            amount: get_asset("10 GRAEL"),
             script: wallet.0.into(),
         };
 
@@ -407,7 +408,7 @@ mod tests {
         let base = Tx::deserialize_header(&mut c).unwrap();
         let dec = MintTx::deserialize(&mut c, base).unwrap();
 
-        cmp_base_tx!(dec, TxType::MINT, 1234, "123 GOLD");
+        cmp_base_tx!(dec, TxType::MINT, 1234, "123 GRAEL");
         assert_eq!(mint_tx.to, dec.to);
         assert_eq!(mint_tx.amount, dec.amount);
     }
@@ -419,11 +420,11 @@ mod tests {
             base: Tx {
                 tx_type: TxType::REWARD,
                 timestamp: 123,
-                fee: get_asset("123 GOLD"),
+                fee: get_asset("123 GRAEL"),
                 signature_pairs: vec![],
             },
             to: to.0.into(),
-            rewards: Balance::from(get_asset("1.50 GOLD"), get_asset("1.0 SILVER")).unwrap(),
+            rewards: get_asset("1.50 GRAEL"),
         };
 
         let mut v = vec![];
@@ -433,7 +434,7 @@ mod tests {
         let base = Tx::deserialize_header(&mut c).unwrap();
         let dec = RewardTx::deserialize(&mut c, base).unwrap();
 
-        cmp_base_tx!(dec, TxType::REWARD, 123, "123 GOLD");
+        cmp_base_tx!(dec, TxType::REWARD, 123, "123 GRAEL");
         assert_eq!(reward_tx.to, dec.to);
         assert_eq!(reward_tx.rewards, dec.rewards);
     }
@@ -446,13 +447,13 @@ mod tests {
             base: Tx {
                 tx_type: TxType::TRANSFER,
                 timestamp: 1234567890,
-                fee: get_asset("1.23 GOLD"),
+                fee: get_asset("1.23 GRAEL"),
                 signature_pairs: vec![],
             },
             from: from.0.into(),
             to: to.0.into(),
             script: vec![1, 2, 3, 4].into(),
-            amount: get_asset("1.0456 GOLD"),
+            amount: get_asset("1.0456 GRAEL"),
             memo: Vec::from(String::from("Hello world!").as_bytes()),
         };
 
@@ -463,7 +464,7 @@ mod tests {
         let base = Tx::deserialize_header(&mut c).unwrap();
         let dec = TransferTx::deserialize(&mut c, base).unwrap();
 
-        cmp_base_tx!(dec, TxType::TRANSFER, 1234567890, "1.23 GOLD");
+        cmp_base_tx!(dec, TxType::TRANSFER, 1234567890, "1.23 GRAEL");
         assert_eq!(transfer_tx.from, dec.from);
         assert_eq!(transfer_tx.to, dec.to);
         assert_eq!(transfer_tx.script, vec![1, 2, 3, 4].into());
@@ -476,7 +477,7 @@ mod tests {
         let tx_a = Tx {
             tx_type: TxType::MINT,
             timestamp: 1000,
-            fee: get_asset("10 GOLD"),
+            fee: get_asset("10 GRAEL"),
             signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
         };
         let tx_b = tx_a.clone();
@@ -491,15 +492,15 @@ mod tests {
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.fee = get_asset("10.0 GOLD");
+        tx_b.fee = get_asset("10.0 GRAEL");
         assert_eq!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.fee = get_asset("10 SILVER");
+        tx_b.fee = get_asset("100 GRAEL");
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.fee = get_asset("1.0 GOLD");
+        tx_b.fee = get_asset("1.0 GRAEL");
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
@@ -514,13 +515,13 @@ mod tests {
             base: Tx {
                 tx_type: TxType::TRANSFER,
                 timestamp: 1000,
-                fee: get_asset("10 GOLD"),
+                fee: get_asset("10 GRAEL"),
                 signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
             },
             from: KeyPair::gen().0.into(),
             to: KeyPair::gen().0.into(),
             script: Builder::new().push(OpFrame::True).build(),
-            amount: get_asset("1.0 GOLD"),
+            amount: get_asset("1.0 GRAEL"),
             memo: vec![1, 2, 3],
         };
 
@@ -528,7 +529,7 @@ mod tests {
         assert_eq!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.base.fee = get_asset("1.0 GOLD");
+        tx_b.base.fee = get_asset("1.0 GRAEL");
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
@@ -544,7 +545,7 @@ mod tests {
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.amount = get_asset("10 GOLD");
+        tx_b.amount = get_asset("10 GRAEL");
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();

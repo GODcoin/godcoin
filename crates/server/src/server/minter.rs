@@ -46,12 +46,12 @@ impl Minter {
         transactions.push(TxVariant::RewardTx(RewardTx {
             base: Tx {
                 tx_type: TxType::REWARD,
-                fee: "0 GOLD".parse().unwrap(),
+                fee: "0 GRAEL".parse().unwrap(),
                 timestamp,
                 signature_pairs: Vec::new(),
             },
             to: self.wallet_addr.clone(),
-            rewards: Balance::default(),
+            rewards: Asset::default(),
         }));
 
         let head = self.chain.get_chain_head();

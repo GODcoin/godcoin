@@ -5,8 +5,8 @@ https://godcoin.gold
 
 ## What is GODcoin?
 
-GODcoin is the official currency of Christ. There are two types of digital
-tokens, gold and silver, which can be exchanged for physical gold and silver.
+GODcoin is the official currency of Christ. GODcoin is backed by physical gold
+assets. The digital token name is represented as GRAEL.
 
 For more information see the [whitepaper](https://godcoin.gold/whitepaper).
 

@@ -6,9 +6,6 @@ use std::str::FromStr;
 mod precision;
 use self::precision::*;
 
-pub mod asset_symbol;
-pub use self::asset_symbol::*;
-
 pub mod cmp;
 pub use self::cmp::*;
 
@@ -18,68 +15,48 @@ pub use self::error::*;
 pub const MAX_STR_LEN: usize = 32;
 pub const MAX_PRECISION: u8 = 4;
 
-pub const EMPTY_GOLD: Asset = Asset {
+pub const EMPTY_GRAEL: Asset = Asset {
     amount: 0,
     decimals: 0,
-    symbol: AssetSymbol::GOLD,
 };
 
-pub const EMPTY_SILVER: Asset = Asset {
-    amount: 0,
-    decimals: 0,
-    symbol: AssetSymbol::SILVER,
-};
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Asset {
     pub amount: i64,
     pub decimals: u8,
-    pub symbol: AssetSymbol,
 }
 
 impl Asset {
     #[inline]
-    pub fn checked_new(amount: i64, decimals: u8, symbol: AssetSymbol) -> Option<Asset> {
+    pub fn checked_new(amount: i64, decimals: u8) -> Option<Asset> {
         if decimals > MAX_PRECISION {
             return None;
         }
-        Some(Asset {
-            amount,
-            decimals,
-            symbol,
-        })
+        Some(Asset { amount, decimals })
     }
 
     pub fn add(&self, other: &Self) -> Option<Self> {
-        if self.symbol != other.symbol {
-            return None;
-        }
         let decimals = max(self.decimals, other.decimals);
         let a = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let b = set_decimals_i64(other.amount, other.decimals, decimals)?;
         Some(Asset {
             amount: a.checked_add(b)?,
             decimals,
-            symbol: self.symbol,
         })
     }
 
     pub fn sub(&self, other: &Self) -> Option<Self> {
-        if self.symbol != other.symbol {
-            return None;
-        }
         let decimals = max(self.decimals, other.decimals);
         let a = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let b = set_decimals_i64(other.amount, other.decimals, decimals)?;
         Some(Asset {
             amount: a.checked_sub(b)?,
             decimals,
-            symbol: self.symbol,
         })
     }
 
     pub fn mul(&self, other: &Self, precision: u8) -> Option<Self> {
-        if self.symbol != other.symbol || precision > MAX_PRECISION {
+        if precision > MAX_PRECISION {
             return None;
         }
         let decimals = self.decimals + other.decimals;
@@ -92,12 +69,11 @@ impl Asset {
         Some(Asset {
             amount: final_mul as i64,
             decimals: precision,
-            symbol: self.symbol,
         })
     }
 
     pub fn div(&self, other: &Self, precision: u8) -> Option<Self> {
-        if self.symbol != other.symbol || other.amount == 0 || precision > MAX_PRECISION {
+        if other.amount == 0 || precision > MAX_PRECISION {
             return None;
         }
         let decimals = max(max(self.decimals, other.decimals), precision);
@@ -106,7 +82,6 @@ impl Asset {
         Some(Asset {
             amount: set_decimals_i64(a.checked_div(b)?, decimals, precision)?,
             decimals: precision,
-            symbol: self.symbol,
         })
     }
 
@@ -118,7 +93,6 @@ impl Asset {
             return Some(Asset {
                 amount: set_decimals_i64(1, 0, precision)?,
                 decimals: precision,
-                symbol: self.symbol,
             });
         }
 
@@ -143,8 +117,13 @@ impl Asset {
         Some(Asset {
             amount: res.to_i64()?,
             decimals: precision,
-            symbol: self.symbol,
         })
+    }
+}
+
+impl PartialEq for Asset {
+    fn eq(&self, other: &Self) -> bool {
+        self.eq(other).unwrap()
     }
 }
 
@@ -165,7 +144,7 @@ impl ToString for Asset {
             }
         }
         s.push(' ');
-        s.push_str(self.symbol.as_str());
+        s.push_str("GRAEL");
         s
     }
 }
@@ -225,15 +204,14 @@ impl FromStr for Asset {
             }
         };
 
-        let symbol = match split.next() {
-            Some(x) => match AssetSymbol::parse_str(x) {
-                Some(x) => x,
-                None => {
+        match split.next() {
+            Some(x) => {
+                if x != "GRAEL" {
                     return Err(AssetError {
                         kind: AssetErrorKind::InvalidAssetType,
                     });
                 }
-            },
+            }
             None => {
                 return Err(AssetError {
                     kind: AssetErrorKind::InvalidFormat,
@@ -241,88 +219,7 @@ impl FromStr for Asset {
             }
         };
 
-        Ok(Asset {
-            amount,
-            decimals,
-            symbol,
-        })
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct Balance {
-    gold: Asset,
-    silver: Asset,
-}
-
-impl PartialEq for Balance {
-    fn eq(&self, other: &Self) -> bool {
-        self.gold.eq(&other.gold).unwrap() && self.silver.eq(&other.silver).unwrap()
-    }
-}
-
-macro_rules! agnostic_op {
-    ($op:ident, $op_bal:ident) => {
-        impl Balance {
-            #[inline]
-            #[must_use = "operation can fail"]
-            pub fn $op(&mut self, asset: &Asset) -> Option<&mut Balance> {
-                match asset.symbol {
-                    AssetSymbol::GOLD => {
-                        self.gold = self.gold.$op(asset)?;
-                    }
-                    AssetSymbol::SILVER => {
-                        self.silver = self.silver.$op(asset)?;
-                    }
-                }
-                Some(self)
-            }
-
-            #[inline]
-            #[must_use = "operation can fail"]
-            pub fn $op_bal(&mut self, other: &Balance) -> Option<&mut Balance> {
-                // Perform the operation ensuring we can rollback if any operation fails
-                let gold = self.gold.$op(&other.gold)?;
-                let silver = self.silver.$op(&other.silver)?;
-                // Now apply the new values
-                self.gold = gold;
-                self.silver = silver;
-                Some(self)
-            }
-        }
-    };
-}
-
-agnostic_op!(add, add_bal);
-agnostic_op!(sub, sub_bal);
-
-impl Balance {
-    #[inline]
-    pub fn from(gold: Asset, silver: Asset) -> Option<Self> {
-        if gold.symbol == AssetSymbol::GOLD && silver.symbol == AssetSymbol::SILVER {
-            Some(Balance { gold, silver })
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    pub fn gold(&self) -> &Asset {
-        &self.gold
-    }
-
-    #[inline]
-    pub fn silver(&self) -> &Asset {
-        &self.silver
-    }
-}
-
-impl Default for Balance {
-    fn default() -> Balance {
-        Balance {
-            gold: EMPTY_GOLD,
-            silver: EMPTY_SILVER,
-        }
+        Ok(Asset { amount, decimals })
     }
 }
 
@@ -332,21 +229,20 @@ mod tests {
 
     #[test]
     fn test_parse_valid_input() {
-        let c = |asset: Asset, amount: &str, decimals: u8, symbol: AssetSymbol| {
+        let c = |asset: Asset, amount: &str, decimals: u8| {
             assert_eq!(asset.amount.to_string(), amount);
             assert_eq!(asset.decimals, decimals);
-            assert_eq!(asset.symbol, symbol);
         };
 
-        c(get_asset("1 GOLD"), "1", 0, AssetSymbol::GOLD);
-        c(get_asset("1. GOLD"), "1", 0, AssetSymbol::GOLD);
-        c(get_asset(".1 GOLD"), "1", 1, AssetSymbol::GOLD);
-        c(get_asset("-.1 GOLD"), "-1", 1, AssetSymbol::GOLD);
-        c(get_asset("0.1 GOLD"), "1", 1, AssetSymbol::GOLD);
-        c(get_asset("1.0 SILVER"), "10", 1, AssetSymbol::SILVER);
-        c(get_asset("0 SILVER"), "0", 0, AssetSymbol::SILVER);
-        c(get_asset("-0.0 SILVER"), "0", 1, AssetSymbol::SILVER);
-        c(get_asset("-1.0 SILVER"), "-10", 1, AssetSymbol::SILVER);
+        c(get_asset("1 GRAEL"), "1", 0);
+        c(get_asset("1. GRAEL"), "1", 0);
+        c(get_asset(".1 GRAEL"), "1", 1);
+        c(get_asset("-.1 GRAEL"), "-1", 1);
+        c(get_asset("0.1 GRAEL"), "1", 1);
+        c(get_asset("1.0 GRAEL"), "10", 1);
+        c(get_asset("0 GRAEL"), "0", 0);
+        c(get_asset("-0.0 GRAEL"), "0", 1);
+        c(get_asset("-1.0 GRAEL"), "-10", 1);
     }
 
     #[test]
@@ -354,12 +250,12 @@ mod tests {
         let c = |asset: Asset, s: &str| {
             assert_eq!(asset.to_string(), s);
         };
-        c(get_asset("1.0001 GOLD"), "1.0001 GOLD");
-        c(get_asset("0.0001 GOLD"), "0.0001 GOLD");
-        c(get_asset("-0.0001 GOLD"), "-0.0001 GOLD");
-        c(get_asset(".0001 GOLD"), "0.0001 GOLD");
-        c(get_asset(".1 GOLD"), "0.1 GOLD");
-        c(get_asset("1.0 GOLD"), "1.0 GOLD");
+        c(get_asset("1.0001 GRAEL"), "1.0001 GRAEL");
+        c(get_asset("0.0001 GRAEL"), "0.0001 GRAEL");
+        c(get_asset("-0.0001 GRAEL"), "-0.0001 GRAEL");
+        c(get_asset(".0001 GRAEL"), "0.0001 GRAEL");
+        c(get_asset(".1 GRAEL"), "0.1 GRAEL");
+        c(get_asset("1.0 GRAEL"), "1.0 GRAEL");
     }
 
     #[test]
@@ -369,39 +265,39 @@ mod tests {
             assert_eq!(e.kind, err);
         };
 
-        c("1e10 GOLD", AssetErrorKind::InvalidAmount);
-        c("a100 GOLD", AssetErrorKind::InvalidAmount);
-        c("100a GOLD", AssetErrorKind::InvalidAmount);
+        c("1e10 GRAEL", AssetErrorKind::InvalidAmount);
+        c("a100 GRAEL", AssetErrorKind::InvalidAmount);
+        c("100a GRAEL", AssetErrorKind::InvalidAmount);
 
         c(
-            "1234567890123456789012345678 GOLD",
+            "1234567890123456789012345678 GRAEL",
             AssetErrorKind::StrTooLarge,
         );
         c("1", AssetErrorKind::InvalidFormat);
 
-        c("1.0 GOLD a", AssetErrorKind::InvalidAssetType);
-        c("1.0 gold", AssetErrorKind::InvalidAssetType);
+        c("1.0 GRAEL a", AssetErrorKind::InvalidAssetType);
+        c("1.0 grael", AssetErrorKind::InvalidAssetType);
     }
 
     #[test]
     fn test_set_precision() {
-        let a = get_asset("1.5678 GOLD");
+        let a = get_asset("1.5678 GRAEL");
         assert_eq!(a.decimals, 4);
         assert_eq!(a.amount.to_string(), "15678");
 
-        let a = a.mul(&get_asset("10000 GOLD"), 0).unwrap();
+        let a = a.mul(&get_asset("10000 GRAEL"), 0).unwrap();
         assert_eq!(a.decimals, 0);
         assert_eq!(a.amount.to_string(), "15678");
 
-        let a = a.div(&get_asset("100 GOLD"), 0).unwrap();
+        let a = a.div(&get_asset("100 GRAEL"), 0).unwrap();
         assert_eq!(a.decimals, 0);
         assert_eq!(a.amount.to_string(), "156");
 
-        let a = a.div(&get_asset("100 GOLD"), 2).unwrap();
+        let a = a.div(&get_asset("100 GRAEL"), 2).unwrap();
         assert_eq!(a.decimals, 2);
         assert_eq!(a.amount.to_string(), "156");
 
-        let a = a.div(&get_asset("100 GOLD"), 2).unwrap();
+        let a = a.div(&get_asset("100 GRAEL"), 2).unwrap();
         assert_eq!(a.decimals, 2);
         assert_eq!(a.amount.to_string(), "1");
     }
@@ -412,66 +308,51 @@ mod tests {
             assert_eq!(asset.to_string(), amount);
         };
 
-        let a = get_asset("123.456 GOLD");
-        c(&a.add(&get_asset("2.0 GOLD")).unwrap(), "125.456 GOLD");
-        c(&a.add(&get_asset("-2.0 GOLD")).unwrap(), "121.456 GOLD");
-        c(&a.add(&get_asset(".0001 GOLD")).unwrap(), "123.4561 GOLD");
-        c(&a.sub(&get_asset("2.0 GOLD")).unwrap(), "121.456 GOLD");
-        c(&a.sub(&get_asset("-2.0 GOLD")).unwrap(), "125.456 GOLD");
+        let a = get_asset("123.456 GRAEL");
+        c(&a.add(&get_asset("2.0 GRAEL")).unwrap(), "125.456 GRAEL");
+        c(&a.add(&get_asset("-2.0 GRAEL")).unwrap(), "121.456 GRAEL");
+        c(&a.add(&get_asset(".0001 GRAEL")).unwrap(), "123.4561 GRAEL");
+        c(&a.sub(&get_asset("2.0 GRAEL")).unwrap(), "121.456 GRAEL");
+        c(&a.sub(&get_asset("-2.0 GRAEL")).unwrap(), "125.456 GRAEL");
         c(
-            &a.mul(&get_asset("100000.1111 GOLD"), 4).unwrap(),
-            "12345613.7159 GOLD",
+            &a.mul(&get_asset("100000.1111 GRAEL"), 4).unwrap(),
+            "12345613.7159 GRAEL",
         );
         c(
-            &a.mul(&get_asset("-100000.1111 GOLD"), 4).unwrap(),
-            "-12345613.7159 GOLD",
+            &a.mul(&get_asset("-100000.1111 GRAEL"), 4).unwrap(),
+            "-12345613.7159 GRAEL",
         );
-        c(&a.div(&get_asset("23 GOLD"), 3).unwrap(), "5.367 GOLD");
-        c(&a.div(&get_asset("-23 GOLD"), 4).unwrap(), "-5.3676 GOLD");
-        c(&a.pow(2, 4).unwrap(), "15241.3839 GOLD");
-        c(&a.pow(3, 4).unwrap(), "1881640.2952 GOLD");
-        c(&a, "123.456 GOLD");
+        c(&a.div(&get_asset("23 GRAEL"), 3).unwrap(), "5.367 GRAEL");
+        c(&a.div(&get_asset("-23 GRAEL"), 4).unwrap(), "-5.3676 GRAEL");
+        c(&a.pow(2, 4).unwrap(), "15241.3839 GRAEL");
+        c(&a.pow(3, 4).unwrap(), "1881640.2952 GRAEL");
+        c(&a, "123.456 GRAEL");
 
         c(
-            &get_asset("1.0002 GOLD").pow(1000, 4).unwrap(),
-            "1.2213 GOLD",
+            &get_asset("1.0002 GRAEL").pow(1000, 4).unwrap(),
+            "1.2213 GRAEL",
         );
         c(
-            &get_asset("10 GOLD").div(&get_asset("2 GOLD"), 0).unwrap(),
-            "5 GOLD",
+            &get_asset("10 GRAEL").div(&get_asset("2 GRAEL"), 0).unwrap(),
+            "5 GRAEL",
         );
         c(
-            &get_asset("5 GOLD").div(&get_asset("10 GOLD"), 1).unwrap(),
-            "0.5 GOLD",
+            &get_asset("5 GRAEL").div(&get_asset("10 GRAEL"), 1).unwrap(),
+            "0.5 GRAEL",
         );
 
-        assert!(&a.div(&get_asset("0 GOLD"), 1).is_none());
+        assert!(&a.div(&get_asset("0 GRAEL"), 1).is_none());
     }
 
     #[test]
     fn test_invalid_arithmetic() {
-        let a = &get_asset("10 GOLD");
-        let b = &get_asset("10 SILVER");
+        let a = &get_asset("10 GRAEL");
+        let b = &get_asset("9223372036854775807 GRAEL");
 
         assert!(a.add(b).is_none());
-        assert!(a.sub(b).is_none());
+        assert!(a.mul(&get_asset("-1 GRAEL"), 0).unwrap().sub(b).is_none());
         assert!(a.div(b, 8).is_none());
         assert!(a.mul(b, 8).is_none());
-    }
-
-    #[test]
-    fn test_balance_eq() {
-        let bal_a = Balance::from(get_asset("10 GOLD"), get_asset("100 SILVER")).unwrap();
-        let bal_b = bal_a.clone();
-        assert_eq!(bal_a, bal_b);
-
-        let mut bal_b = bal_a.clone();
-        bal_b.add(&get_asset("1 GOLD")).unwrap();
-        assert_ne!(bal_a, bal_b);
-
-        let mut bal_b = bal_a.clone();
-        bal_b.add(&get_asset("1 SILVER")).unwrap();
-        assert_ne!(bal_a, bal_b);
     }
 
     fn get_asset(s: &str) -> Asset {

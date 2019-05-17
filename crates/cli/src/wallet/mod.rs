@@ -139,7 +139,7 @@ impl Wallet {
             "Broadcasts a transaction to the network",
         ]);
         cmds.push([
-            "build_mint_tx <timestamp_offset> <gold_asset> <silver_asset> <owner_script>",
+            "build_mint_tx <timestamp_offset> <grael_asset> <owner_script>",
             "Builds a mint transaction",
         ]);
         cmds.push(["get_properties", "Retrieve global network properties"]);

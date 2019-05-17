@@ -1,6 +1,6 @@
 use std::io::{Cursor, Error, ErrorKind, Read};
 
-use crate::asset::{Asset, AssetSymbol, Balance};
+use crate::asset::Asset;
 use crate::crypto::{PublicKey, ScriptHash, SigPair, Signature};
 
 pub trait BufWrite {
@@ -13,7 +13,6 @@ pub trait BufWrite {
     fn push_script_hash(&mut self, hash: &ScriptHash);
     fn push_sig_pair(&mut self, pair: &SigPair);
     fn push_asset(&mut self, asset: &Asset);
-    fn push_balance(&mut self, bal: &Balance);
 }
 
 impl BufWrite for Vec<u8> {
@@ -76,12 +75,6 @@ impl BufWrite for Vec<u8> {
     fn push_asset(&mut self, asset: &Asset) {
         self.push_i64(asset.amount);
         self.push(asset.decimals);
-        self.push(asset.symbol as u8);
-    }
-
-    fn push_balance(&mut self, bal: &Balance) {
-        self.push_asset(bal.gold());
-        self.push_asset(bal.silver());
     }
 }
 
@@ -96,7 +89,6 @@ pub trait BufRead {
     fn take_script_hash(&mut self) -> Result<ScriptHash, Error>;
     fn take_sig_pair(&mut self) -> Result<SigPair, Error>;
     fn take_asset(&mut self) -> Result<Asset, Error>;
-    fn take_balance(&mut self) -> Result<Balance, Error>;
 }
 
 impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
@@ -169,19 +161,8 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     fn take_asset(&mut self) -> Result<Asset, Error> {
         let amount = self.take_i64()?;
         let decimals = self.take_u8()?;
-        let symbol = match self.take_u8()? {
-            0 => AssetSymbol::GOLD,
-            1 => AssetSymbol::SILVER,
-            _ => return Err(Error::new(ErrorKind::Other, "invalid symbol")),
-        };
-        Asset::checked_new(amount, decimals, symbol)
+        Asset::checked_new(amount, decimals)
             .ok_or_else(|| Error::new(ErrorKind::Other, "invalid asset"))
-    }
-
-    fn take_balance(&mut self) -> Result<Balance, Error> {
-        let gold = self.take_asset()?;
-        let silver = self.take_asset()?;
-        Balance::from(gold, silver).ok_or_else(|| Error::new(ErrorKind::Other, "invalid balance"))
     }
 }
 
@@ -211,7 +192,7 @@ mod tests {
     #[test]
     fn test_asset_serialization() {
         {
-            let a = "12.34 GOLD".parse().unwrap();
+            let a = "12.34 GRAEL".parse().unwrap();
             let mut v = vec![];
             v.push_asset(&a);
 
@@ -223,7 +204,6 @@ mod tests {
             let a = Asset {
                 amount: 1,
                 decimals: crate::asset::MAX_PRECISION + 1,
-                symbol: crate::asset::AssetSymbol::GOLD,
             };
             let mut v = vec![];
             v.push_asset(&a);

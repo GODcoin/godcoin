@@ -3,7 +3,7 @@ use std::io::Cursor;
 use std::mem;
 use std::path::Path;
 
-use crate::asset::Balance;
+use crate::asset::Asset;
 use crate::crypto::ScriptHash;
 use crate::serializer::*;
 use crate::tx::{OwnerTx, TxVariant};
@@ -80,41 +80,41 @@ impl Indexer {
         self.db.put(KEY_NET_OWNER, &val).unwrap();
     }
 
-    pub fn get_balance(&self, hash: &ScriptHash) -> Option<Balance> {
+    pub fn get_balance(&self, hash: &ScriptHash) -> Option<Asset> {
         let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
         let bal_buf = self.db.get_cf(cf, hash.as_ref()).unwrap()?;
         let cur = &mut Cursor::<&[u8]>::new(&bal_buf);
-        let bal = cur.take_balance().unwrap();
+        let bal = cur.take_asset().unwrap();
         Some(bal)
     }
 
-    pub fn set_balance(&self, hash: &ScriptHash, bal: &Balance) {
+    pub fn set_balance(&self, hash: &ScriptHash, bal: &Asset) {
         let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
         let key = hash.as_ref();
         let val = {
-            let mut vec = Vec::with_capacity(mem::size_of::<Balance>());
-            vec.push_balance(bal);
-            vec
+            let mut buf = Vec::with_capacity(mem::size_of::<Asset>());
+            buf.push_asset(bal);
+            buf
         };
         self.db.put_cf(cf, key, &val).unwrap();
     }
 
-    pub fn get_token_supply(&self) -> Balance {
-        let bal_buf = self.db.get(KEY_TOKEN_SUPPLY).unwrap();
-        match bal_buf {
-            Some(bal_buf) => {
-                let cur = &mut Cursor::<&[u8]>::new(&bal_buf);
-                cur.take_balance().unwrap()
+    pub fn get_token_supply(&self) -> Asset {
+        let supply_buf = self.db.get(KEY_TOKEN_SUPPLY).unwrap();
+        match supply_buf {
+            Some(supply_buf) => {
+                let cur = &mut Cursor::<&[u8]>::new(&supply_buf);
+                cur.take_asset().unwrap()
             }
-            None => Balance::default(),
+            None => Asset::default(),
         }
     }
 
-    pub fn set_token_supply(&self, bal: &Balance) {
+    pub fn set_token_supply(&self, amount: &Asset) {
         let val = {
-            let mut vec = Vec::with_capacity(mem::size_of::<Balance>());
-            vec.push_balance(bal);
-            vec
+            let mut buf = Vec::with_capacity(mem::size_of::<Asset>());
+            buf.push_asset(amount);
+            buf
         };
         self.db.put(KEY_TOKEN_SUPPLY, &val).unwrap();
     }

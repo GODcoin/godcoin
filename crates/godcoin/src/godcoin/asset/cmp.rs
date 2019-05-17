@@ -3,9 +3,6 @@ use std::cmp;
 
 impl Asset {
     pub fn gt(&self, other: &Asset) -> Option<bool> {
-        if self.symbol != other.symbol {
-            return None;
-        }
         let decimals = cmp::max(self.decimals, other.decimals);
         let t = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let o = set_decimals_i64(other.amount, other.decimals, decimals)?;
@@ -13,9 +10,6 @@ impl Asset {
     }
 
     pub fn geq(&self, other: &Asset) -> Option<bool> {
-        if self.symbol != other.symbol {
-            return None;
-        }
         let decimals = cmp::max(self.decimals, other.decimals);
         let t = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let o = set_decimals_i64(other.amount, other.decimals, decimals)?;
@@ -31,9 +25,6 @@ impl Asset {
     }
 
     pub fn eq(&self, other: &Asset) -> Option<bool> {
-        if self.symbol != other.symbol {
-            return None;
-        }
         let decimals = cmp::max(self.decimals, other.decimals);
         let t = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let o = set_decimals_i64(other.amount, other.decimals, decimals)?;
@@ -47,44 +38,32 @@ mod tests {
 
     #[test]
     fn test_compare_assets() {
-        assert!(get_asset("1 GOLD").gt(&get_asset("0.50 GOLD")).unwrap());
-        assert!(get_asset("1.0 GOLD").gt(&get_asset("0.99 GOLD")).unwrap());
+        assert!(get_asset("1 GRAEL").gt(&get_asset("0.50 GRAEL")).unwrap());
+        assert!(get_asset("1.0 GRAEL").gt(&get_asset("0.99 GRAEL")).unwrap());
 
-        assert!(get_asset("1 GOLD").geq(&get_asset("1.0 GOLD")).unwrap());
-        assert!(!get_asset("0.1 GOLD").geq(&get_asset("1.0 GOLD")).unwrap());
+        assert!(get_asset("1 GRAEL").geq(&get_asset("1.0 GRAEL")).unwrap());
+        assert!(!get_asset("0.1 GRAEL").geq(&get_asset("1.0 GRAEL")).unwrap());
 
-        assert!(get_asset("1 GOLD").leq(&get_asset("1.0 GOLD")).unwrap());
-        assert!(get_asset("0.1 GOLD").leq(&get_asset("1.0 GOLD")).unwrap());
-        assert!(get_asset("5.0 GOLD").leq(&get_asset("10 GOLD")).unwrap());
+        assert!(get_asset("1 GRAEL").leq(&get_asset("1.0 GRAEL")).unwrap());
+        assert!(get_asset("0.1 GRAEL").leq(&get_asset("1.0 GRAEL")).unwrap());
+        assert!(get_asset("5.0 GRAEL").leq(&get_asset("10 GRAEL")).unwrap());
 
-        assert!(get_asset("1 GOLD").eq(&get_asset("1 GOLD")).unwrap());
-        assert!(get_asset("1.0 GOLD").eq(&get_asset("1 GOLD")).unwrap());
-        assert!(get_asset("1.0 GOLD").eq(&get_asset("1.0 GOLD")).unwrap());
-        assert!(get_asset("1 GOLD").eq(&get_asset("1.00 GOLD")).unwrap());
-        assert!(get_asset("1 GOLD").eq(&get_asset("1.0 GOLD")).unwrap());
-        assert!(get_asset("1.0 GOLD").eq(&get_asset("1.00 GOLD")).unwrap());
+        assert!(get_asset("1 GRAEL").eq(&get_asset("1 GRAEL")).unwrap());
+        assert!(get_asset("1.0 GRAEL").eq(&get_asset("1 GRAEL")).unwrap());
+        assert!(get_asset("1.0 GRAEL").eq(&get_asset("1.0 GRAEL")).unwrap());
+        assert!(get_asset("1 GRAEL").eq(&get_asset("1.00 GRAEL")).unwrap());
+        assert!(get_asset("1 GRAEL").eq(&get_asset("1.0 GRAEL")).unwrap());
+        assert!(get_asset("1.0 GRAEL").eq(&get_asset("1.00 GRAEL")).unwrap());
 
-        assert!(!get_asset("1 GOLD").gt(&get_asset("1 GOLD")).unwrap());
-        assert!(!get_asset("1.0 GOLD").gt(&get_asset("1 GOLD")).unwrap());
-        assert!(!get_asset("1 GOLD").gt(&get_asset("1.0 GOLD")).unwrap());
+        assert!(!get_asset("1 GRAEL").gt(&get_asset("1 GRAEL")).unwrap());
+        assert!(!get_asset("1.0 GRAEL").gt(&get_asset("1 GRAEL")).unwrap());
+        assert!(!get_asset("1 GRAEL").gt(&get_asset("1.0 GRAEL")).unwrap());
 
-        assert!(get_asset("-1 GOLD").lt(&get_asset("1 GOLD")).unwrap());
-        assert!(!get_asset("1 GOLD").lt(&get_asset("1 GOLD")).unwrap());
-        assert!(!get_asset("1 GOLD").lt(&get_asset("1.0 GOLD")).unwrap());
-        assert!(!get_asset("1.0 GOLD").lt(&get_asset("1 GOLD")).unwrap());
-        assert!(!get_asset("1 GOLD").lt(&get_asset("-1 GOLD")).unwrap());
-    }
-
-    #[test]
-    fn test_invalid_cmp() {
-        let a = &get_asset("10 GOLD");
-        let b = &get_asset("10 SILVER");
-
-        assert!(a.gt(b).is_none());
-        assert!(a.geq(b).is_none());
-        assert!(a.lt(b).is_none());
-        assert!(a.leq(b).is_none());
-        assert!(a.eq(b).is_none());
+        assert!(get_asset("-1 GRAEL").lt(&get_asset("1 GRAEL")).unwrap());
+        assert!(!get_asset("1 GRAEL").lt(&get_asset("1 GRAEL")).unwrap());
+        assert!(!get_asset("1 GRAEL").lt(&get_asset("1.0 GRAEL")).unwrap());
+        assert!(!get_asset("1.0 GRAEL").lt(&get_asset("1 GRAEL")).unwrap());
+        assert!(!get_asset("1 GRAEL").lt(&get_asset("-1 GRAEL")).unwrap());
     }
 
     fn get_asset(s: &str) -> Asset {

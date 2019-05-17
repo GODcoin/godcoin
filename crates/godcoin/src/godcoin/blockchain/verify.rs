@@ -32,7 +32,6 @@ pub enum TxErr {
     ScriptHashMismatch,
     ScriptRetFalse,
     Arithmetic,
-    SymbolMismatch,
     InsufficientBalance,
     InsufficientFeeAmount,
     TooManySignatures,
@@ -51,11 +50,10 @@ impl TxErr {
             TxErr::ScriptHashMismatch => buf.push(2),
             TxErr::ScriptRetFalse => buf.push(3),
             TxErr::Arithmetic => buf.push(4),
-            TxErr::SymbolMismatch => buf.push(5),
-            TxErr::InsufficientBalance => buf.push(6),
-            TxErr::InsufficientFeeAmount => buf.push(7),
-            TxErr::TooManySignatures => buf.push(8),
-            TxErr::TxProhibited => buf.push(9),
+            TxErr::InsufficientBalance => buf.push(5),
+            TxErr::InsufficientFeeAmount => buf.push(6),
+            TxErr::TooManySignatures => buf.push(7),
+            TxErr::TxProhibited => buf.push(8),
         }
     }
 
@@ -85,11 +83,10 @@ impl TxErr {
             2 => TxErr::ScriptHashMismatch,
             3 => TxErr::ScriptRetFalse,
             4 => TxErr::Arithmetic,
-            5 => TxErr::SymbolMismatch,
-            6 => TxErr::InsufficientBalance,
-            7 => TxErr::InsufficientFeeAmount,
-            8 => TxErr::TooManySignatures,
-            9 => TxErr::TxProhibited,
+            5 => TxErr::InsufficientBalance,
+            6 => TxErr::InsufficientFeeAmount,
+            7 => TxErr::TooManySignatures,
+            8 => TxErr::TxProhibited,
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,

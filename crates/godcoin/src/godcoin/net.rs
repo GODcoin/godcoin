@@ -128,8 +128,8 @@ impl MsgResponse {
                     TxVariant::OwnerTx(*props.owner).serialize(&mut tx_buf);
                     buf.extend_from_slice(&tx_buf);
                 }
-                buf.push_balance(&props.network_fee);
-                buf.push_balance(&props.token_supply);
+                buf.push_asset(&props.network_fee);
+                buf.push_asset(&props.token_supply);
                 buf
             }
             MsgResponse::GetBlock(block) => {
@@ -162,8 +162,8 @@ impl MsgResponse {
                         }
                     }
                 };
-                let network_fee = cursor.take_balance()?;
-                let token_supply = cursor.take_balance()?;
+                let network_fee = cursor.take_asset()?;
+                let token_supply = cursor.take_asset()?;
                 Ok(MsgResponse::GetProperties(Properties {
                     height,
                     owner,
