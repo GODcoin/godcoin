@@ -1,16 +1,10 @@
+dist: xenial
+addons:
+  apt:
+    packages:
+    - libsodium-dev
 language: rust
 rust:
-  - beta
-env:
-  global:
-    - LIBSODIUM_VERSION="1.0.16"
-    - SODIUM_LIB_DIR="$HOME/libsodium-$LIBSODIUM_VERSION/lib"
-    - SODIUM_INC_DIR="$HOME/libsodium-$LIBSODIUM_VERSION/include"
-    - LD_LIBRARY_PATH="$SODIUM_LIB_DIR:$LD_LIBRARY_PATH"
-install:
-  - ./.travis/install-libsodium.sh
+  - stable
 cache:
-  cargo: true
   apt: true
-  directories:
-    - $HOME/libsodium-$LIBSODIUM_VERSION
