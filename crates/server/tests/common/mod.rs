@@ -17,6 +17,15 @@ pub fn create_tx(tx_type: TxType, fee: &str) -> Tx {
     }
 }
 
+pub fn create_tx_with_ts(tx_type: TxType, fee: &str, timestamp: u64) -> Tx {
+    Tx {
+        tx_type,
+        timestamp,
+        fee: fee.parse().unwrap(),
+        signature_pairs: Vec::with_capacity(script::MAX_SIGNATURES),
+    }
+}
+
 pub fn check_sigs(tx: &TxVariant) -> bool {
     let mut buf = Vec::with_capacity(4096);
     tx.serialize_without_sigs(&mut buf);

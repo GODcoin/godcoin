@@ -129,3 +129,67 @@ fn mint_tx_updates_balances() {
     })
     .unwrap();
 }
+
+#[test]
+fn tx_expired() {
+    use godcoin::constants::TX_EXPIRY_TIME;
+
+    System::run(|| {
+        let minter = TestMinter::new();
+        let time = util::get_epoch_ms();
+
+        let tx = MintTx {
+            base: create_tx_with_ts(TxType::MINT, "0 GRAEL", time + TX_EXPIRY_TIME),
+            to: (&minter.genesis_info().script).into(),
+            amount: get_asset("10.0 GRAEL"),
+            script: minter.genesis_info().script.clone(),
+        };
+
+        let tx = TxVariant::MintTx(tx);
+        let fut = minter.request(MsgRequest::Broadcast(tx));
+        System::current().arbiter().send(fut.then(move |res| {
+            let res = res.unwrap();
+            match res {
+                MsgResponse::Error(err) => {
+                    assert_eq!(err, net::ErrorKind::TxValidation(verify::TxErr::TxExpired));
+                }
+                _ => panic!("Unexpected response: {:?}", res),
+            }
+
+            System::current().stop();
+            Ok(())
+        }));
+    })
+    .unwrap();
+}
+
+#[test]
+fn tx_far_in_the_future() {
+    System::run(|| {
+        let minter = TestMinter::new();
+        let time = util::get_epoch_ms();
+
+        let tx = MintTx {
+            base: create_tx_with_ts(TxType::MINT, "0 GRAEL", time + 4000),
+            to: (&minter.genesis_info().script).into(),
+            amount: get_asset("10.0 GRAEL"),
+            script: minter.genesis_info().script.clone(),
+        };
+
+        let tx = TxVariant::MintTx(tx);
+        let fut = minter.request(MsgRequest::Broadcast(tx));
+        System::current().arbiter().send(fut.then(move |res| {
+            let res = res.unwrap();
+            match res {
+                MsgResponse::Error(err) => {
+                    assert_eq!(err, net::ErrorKind::TxValidation(verify::TxErr::TxExpired));
+                }
+                _ => panic!("Unexpected response: {:?}", res),
+            }
+
+            System::current().stop();
+            Ok(())
+        }));
+    })
+    .unwrap();
+}
