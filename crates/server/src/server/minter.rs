@@ -98,9 +98,10 @@ impl Handler<PushTx> for Minter {
         let tx = msg.0;
 
         let current_time = util::get_epoch_ms();
-        if (current_time > tx.timestamp + godcoin::constants::TX_EXPIRY_TIME)
-            || (current_time < tx.timestamp && tx.timestamp - current_time > 3000) {
-            return Err(TxValidateError(verify::TxErr::TxExpired))
+        if (tx.timestamp < current_time - godcoin::constants::TX_EXPIRY_TIME)
+            || (tx.timestamp > current_time + 3000)
+        {
+            return Err(TxValidateError(verify::TxErr::TxExpired));
         }
 
         self.chain

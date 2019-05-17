@@ -55,7 +55,7 @@ impl TxErr {
             TxErr::InsufficientFeeAmount => buf.push(6),
             TxErr::TooManySignatures => buf.push(7),
             TxErr::TxProhibited => buf.push(8),
-            TxErr::TxExpired => buf.push(9)
+            TxErr::TxExpired => buf.push(9),
         }
     }
 
