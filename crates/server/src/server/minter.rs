@@ -74,8 +74,9 @@ impl Handler<StartProductionLoop> for Minter {
 
     fn handle(&mut self, _: StartProductionLoop, ctx: &mut Self::Context) -> Self::Result {
         let dur = Duration::from_secs(3);
-        ctx.run_interval(dur, |minter, _| {
+        ctx.run_later(dur, |minter, ctx| {
             minter.produce();
+            ctx.notify(StartProductionLoop);
         });
     }
 }
