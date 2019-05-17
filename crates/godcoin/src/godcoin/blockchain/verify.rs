@@ -36,6 +36,7 @@ pub enum TxErr {
     InsufficientFeeAmount,
     TooManySignatures,
     TxProhibited,
+    TxExpired,
 }
 
 impl TxErr {
@@ -54,6 +55,7 @@ impl TxErr {
             TxErr::InsufficientFeeAmount => buf.push(6),
             TxErr::TooManySignatures => buf.push(7),
             TxErr::TxProhibited => buf.push(8),
+            TxErr::TxExpired => buf.push(9)
         }
     }
 
@@ -87,6 +89,7 @@ impl TxErr {
             6 => TxErr::InsufficientFeeAmount,
             7 => TxErr::TooManySignatures,
             8 => TxErr::TxProhibited,
+            9 => TxErr::TxExpired,
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,

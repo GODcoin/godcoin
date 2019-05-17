@@ -18,6 +18,7 @@ pub const GRAEL_FEE_NET_MULT: Asset = Asset {
 pub const NETWORK_FEE_AVG_WINDOW: u64 = 10;
 pub const FEE_RESET_WINDOW: usize = 4;
 
+pub const TX_EXPIRY_TIME: u64 = 30000;
 pub const BLOCK_PROD_TIME: u64 = 3000;
 
 mod tests {
