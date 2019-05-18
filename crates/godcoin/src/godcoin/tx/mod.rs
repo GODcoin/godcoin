@@ -123,7 +123,7 @@ impl<'a> Into<Cow<'a, TxVariant>> for &'a TxVariant {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Tx {
     pub tx_type: TxType,
     pub timestamp: u64,
@@ -155,15 +155,6 @@ impl Tx {
             fee,
             signature_pairs: Vec::new(),
         })
-    }
-}
-
-impl PartialEq for Tx {
-    fn eq(&self, other: &Self) -> bool {
-        self.tx_type == other.tx_type
-            && self.timestamp == other.timestamp
-            && self.fee.eq(other.fee).unwrap_or(false)
-            && self.signature_pairs == other.signature_pairs
     }
 }
 
@@ -261,7 +252,7 @@ impl DeserializeTx<RewardTx> for RewardTx {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TransferTx {
     pub base: Tx,
     pub from: ScriptHash,
@@ -298,17 +289,6 @@ impl DeserializeTx<TransferTx> for TransferTx {
             amount,
             memo,
         })
-    }
-}
-
-impl PartialEq for TransferTx {
-    fn eq(&self, other: &Self) -> bool {
-        self.base == other.base
-            && self.from == other.from
-            && self.to == other.to
-            && self.script == other.script
-            && self.amount.eq(other.amount).unwrap_or(false)
-            && self.memo == other.memo
     }
 }
 
@@ -526,6 +506,10 @@ mod tests {
         };
 
         let tx_b = tx_a.clone();
+        assert_eq!(tx_a, tx_b);
+
+        let mut tx_b = tx_a.clone();
+        tx_b.base.fee = get_asset("10.0 GRAEL");
         assert_eq!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
