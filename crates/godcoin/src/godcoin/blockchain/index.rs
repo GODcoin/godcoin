@@ -88,7 +88,7 @@ impl Indexer {
         Some(bal)
     }
 
-    pub fn set_balance(&self, hash: &ScriptHash, bal: &Asset) {
+    pub fn set_balance(&self, hash: &ScriptHash, bal: Asset) {
         let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
         let key = hash.as_ref();
         let val = {
@@ -110,7 +110,7 @@ impl Indexer {
         }
     }
 
-    pub fn set_token_supply(&self, amount: &Asset) {
+    pub fn set_token_supply(&self, amount: Asset) {
         let val = {
             let mut buf = Vec::with_capacity(mem::size_of::<Asset>());
             buf.push_asset(amount);

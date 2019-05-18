@@ -135,7 +135,7 @@ impl Tx {
     fn serialize_header(&self, v: &mut Vec<u8>) {
         v.push(self.tx_type as u8);
         v.push_u64(self.timestamp);
-        v.push_asset(&self.fee);
+        v.push_asset(self.fee);
     }
 
     fn deserialize_header(cur: &mut Cursor<&[u8]>) -> Option<Tx> {
@@ -162,7 +162,7 @@ impl PartialEq for Tx {
     fn eq(&self, other: &Self) -> bool {
         self.tx_type == other.tx_type
             && self.timestamp == other.timestamp
-            && self.fee.eq(&other.fee).unwrap_or(false)
+            && self.fee.eq(other.fee).unwrap_or(false)
             && self.signature_pairs == other.signature_pairs
     }
 }
@@ -211,7 +211,7 @@ impl SerializeTx for MintTx {
     fn serialize(&self, v: &mut Vec<u8>) {
         self.serialize_header(v);
         v.push_script_hash(&self.to);
-        v.push_asset(&self.amount);
+        v.push_asset(self.amount);
         v.push_bytes(&self.script);
     }
 }
@@ -243,7 +243,7 @@ impl SerializeTx for RewardTx {
         debug_assert_eq!(self.base.signature_pairs.len(), 0);
         self.serialize_header(v);
         v.push_script_hash(&self.to);
-        v.push_asset(&self.rewards);
+        v.push_asset(self.rewards);
     }
 }
 
@@ -277,7 +277,7 @@ impl SerializeTx for TransferTx {
         v.push_script_hash(&self.from);
         v.push_script_hash(&self.to);
         v.push_bytes(&self.script);
-        v.push_asset(&self.amount);
+        v.push_asset(self.amount);
         v.push_bytes(&self.memo);
     }
 }
@@ -307,7 +307,7 @@ impl PartialEq for TransferTx {
             && self.from == other.from
             && self.to == other.to
             && self.script == other.script
-            && self.amount.eq(&other.amount).unwrap_or(false)
+            && self.amount.eq(other.amount).unwrap_or(false)
             && self.memo == other.memo
     }
 }

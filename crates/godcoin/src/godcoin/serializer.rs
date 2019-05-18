@@ -12,7 +12,7 @@ pub trait BufWrite {
     fn push_pub_key(&mut self, key: &PublicKey);
     fn push_script_hash(&mut self, hash: &ScriptHash);
     fn push_sig_pair(&mut self, pair: &SigPair);
-    fn push_asset(&mut self, asset: &Asset);
+    fn push_asset(&mut self, asset: Asset);
 }
 
 impl BufWrite for Vec<u8> {
@@ -72,7 +72,7 @@ impl BufWrite for Vec<u8> {
         self.push_bytes(pair.signature.as_ref());
     }
 
-    fn push_asset(&mut self, asset: &Asset) {
+    fn push_asset(&mut self, asset: Asset) {
         self.push_i64(asset.amount);
         self.push(asset.decimals);
     }
@@ -194,7 +194,7 @@ mod tests {
         {
             let a = "12.34 GRAEL".parse().unwrap();
             let mut v = vec![];
-            v.push_asset(&a);
+            v.push_asset(a);
 
             let mut c = Cursor::<&[u8]>::new(&v);
             let b = c.take_asset().unwrap();
@@ -206,7 +206,7 @@ mod tests {
                 decimals: crate::asset::MAX_PRECISION + 1,
             };
             let mut v = vec![];
-            v.push_asset(&a);
+            v.push_asset(a);
 
             let mut c = Cursor::<&[u8]>::new(&v);
             let b = c.take_asset();

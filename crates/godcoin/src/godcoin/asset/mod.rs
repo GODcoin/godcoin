@@ -20,7 +20,7 @@ pub const EMPTY_GRAEL: Asset = Asset {
     decimals: 0,
 };
 
-#[derive(Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Asset {
     pub amount: i64,
     pub decimals: u8,
@@ -35,7 +35,7 @@ impl Asset {
         Some(Asset { amount, decimals })
     }
 
-    pub fn add(&self, other: &Self) -> Option<Self> {
+    pub fn add(&self, other: Self) -> Option<Self> {
         let decimals = max(self.decimals, other.decimals);
         let a = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let b = set_decimals_i64(other.amount, other.decimals, decimals)?;
@@ -45,7 +45,7 @@ impl Asset {
         })
     }
 
-    pub fn sub(&self, other: &Self) -> Option<Self> {
+    pub fn sub(&self, other: Self) -> Option<Self> {
         let decimals = max(self.decimals, other.decimals);
         let a = set_decimals_i64(self.amount, self.decimals, decimals)?;
         let b = set_decimals_i64(other.amount, other.decimals, decimals)?;
@@ -55,7 +55,7 @@ impl Asset {
         })
     }
 
-    pub fn mul(&self, other: &Self, precision: u8) -> Option<Self> {
+    pub fn mul(&self, other: Self, precision: u8) -> Option<Self> {
         if precision > MAX_PRECISION {
             return None;
         }
@@ -72,7 +72,7 @@ impl Asset {
         })
     }
 
-    pub fn div(&self, other: &Self, precision: u8) -> Option<Self> {
+    pub fn div(&self, other: Self, precision: u8) -> Option<Self> {
         if other.amount == 0 || precision > MAX_PRECISION {
             return None;
         }
@@ -123,7 +123,7 @@ impl Asset {
 
 impl PartialEq for Asset {
     fn eq(&self, other: &Self) -> bool {
-        self.eq(other).unwrap()
+        self.eq(*other).unwrap()
     }
 }
 
@@ -285,72 +285,72 @@ mod tests {
         assert_eq!(a.decimals, 4);
         assert_eq!(a.amount.to_string(), "15678");
 
-        let a = a.mul(&get_asset("10000 GRAEL"), 0).unwrap();
+        let a = a.mul(get_asset("10000 GRAEL"), 0).unwrap();
         assert_eq!(a.decimals, 0);
         assert_eq!(a.amount.to_string(), "15678");
 
-        let a = a.div(&get_asset("100 GRAEL"), 0).unwrap();
+        let a = a.div(get_asset("100 GRAEL"), 0).unwrap();
         assert_eq!(a.decimals, 0);
         assert_eq!(a.amount.to_string(), "156");
 
-        let a = a.div(&get_asset("100 GRAEL"), 2).unwrap();
+        let a = a.div(get_asset("100 GRAEL"), 2).unwrap();
         assert_eq!(a.decimals, 2);
         assert_eq!(a.amount.to_string(), "156");
 
-        let a = a.div(&get_asset("100 GRAEL"), 2).unwrap();
+        let a = a.div(get_asset("100 GRAEL"), 2).unwrap();
         assert_eq!(a.decimals, 2);
         assert_eq!(a.amount.to_string(), "1");
     }
 
     #[test]
     fn test_perform_arithmetic() {
-        let c = |asset: &Asset, amount: &str| {
+        let c = |asset: Asset, amount: &str| {
             assert_eq!(asset.to_string(), amount);
         };
 
         let a = get_asset("123.456 GRAEL");
-        c(&a.add(&get_asset("2.0 GRAEL")).unwrap(), "125.456 GRAEL");
-        c(&a.add(&get_asset("-2.0 GRAEL")).unwrap(), "121.456 GRAEL");
-        c(&a.add(&get_asset(".0001 GRAEL")).unwrap(), "123.4561 GRAEL");
-        c(&a.sub(&get_asset("2.0 GRAEL")).unwrap(), "121.456 GRAEL");
-        c(&a.sub(&get_asset("-2.0 GRAEL")).unwrap(), "125.456 GRAEL");
+        c(a.add(get_asset("2.0 GRAEL")).unwrap(), "125.456 GRAEL");
+        c(a.add(get_asset("-2.0 GRAEL")).unwrap(), "121.456 GRAEL");
+        c(a.add(get_asset(".0001 GRAEL")).unwrap(), "123.4561 GRAEL");
+        c(a.sub(get_asset("2.0 GRAEL")).unwrap(), "121.456 GRAEL");
+        c(a.sub(get_asset("-2.0 GRAEL")).unwrap(), "125.456 GRAEL");
         c(
-            &a.mul(&get_asset("100000.1111 GRAEL"), 4).unwrap(),
+            a.mul(get_asset("100000.1111 GRAEL"), 4).unwrap(),
             "12345613.7159 GRAEL",
         );
         c(
-            &a.mul(&get_asset("-100000.1111 GRAEL"), 4).unwrap(),
+            a.mul(get_asset("-100000.1111 GRAEL"), 4).unwrap(),
             "-12345613.7159 GRAEL",
         );
-        c(&a.div(&get_asset("23 GRAEL"), 3).unwrap(), "5.367 GRAEL");
-        c(&a.div(&get_asset("-23 GRAEL"), 4).unwrap(), "-5.3676 GRAEL");
-        c(&a.pow(2, 4).unwrap(), "15241.3839 GRAEL");
-        c(&a.pow(3, 4).unwrap(), "1881640.2952 GRAEL");
-        c(&a, "123.456 GRAEL");
+        c(a.div(get_asset("23 GRAEL"), 3).unwrap(), "5.367 GRAEL");
+        c(a.div(get_asset("-23 GRAEL"), 4).unwrap(), "-5.3676 GRAEL");
+        c(a.pow(2, 4).unwrap(), "15241.3839 GRAEL");
+        c(a.pow(3, 4).unwrap(), "1881640.2952 GRAEL");
+        c(a, "123.456 GRAEL");
 
         c(
-            &get_asset("1.0002 GRAEL").pow(1000, 4).unwrap(),
+            get_asset("1.0002 GRAEL").pow(1000, 4).unwrap(),
             "1.2213 GRAEL",
         );
         c(
-            &get_asset("10 GRAEL").div(&get_asset("2 GRAEL"), 0).unwrap(),
+            get_asset("10 GRAEL").div(get_asset("2 GRAEL"), 0).unwrap(),
             "5 GRAEL",
         );
         c(
-            &get_asset("5 GRAEL").div(&get_asset("10 GRAEL"), 1).unwrap(),
+            get_asset("5 GRAEL").div(get_asset("10 GRAEL"), 1).unwrap(),
             "0.5 GRAEL",
         );
 
-        assert!(&a.div(&get_asset("0 GRAEL"), 1).is_none());
+        assert!(a.div(get_asset("0 GRAEL"), 1).is_none());
     }
 
     #[test]
     fn test_invalid_arithmetic() {
-        let a = &get_asset("10 GRAEL");
-        let b = &get_asset("9223372036854775807 GRAEL");
+        let a = get_asset("10 GRAEL");
+        let b = get_asset("9223372036854775807 GRAEL");
 
         assert!(a.add(b).is_none());
-        assert!(a.mul(&get_asset("-1 GRAEL"), 0).unwrap().sub(b).is_none());
+        assert!(a.mul(get_asset("-1 GRAEL"), 0).unwrap().sub(b).is_none());
         assert!(a.div(b, 8).is_none());
         assert!(a.mul(b, 8).is_none());
     }

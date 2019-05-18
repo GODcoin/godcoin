@@ -79,7 +79,7 @@ impl Blockchain {
     pub fn get_total_fee(&self, hash: &ScriptHash) -> Option<Asset> {
         let net_fee = self.get_network_fee()?;
         let addr_fee = self.get_address_fee(hash)?;
-        addr_fee.add(&net_fee)
+        addr_fee.add(net_fee)
     }
 
     pub fn get_address_fee(&self, hash: &ScriptHash) -> Option<Asset> {
@@ -106,7 +106,7 @@ impl Blockchain {
         }
 
         let prec = asset::MAX_PRECISION;
-        GRAEL_FEE_MIN.mul(&GRAEL_FEE_MULT.pow(tx_count as u16, prec)?, prec)
+        GRAEL_FEE_MIN.mul(GRAEL_FEE_MULT.pow(tx_count as u16, prec)?, prec)
     }
 
     pub fn get_network_fee(&self) -> Option<Asset> {
@@ -131,7 +131,7 @@ impl Blockchain {
         }
 
         let prec = asset::MAX_PRECISION;
-        GRAEL_FEE_MIN.mul(&GRAEL_FEE_NET_MULT.pow(tx_count as u16, prec)?, prec)
+        GRAEL_FEE_MIN.mul(GRAEL_FEE_NET_MULT.pow(tx_count as u16, prec)?, prec)
     }
 
     pub fn get_balance(&self, hash: &ScriptHash) -> Asset {
@@ -145,20 +145,20 @@ impl Blockchain {
                 TxVariant::OwnerTx(_) => {}
                 TxVariant::MintTx(tx) => {
                     if &tx.to == hash {
-                        bal = bal.add(&tx.amount)?;
+                        bal = bal.add(tx.amount)?;
                     }
                 }
                 TxVariant::RewardTx(tx) => {
                     if &tx.to == hash {
-                        bal = bal.add(&tx.rewards)?;
+                        bal = bal.add(tx.rewards)?;
                     }
                 }
                 TxVariant::TransferTx(tx) => {
                     if &tx.from == hash {
-                        bal = bal.sub(&tx.fee)?;
-                        bal = bal.sub(&tx.amount)?;
+                        bal = bal.sub(tx.fee)?;
+                        bal = bal.sub(tx.amount)?;
                     } else if &tx.to == hash {
-                        bal = bal.add(&tx.amount)?;
+                        bal = bal.add(tx.amount)?;
                     }
                 }
             }
@@ -268,12 +268,12 @@ impl Blockchain {
                 // Sanity check to ensure too many new coins can't be minted
                 self.get_balance_with_txs(&mint_tx.to, additional_txs)
                     .ok_or(TxErr::Arithmetic)?
-                    .add(&mint_tx.amount)
+                    .add(mint_tx.amount)
                     .ok_or(TxErr::Arithmetic)?;
 
                 self.indexer
                     .get_token_supply()
-                    .add(&mint_tx.amount)
+                    .add(mint_tx.amount)
                     .ok_or(TxErr::Arithmetic)?;
             }
             TxVariant::RewardTx(tx) => {
@@ -305,9 +305,9 @@ impl Blockchain {
                 let bal = self
                     .get_balance_with_txs(&transfer.from, additional_txs)
                     .ok_or(TxErr::Arithmetic)?
-                    .sub(&transfer.fee)
+                    .sub(transfer.fee)
                     .ok_or(TxErr::Arithmetic)?
-                    .sub(&transfer.amount)
+                    .sub(transfer.amount)
                     .ok_or(TxErr::Arithmetic)?;
                 check_suf_bal!(bal);
             }
@@ -321,27 +321,27 @@ impl Blockchain {
                 self.indexer.set_owner(tx);
             }
             TxVariant::MintTx(tx) => {
-                let supply = self.indexer.get_token_supply().add(&tx.amount).unwrap();
-                self.indexer.set_token_supply(&supply);
+                let supply = self.indexer.get_token_supply().add(tx.amount).unwrap();
+                self.indexer.set_token_supply(supply);
 
-                let bal = self.get_balance(&tx.to).add(&tx.amount).unwrap();
-                self.indexer.set_balance(&tx.to, &bal);
+                let bal = self.get_balance(&tx.to).add(tx.amount).unwrap();
+                self.indexer.set_balance(&tx.to, bal);
             }
             TxVariant::RewardTx(tx) => {
-                let bal = self.get_balance(&tx.to).add(&tx.rewards).unwrap();
-                self.indexer.set_balance(&tx.to, &bal);
+                let bal = self.get_balance(&tx.to).add(tx.rewards).unwrap();
+                self.indexer.set_balance(&tx.to, bal);
             }
             TxVariant::TransferTx(tx) => {
                 let from_bal = self
                     .get_balance(&tx.from)
-                    .sub(&tx.fee)
+                    .sub(tx.fee)
                     .unwrap()
-                    .sub(&tx.amount)
+                    .sub(tx.amount)
                     .unwrap();
-                let to_bal = self.get_balance(&tx.to).add(&tx.amount).unwrap();
+                let to_bal = self.get_balance(&tx.to).add(tx.amount).unwrap();
 
-                self.indexer.set_balance(&tx.from, &from_bal);
-                self.indexer.set_balance(&tx.to, &to_bal);
+                self.indexer.set_balance(&tx.from, from_bal);
+                self.indexer.set_balance(&tx.to, to_bal);
             }
         }
     }
