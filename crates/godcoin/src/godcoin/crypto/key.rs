@@ -190,9 +190,9 @@ impl KeyPair {
     }
 
     pub fn gen() -> KeyPair {
-        let mut raw_seed: [u8; sign::SEEDBYTES] = [0; sign::SEEDBYTES];
-        randombytes::randombytes_into(&mut raw_seed);
-        let seed = sign::Seed::from_slice(&raw_seed).unwrap();
+        let mut seed = sign::Seed([0; sign::SEEDBYTES]);
+        randombytes::randombytes_into(&mut seed.0);
+        assert_ne!(seed.0, [0; sign::SEEDBYTES]);
         let (pk, sk) = sign::keypair_from_seed(&seed);
         KeyPair(PublicKey(pk), PrivateKey { seed, key: sk })
     }
