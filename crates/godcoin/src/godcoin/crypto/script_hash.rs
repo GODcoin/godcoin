@@ -4,7 +4,7 @@ use crate::script::Script;
 
 pub const SCRIPT_HASH_BUF_PREFIX: u8 = 0x03;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ScriptHash(Digest);
 
 impl ScriptHash {
