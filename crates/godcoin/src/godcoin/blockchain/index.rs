@@ -36,20 +36,20 @@ impl Indexer {
 
     pub fn get_block_byte_pos(&self, height: u64) -> Option<u64> {
         let cf = self.db.cf_handle(CF_BLOCK_BYTE_POS).unwrap();
-        let buf = self.db.get_cf(cf, height.to_be_bytes()).unwrap()?;
+        let buf = self.db.get_pinned_cf(cf, height.to_be_bytes()).unwrap()?;
 
         Some(u64_from_buf!(buf))
     }
 
     pub fn get_chain_height(&self) -> u64 {
-        match self.db.get(KEY_CHAIN_HEIGHT).unwrap() {
+        match self.db.get_pinned(KEY_CHAIN_HEIGHT).unwrap() {
             Some(val) => u64_from_buf!(val),
             None => 0,
         }
     }
 
     pub fn get_owner(&self) -> Option<OwnerTx> {
-        let tx_buf = self.db.get(KEY_NET_OWNER).unwrap()?;
+        let tx_buf = self.db.get_pinned(KEY_NET_OWNER).unwrap()?;
         let cur = &mut Cursor::<&[u8]>::new(&tx_buf);
         let tx = TxVariant::deserialize(cur).unwrap();
         match tx {
@@ -60,14 +60,14 @@ impl Indexer {
 
     pub fn get_balance(&self, hash: &ScriptHash) -> Option<Asset> {
         let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
-        let bal_buf = self.db.get_cf(cf, hash.as_ref()).unwrap()?;
+        let bal_buf = self.db.get_pinned_cf(cf, hash.as_ref()).unwrap()?;
         let cur = &mut Cursor::<&[u8]>::new(&bal_buf);
         let bal = cur.take_asset().unwrap();
         Some(bal)
     }
 
     pub fn get_token_supply(&self) -> Asset {
-        let supply_buf = self.db.get(KEY_TOKEN_SUPPLY).unwrap();
+        let supply_buf = self.db.get_pinned(KEY_TOKEN_SUPPLY).unwrap();
         match supply_buf {
             Some(supply_buf) => {
                 let cur = &mut Cursor::<&[u8]>::new(&supply_buf);
