@@ -11,7 +11,7 @@ faster-hex = "0.3.1"
 godcoin = { path = "../godcoin" }
 log = "0.4.6"
 reqwest = "0.9.17"
-rustyline = "4.0.0"
+rustyline = "4.1.0"
 rocksdb = "0.12.2"
 sodiumoxide = { version = "0.2.2", default-features = false, features = ["std"] }
 
