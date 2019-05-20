@@ -121,7 +121,7 @@ impl BlockStore {
         )
     }
 
-    pub fn insert(&mut self, block: SignedBlock) {
+    pub fn insert(&mut self, batch: &mut WriteBatch, block: SignedBlock) {
         assert_eq!(self.height + 1, block.height, "invalid block height");
         let byte_pos = self.byte_pos_tail;
         self.write_to_disk(&block);
@@ -130,8 +130,8 @@ impl BlockStore {
             // Update internal cache
             let height = block.height;
             self.height = height;
-            self.indexer.set_block_byte_pos(height, byte_pos);
-            self.indexer.set_chain_height(height);
+            batch.set_block_byte_pos(height, byte_pos);
+            batch.set_chain_height(height);
 
             let opt = self.blocks.insert(height, Arc::new(block));
             if self.blocks.len() > MAX_CACHE_SIZE as usize {
@@ -142,7 +142,7 @@ impl BlockStore {
         }
     }
 
-    pub fn insert_genesis(&mut self, block: SignedBlock) {
+    pub fn insert_genesis(&mut self, batch: &mut WriteBatch, block: SignedBlock) {
         assert_eq!(block.height, 0, "expected to be 0");
         assert!(
             self.genesis_block.is_none(),
@@ -150,7 +150,7 @@ impl BlockStore {
         );
         self.write_to_disk(&block);
         self.genesis_block = Some(Arc::new(block));
-        self.indexer.set_block_byte_pos(0, 0);
+        batch.set_block_byte_pos(0, 0);
     }
 
     fn write_to_disk(&mut self, block: &SignedBlock) {

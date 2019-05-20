@@ -6,7 +6,7 @@ pub mod index;
 pub mod store;
 pub mod verify;
 
-pub use self::{block::*, index::Indexer, store::BlockStore, verify::TxErr};
+pub use self::{block::*, index::{Indexer, WriteBatch}, store::BlockStore, verify::TxErr};
 
 use crate::{
     asset::{self, Asset},
@@ -170,10 +170,12 @@ impl Blockchain {
     pub fn insert_block(&self, block: SignedBlock) -> Result<(), verify::BlockError> {
         static CONFIG: verify::Config = verify::Config { skip_reward: true };
         self.verify_block(&block, &self.get_chain_head(), CONFIG)?;
+        let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
         for tx in &block.transactions {
-            self.index_tx(tx);
+            Self::index_tx(&mut batch, tx);
         }
-        self.store.lock().insert(block);
+        self.store.lock().insert(&mut batch, block);
+        batch.commit();
 
         Ok(())
     }
@@ -315,33 +317,21 @@ impl Blockchain {
         Ok(())
     }
 
-    fn index_tx(&self, tx: &TxVariant) {
+    fn index_tx(batch: &mut WriteBatch, tx: &TxVariant) {
         match tx {
             TxVariant::OwnerTx(tx) => {
-                self.indexer.set_owner(tx);
+                batch.set_owner(tx.clone());
             }
             TxVariant::MintTx(tx) => {
-                let supply = self.indexer.get_token_supply().add(tx.amount).unwrap();
-                self.indexer.set_token_supply(supply);
-
-                let bal = self.get_balance(&tx.to).add(tx.amount).unwrap();
-                self.indexer.set_balance(&tx.to, bal);
+                batch.add_token_supply(tx.amount);
+                batch.add_bal(&tx.to, tx.amount);
             }
             TxVariant::RewardTx(tx) => {
-                let bal = self.get_balance(&tx.to).add(tx.rewards).unwrap();
-                self.indexer.set_balance(&tx.to, bal);
+                batch.add_bal(&tx.to, tx.rewards);
             }
             TxVariant::TransferTx(tx) => {
-                let from_bal = self
-                    .get_balance(&tx.from)
-                    .sub(tx.fee)
-                    .unwrap()
-                    .sub(tx.amount)
-                    .unwrap();
-                let to_bal = self.get_balance(&tx.to).add(tx.amount).unwrap();
-
-                self.indexer.set_balance(&tx.from, from_bal);
-                self.indexer.set_balance(&tx.to, to_bal);
+                batch.sub_bal(&tx.from, tx.fee.add(tx.amount).unwrap());
+                batch.add_bal(&tx.to, tx.amount);
             }
         }
     }
@@ -371,8 +361,10 @@ impl Blockchain {
         })
         .sign(&info.minter_key);
 
-        self.store.lock().insert_genesis(block);
-        self.indexer.set_owner(&owner_tx);
+        let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
+        self.store.lock().insert_genesis(&mut batch, block);
+        batch.set_owner(owner_tx);
+        batch.commit();
 
         info
     }
