@@ -13,7 +13,6 @@ fn main() {
 
     let home: PathBuf = {
         let home = {
-            use dirs;
             match env::var("GODCOIN_HOME") {
                 Ok(s) => PathBuf::from(s),
                 Err(_) => Path::join(&dirs::data_local_dir().unwrap(), "godcoin"),
