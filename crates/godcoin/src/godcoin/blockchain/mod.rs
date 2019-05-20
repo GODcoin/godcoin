@@ -6,7 +6,12 @@ pub mod index;
 pub mod store;
 pub mod verify;
 
-pub use self::{block::*, index::{Indexer, WriteBatch}, store::BlockStore, verify::TxErr};
+pub use self::{
+    block::*,
+    index::{Indexer, WriteBatch},
+    store::BlockStore,
+    verify::TxErr,
+};
 
 use crate::{
     asset::{self, Asset},

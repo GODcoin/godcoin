@@ -1,11 +1,5 @@
 use rocksdb::{ColumnFamilyDescriptor, DBRecoveryMode, Options, DB};
-use std::{
-    collections::HashMap,
-    io::Cursor,
-    path::Path,
-    sync::Arc,
-    mem,
-};
+use std::{collections::HashMap, io::Cursor, mem, path::Path, sync::Arc};
 
 use crate::{
     asset::Asset,
@@ -168,7 +162,7 @@ impl WriteBatch {
         match self.token_supply.as_mut() {
             Some(token_supply) => {
                 *token_supply = token_supply.add(amount).unwrap();
-            },
+            }
             None => {
                 let amt = self.indexer.get_token_supply().add(amount).unwrap();
                 self.token_supply = Some(amt);
@@ -180,9 +174,14 @@ impl WriteBatch {
         match self.balances.get_mut(addr) {
             Some(bal) => {
                 *bal = bal.add(amount).unwrap();
-            },
+            }
             None => {
-                let bal = self.indexer.get_balance(addr).unwrap_or_else(Default::default).add(amount).unwrap();
+                let bal = self
+                    .indexer
+                    .get_balance(addr)
+                    .unwrap_or_else(Default::default)
+                    .add(amount)
+                    .unwrap();
                 self.balances.insert(addr.clone(), bal);
             }
         }
@@ -192,9 +191,14 @@ impl WriteBatch {
         match self.balances.get_mut(addr) {
             Some(bal) => {
                 *bal = bal.sub(amount).unwrap();
-            },
+            }
             None => {
-                let bal = self.indexer.get_balance(addr).unwrap_or_else(Default::default).sub(amount).unwrap();
+                let bal = self
+                    .indexer
+                    .get_balance(addr)
+                    .unwrap_or_else(Default::default)
+                    .sub(amount)
+                    .unwrap();
                 self.balances.insert(addr.clone(), bal);
             }
         }
