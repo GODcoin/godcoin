@@ -40,13 +40,11 @@ impl Minter {
     fn produce(&mut self) {
         let mut transactions = self.tx_pool.flush();
 
-        let timestamp = util::get_epoch_ms();
-
         transactions.push(TxVariant::RewardTx(RewardTx {
             base: Tx {
                 tx_type: TxType::REWARD,
                 fee: "0 GRAEL".parse().unwrap(),
-                timestamp,
+                timestamp: 0,
                 signature_pairs: Vec::new(),
             },
             to: self.wallet_addr.clone(),

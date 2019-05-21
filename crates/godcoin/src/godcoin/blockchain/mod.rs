@@ -287,10 +287,13 @@ impl Blockchain {
                 if !config.skip_reward {
                     return Err(TxErr::TxProhibited);
                 }
-                check_zero_fee!(tx.fee);
-                if !tx.signature_pairs.is_empty() {
-                    // Reward transactions are internally generated, thus should panic on failure
-                    panic!("reward transaction must not be signed");
+                // Reward transactions are internally generated, thus should panic on failure
+                if tx.fee.amount != 0 {
+                    panic!("reward tx must have no fee");
+                } else if !tx.signature_pairs.is_empty() {
+                    panic!("reward tx must not be signed");
+                } else if tx.timestamp != 0 {
+                    panic!("reward tx must have a timestamp of 0");
                 }
             }
             TxVariant::TransferTx(transfer) => {
