@@ -1,7 +1,7 @@
 use actix::prelude::*;
 use godcoin::prelude::*;
 use log::{info, warn};
-use std::{mem, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 #[derive(Message)]
 pub struct StartProductionLoop;
@@ -20,7 +20,7 @@ pub struct Minter {
     chain: Arc<Blockchain>,
     minter_key: KeyPair,
     wallet_addr: ScriptHash,
-    txs: Vec<TxVariant>,
+    tx_pool: TxPool,
 }
 
 impl Actor for Minter {
@@ -30,16 +30,15 @@ impl Actor for Minter {
 impl Minter {
     pub fn new(chain: Arc<Blockchain>, minter_key: KeyPair, wallet_addr: ScriptHash) -> Self {
         Self {
-            chain,
+            chain: Arc::clone(&chain),
             minter_key,
             wallet_addr,
-            txs: Vec::with_capacity(1024),
+            tx_pool: TxPool::new(chain),
         }
     }
 
     fn produce(&mut self) {
-        let mut transactions = Vec::with_capacity(1024);
-        mem::swap(&mut transactions, &mut self.txs);
+        let mut transactions = self.tx_pool.flush();
 
         let timestamp = util::get_epoch_ms();
 
@@ -95,19 +94,6 @@ impl Handler<PushTx> for Minter {
 
     fn handle(&mut self, msg: PushTx, _: &mut Self::Context) -> Self::Result {
         static CONFIG: verify::Config = verify::Config::strict();
-        let tx = msg.0;
-
-        let current_time = util::get_epoch_ms();
-        if (tx.timestamp < current_time - godcoin::constants::TX_EXPIRY_TIME)
-            || (tx.timestamp > current_time + 3000)
-        {
-            return Err(TxValidateError(verify::TxErr::TxExpired));
-        }
-
-        self.chain
-            .verify_tx(&tx, &self.txs, CONFIG)
-            .map_err(TxValidateError)?;
-        self.txs.push(tx);
-        Ok(())
+        self.tx_pool.push(msg.0, CONFIG).map_err(TxValidateError)
     }
 }

@@ -14,7 +14,10 @@ use crate::{
 #[macro_use]
 mod util;
 
+pub mod tx_pool;
 pub mod tx_type;
+
+pub use self::tx_pool::*;
 pub use self::tx_type::*;
 
 pub trait SerializeTx {
