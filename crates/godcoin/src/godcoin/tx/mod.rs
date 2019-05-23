@@ -37,6 +37,12 @@ pub trait SignTx {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TxId(Digest);
 
+impl TxId {
+    pub fn from_digest(txid: Digest) -> Self {
+        TxId(txid)
+    }
+}
+
 impl AsRef<[u8]> for TxId {
     fn as_ref(&self) -> &[u8] {
         &self.0

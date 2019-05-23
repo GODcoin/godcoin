@@ -47,6 +47,10 @@ impl Blockchain {
         }
     }
 
+    pub fn indexer(&self) -> Arc<Indexer> {
+        Arc::clone(&self.indexer)
+    }
+
     pub fn get_properties(&self) -> Properties {
         Properties {
             height: self.get_chain_height(),

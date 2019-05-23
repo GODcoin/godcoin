@@ -37,6 +37,7 @@ pub enum TxErr {
     TooManySignatures,
     TxProhibited,
     TxExpired,
+    TxDupe,
 }
 
 impl TxErr {
@@ -56,6 +57,7 @@ impl TxErr {
             TxErr::TooManySignatures => buf.push(7),
             TxErr::TxProhibited => buf.push(8),
             TxErr::TxExpired => buf.push(9),
+            TxErr::TxDupe => buf.push(10),
         }
     }
 
@@ -90,6 +92,7 @@ impl TxErr {
             7 => TxErr::TooManySignatures,
             8 => TxErr::TxProhibited,
             9 => TxErr::TxExpired,
+            10 => TxErr::TxDupe,
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,

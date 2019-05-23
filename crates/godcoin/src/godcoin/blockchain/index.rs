@@ -1,15 +1,18 @@
-use rocksdb::{ColumnFamilyDescriptor, DBRecoveryMode, Options, DB};
-use std::{collections::HashMap, io::Cursor, mem, path::Path, sync::Arc};
+use rocksdb::{ColumnFamilyDescriptor, DBRecoveryMode, IteratorMode, Options, DB};
+use std::{collections::HashMap, convert::TryInto, io::Cursor, mem, path::Path, sync::Arc};
 
 use crate::{
     asset::Asset,
+    constants::TX_EXPIRY_TIME,
     crypto::ScriptHash,
     serializer::*,
-    tx::{OwnerTx, TxVariant},
+    tx::{OwnerTx, TxId, TxVariant},
+    util,
 };
 
 const CF_BLOCK_BYTE_POS: &str = "block_byte_pos";
 const CF_ADDR_BAL: &str = "address_balance";
+const CF_TX_EXPIRY: &str = "tx_expiry";
 
 const KEY_NET_OWNER: &[u8] = b"network_owner";
 const KEY_CHAIN_HEIGHT: &[u8] = b"chain_height";
@@ -29,6 +32,7 @@ impl Indexer {
         let col_families = vec![
             ColumnFamilyDescriptor::new(CF_BLOCK_BYTE_POS, Options::default()),
             ColumnFamilyDescriptor::new(CF_ADDR_BAL, Options::default()),
+            ColumnFamilyDescriptor::new(CF_TX_EXPIRY, Options::default()),
         ];
         let db = DB::open_cf_descriptors(&db_opts, path, col_families).unwrap();
         Indexer { db }
@@ -205,9 +209,49 @@ impl WriteBatch {
     }
 }
 
+pub struct TxManager {
+    indexer: Arc<Indexer>,
+}
+
+impl TxManager {
+    pub fn new(indexer: Arc<Indexer>) -> Self {
+        Self { indexer }
+    }
+
+    pub fn has(&self, id: &TxId) -> bool {
+        let db = &self.indexer.db;
+        let cf = db.cf_handle(CF_TX_EXPIRY).unwrap();
+        self.indexer.db.get_cf(cf, id).unwrap().is_some()
+    }
+
+    pub fn insert(&self, id: &TxId, ts: u64) {
+        let db = &self.indexer.db;
+        let cf = db.cf_handle(CF_TX_EXPIRY).unwrap();
+        db.put_cf(cf, id, ts.to_be_bytes()).unwrap();
+    }
+
+    pub fn purge_expired(&self) {
+        let db = &self.indexer.db;
+        let cf = db.cf_handle(CF_TX_EXPIRY).unwrap();
+        let current_time = util::get_epoch_ms();
+
+        let mut batch = rocksdb::WriteBatch::default();
+        for (key, value) in db.iterator_cf(cf, IteratorMode::Start).unwrap() {
+            let ts = u64::from_be_bytes(value.as_ref().try_into().unwrap());
+            // We increase the expiry time by an extra second for extra assurance if system time
+            // slightly adjusts.
+            if ts < current_time - TX_EXPIRY_TIME - 1000 {
+                batch.delete_cf(cf, key).unwrap();
+            }
+        }
+        db.write(batch).unwrap();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::Digest;
     use sodiumoxide::randombytes;
     use std::{env, fs, panic};
 
@@ -230,6 +274,36 @@ mod tests {
             batch.set_chain_height(42);
             batch.commit();
             assert_eq!(indexer.get_chain_height(), 42);
+        });
+    }
+
+    #[test]
+    fn test_tx_manager() {
+        run_test(|indexer| {
+            let id = TxId::from_digest(Digest::from_slice(&[0u8; 32]).unwrap());
+            let ts = util::get_epoch_ms();
+            let manager = TxManager::new(Arc::clone(&indexer));
+            assert!(!manager.has(&id));
+            manager.insert(&id, ts);
+            assert!(manager.has(&id));
+
+            let cf = indexer.db.cf_handle(CF_TX_EXPIRY).unwrap();
+            indexer.db.delete_cf(cf, &id).unwrap();
+            assert!(!manager.has(&id));
+
+            manager.insert(&id, ts - TX_EXPIRY_TIME);
+            manager.purge_expired();
+            // The transaction has expired, but we give an additional second before purging it.
+            assert!(manager.has(&id));
+
+            let cf = indexer.db.cf_handle(CF_TX_EXPIRY).unwrap();
+            indexer.db.delete_cf(cf, &id).unwrap();
+            assert!(!manager.has(&id));
+            manager.insert(&id, ts - TX_EXPIRY_TIME - 1000);
+            assert!(manager.has(&id));
+            manager.purge_expired();
+            // Test that the expiry is completely over
+            assert!(!manager.has(&id));
         });
     }
 
