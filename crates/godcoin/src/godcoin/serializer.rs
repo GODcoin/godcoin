@@ -1,7 +1,22 @@
+use sodiumoxide::crypto::{
+    hash::sha256::DIGESTBYTES,
+    sign::{PUBLICKEYBYTES, SIGNATUREBYTES},
+};
 use std::io::{Cursor, Error, ErrorKind, Read};
 
 use crate::asset::Asset;
 use crate::crypto::{PublicKey, ScriptHash, SigPair, Signature};
+
+macro_rules! read_exact_bytes {
+    ($self:expr, $len:expr) => {{
+        let mut buf = Vec::with_capacity($len);
+        unsafe {
+            buf.set_len($len);
+        }
+        $self.read_exact(&mut buf)?;
+        buf
+    }};
+}
 
 pub trait BufWrite {
     fn push_u16(&mut self, num: u16);
@@ -60,16 +75,16 @@ impl BufWrite for Vec<u8> {
     }
 
     fn push_pub_key(&mut self, key: &PublicKey) {
-        self.push_bytes(key.as_ref());
+        self.extend_from_slice(key.as_ref());
     }
 
     fn push_script_hash(&mut self, hash: &ScriptHash) {
-        self.push_bytes(hash.as_ref());
+        self.extend_from_slice(hash.as_ref());
     }
 
     fn push_sig_pair(&mut self, pair: &SigPair) {
         self.push_pub_key(&pair.pub_key);
-        self.push_bytes(pair.signature.as_ref());
+        self.extend_from_slice(pair.signature.as_ref());
     }
 
     fn push_asset(&mut self, asset: Asset) {
@@ -131,30 +146,29 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
 
     fn take_bytes(&mut self) -> Result<Vec<u8>, Error> {
         let len = self.take_u32()? as usize;
-        let mut buf = Vec::with_capacity(len);
-        unsafe {
-            buf.set_len(len);
-        }
-        self.read_exact(&mut buf)?;
+        let buf = read_exact_bytes!(self, len);
         Ok(buf)
     }
 
     fn take_pub_key(&mut self) -> Result<PublicKey, Error> {
-        let buf = self.take_bytes()?;
+        let buf = read_exact_bytes!(self, PUBLICKEYBYTES);
         PublicKey::from_slice(&buf)
             .ok_or_else(|| Error::new(ErrorKind::Other, "incorrect public key length"))
     }
 
     fn take_script_hash(&mut self) -> Result<ScriptHash, Error> {
-        let buf = self.take_bytes()?;
+        let buf = read_exact_bytes!(self, DIGESTBYTES);
         ScriptHash::from_slice(&buf)
             .ok_or_else(|| Error::new(ErrorKind::Other, "incorrect script hash length"))
     }
 
     fn take_sig_pair(&mut self) -> Result<SigPair, Error> {
         let pub_key = self.take_pub_key()?;
-        let signature = Signature::from_slice(&self.take_bytes()?)
-            .ok_or_else(|| Error::new(ErrorKind::Other, "incorrect signature length"))?;
+        let signature = {
+            let buf = read_exact_bytes!(self, SIGNATUREBYTES);
+            Signature::from_slice(&buf)
+                .ok_or_else(|| Error::new(ErrorKind::Other, "incorrect signature length"))?
+        };
         Ok(SigPair { pub_key, signature })
     }
 
