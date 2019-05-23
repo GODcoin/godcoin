@@ -86,13 +86,17 @@ impl Blockchain {
         store.get(height)
     }
 
-    pub fn get_total_fee(&self, hash: &ScriptHash) -> Option<Asset> {
+    pub fn get_total_fee(&self, hash: &ScriptHash, additional_txs: &[TxVariant]) -> Option<Asset> {
         let net_fee = self.get_network_fee()?;
-        let addr_fee = self.get_address_fee(hash)?;
+        let addr_fee = self.get_address_fee(hash, additional_txs)?;
         addr_fee.add(net_fee)
     }
 
-    pub fn get_address_fee(&self, hash: &ScriptHash) -> Option<Asset> {
+    pub fn get_address_fee(
+        &self,
+        hash: &ScriptHash,
+        additional_txs: &[TxVariant],
+    ) -> Option<Asset> {
         let mut tx_count = 1;
         let mut delta = 0;
 
@@ -109,6 +113,10 @@ impl Blockchain {
                     delta = 0;
                 }
             };
+        }
+
+        for tx in additional_txs {
+            handle_tx_match!(tx);
         }
 
         for i in (0..=self.get_chain_height()).rev() {
@@ -310,8 +318,10 @@ impl Blockchain {
                 }
             }
             TxVariant::TransferTx(transfer) => {
-                // TODO check against required address fee amount
-                if tx.fee.amount < 0 {
+                let total_fee = self
+                    .get_total_fee(&transfer.from, additional_txs)
+                    .ok_or(TxErr::Arithmetic)?;
+                if tx.fee.lt(total_fee).ok_or(TxErr::Arithmetic)? {
                     return Err(TxErr::InsufficientFeeAmount);
                 } else if transfer.from != (&transfer.script).into() {
                     return Err(TxErr::ScriptHashMismatch);
