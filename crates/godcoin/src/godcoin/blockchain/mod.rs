@@ -15,6 +15,7 @@ pub use self::{
 
 use crate::{
     asset::{self, Asset},
+    constants::*,
     crypto::*,
     script::*,
     tx::*,
@@ -92,14 +93,12 @@ impl Blockchain {
     }
 
     pub fn get_address_fee(&self, hash: &ScriptHash) -> Option<Asset> {
-        use crate::constants::*;
-
         let mut tx_count = 1;
-        let head = self.get_chain_height();
-        for (delta, i) in (0..=head).rev().enumerate() {
-            let block = self.get_block(i).unwrap();
-            for tx in &block.transactions {
-                let has_match = match tx {
+        let mut delta = 0;
+
+        macro_rules! handle_tx_match {
+            ($tx:expr) => {
+                let has_match = match $tx {
                     TxVariant::OwnerTx(_) => false,
                     TxVariant::MintTx(_) => false,
                     TxVariant::RewardTx(_) => false,
@@ -107,9 +106,18 @@ impl Blockchain {
                 };
                 if has_match {
                     tx_count += 1;
+                    delta = 0;
                 }
+            };
+        }
+
+        for i in (0..=self.get_chain_height()).rev() {
+            delta += 1;
+            let block = self.get_block(i).unwrap();
+            for tx in &block.transactions {
+                handle_tx_match!(tx);
             }
-            if delta + 1 == FEE_RESET_WINDOW {
+            if delta == FEE_RESET_WINDOW {
                 break;
             }
         }
