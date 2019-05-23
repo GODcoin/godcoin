@@ -210,7 +210,7 @@ impl Blockchain {
         for i in 0..len {
             let tx = &block.transactions[i];
             let txs = &block.transactions[0..i];
-            if let Err(e) = self.verify_tx(tx, txs, config) {
+            if let Err(e) = self.verify_tx(&TxPrecompData::from_tx(tx), txs, config) {
                 return Err(verify::BlockError::Tx(e));
             }
         }
@@ -220,7 +220,7 @@ impl Blockchain {
 
     pub fn verify_tx(
         &self,
-        tx: &TxVariant,
+        data: &TxPrecompData,
         additional_txs: &[TxVariant],
         config: verify::Config,
     ) -> Result<(), TxErr> {
@@ -240,6 +240,7 @@ impl Blockchain {
             };
         }
 
+        let tx = data.tx();
         match tx {
             TxVariant::OwnerTx(new_owner) => {
                 check_zero_fee!(tx.fee);
@@ -249,7 +250,7 @@ impl Blockchain {
                     return Err(TxErr::ScriptHashMismatch);
                 }
 
-                let success = ScriptEngine::checked_new(tx, &new_owner.script)
+                let success = ScriptEngine::checked_new(data, &new_owner.script)
                     .map_err(TxErr::from)?
                     .eval()
                     .map_err(TxErr::ScriptEval)?;
@@ -264,7 +265,7 @@ impl Blockchain {
                 if owner.wallet != (&mint_tx.script).into() {
                     return Err(TxErr::ScriptHashMismatch);
                 }
-                let success = ScriptEngine::checked_new(tx, &mint_tx.script)
+                let success = ScriptEngine::checked_new(data, &mint_tx.script)
                     .map_err(TxErr::from)?
                     .eval()
                     .map_err(TxErr::ScriptEval)?;
@@ -304,7 +305,7 @@ impl Blockchain {
                     return Err(TxErr::ScriptHashMismatch);
                 }
 
-                let success = ScriptEngine::checked_new(tx, &transfer.script)
+                let success = ScriptEngine::checked_new(data, &transfer.script)
                     .map_err(TxErr::from)?
                     .eval()
                     .map_err(TxErr::ScriptEval)?;

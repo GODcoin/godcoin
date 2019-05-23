@@ -1,4 +1,4 @@
-use crate::prelude::{util, verify, Blockchain, TxVariant};
+use crate::prelude::{util, verify, Blockchain, TxPrecompData, TxVariant};
 use std::{mem, sync::Arc};
 
 const DEFAULT_TX_CAP: usize = 1024;
@@ -16,18 +16,24 @@ impl TxPool {
         }
     }
 
-    pub fn push(&mut self, tx: TxVariant, config: verify::Config) -> Result<(), verify::TxErr> {
+    pub fn push(
+        &mut self,
+        data: TxPrecompData,
+        config: verify::Config,
+    ) -> Result<(), verify::TxErr> {
         let current_time = util::get_epoch_ms();
+
+        let tx = data.tx();
         if (tx.timestamp < current_time - crate::constants::TX_EXPIRY_TIME)
             || (tx.timestamp > current_time + 3000)
         {
             return Err(verify::TxErr::TxExpired);
         }
 
-        self.chain.verify_tx(&tx, &self.txs, config)?;
+        self.chain.verify_tx(&data, &self.txs, config)?;
 
         // TODO: push into the indexer and check for dupes
-        self.txs.push(tx);
+        self.txs.push(data.take());
         Ok(())
     }
 

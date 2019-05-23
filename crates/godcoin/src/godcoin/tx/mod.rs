@@ -1,3 +1,4 @@
+use sodiumoxide::crypto::sign::{PUBLICKEYBYTES, SIGNATUREBYTES};
 use std::{
     borrow::Cow,
     io::Cursor,
@@ -6,7 +7,7 @@ use std::{
 
 use crate::{
     asset::Asset,
-    crypto::{KeyPair, PublicKey, ScriptHash, SigPair},
+    crypto::{double_sha256, Digest, KeyPair, PublicKey, ScriptHash, SigPair},
     script::Script,
     serializer::*,
 };
@@ -34,6 +35,80 @@ pub trait SignTx {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct TxId(Digest);
+
+impl AsRef<[u8]> for TxId {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TxPrecompData<'a> {
+    tx: Cow<'a, TxVariant>,
+    txid: TxId,
+    bytes: Vec<u8>,
+    sig_tx_prefix: usize,
+}
+
+impl<'a> TxPrecompData<'a> {
+    pub fn from_tx<T>(tx: T) -> Self
+    where
+        T: Into<Cow<'a, TxVariant>>,
+    {
+        let tx = tx.into();
+        let mut bytes = Vec::with_capacity(4096);
+        tx.serialize(&mut bytes);
+        let sig_tx_prefix = 1 + (tx.signature_pairs.len() * (PUBLICKEYBYTES + SIGNATUREBYTES));
+
+        let txid = TxId(double_sha256(&bytes));
+        Self {
+            tx,
+            txid,
+            bytes,
+            sig_tx_prefix,
+        }
+    }
+
+    #[inline]
+    pub fn take(self) -> TxVariant {
+        self.tx.into_owned()
+    }
+
+    #[inline]
+    pub fn tx(&self) -> &TxVariant {
+        &self.tx
+    }
+
+    #[inline]
+    pub fn txid(&self) -> &TxId {
+        &self.txid
+    }
+
+    #[inline]
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    #[inline]
+    pub fn bytes_without_sigs(&self) -> &[u8] {
+        &self.bytes[self.sig_tx_prefix..]
+    }
+}
+
+impl<'a> Into<Cow<'a, TxPrecompData<'a>>> for TxPrecompData<'a> {
+    fn into(self) -> Cow<'a, TxPrecompData<'a>> {
+        Cow::Owned(self)
+    }
+}
+
+impl<'a> Into<Cow<'a, TxPrecompData<'a>>> for &'a TxPrecompData<'a> {
+    fn into(self) -> Cow<'a, TxPrecompData<'a>> {
+        Cow::Borrowed(self)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum TxVariant {
     OwnerTx(OwnerTx),
     MintTx(MintTx),
@@ -42,6 +117,11 @@ pub enum TxVariant {
 }
 
 impl TxVariant {
+    #[inline]
+    pub fn precompute(self) -> TxPrecompData<'static> {
+        TxPrecompData::from_tx(Cow::Owned(self))
+    }
+
     pub fn serialize_without_sigs(&self, buf: &mut Vec<u8>) {
         match self {
             TxVariant::OwnerTx(tx) => tx.serialize(buf),
@@ -54,7 +134,7 @@ impl TxVariant {
     pub fn serialize(&self, v: &mut Vec<u8>) {
         macro_rules! serialize_sigs {
             ($name:expr, $vec:expr) => {{
-                $vec.push_u16($name.signature_pairs.len() as u16);
+                $vec.push($name.signature_pairs.len() as u8);
                 for sig in &$name.signature_pairs {
                     $vec.push_sig_pair(sig)
                 }
@@ -72,7 +152,7 @@ impl TxVariant {
 
     pub fn deserialize(cur: &mut Cursor<&[u8]>) -> Option<TxVariant> {
         let sigs = {
-            let len = cur.take_u16().ok()?;
+            let len = cur.take_u8().ok()?;
             let mut vec = Vec::with_capacity(len as usize);
             for _ in 0..len {
                 vec.push(cur.take_sig_pair().ok()?)
@@ -538,6 +618,27 @@ mod tests {
         let mut tx_b = tx_a.clone();
         tx_b.memo = vec![1, 2, 3, 4];
         assert_ne!(tx_a, tx_b);
+    }
+
+    #[test]
+    fn test_precomp_data_sig_split() {
+        let tx = TxVariant::TransferTx(TransferTx {
+            base: Tx {
+                tx_type: TxType::TRANSFER,
+                timestamp: 1000,
+                fee: get_asset("10 GRAEL"),
+                signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
+            },
+            from: KeyPair::gen().0.into(),
+            to: KeyPair::gen().0.into(),
+            script: Builder::new().push(OpFrame::True).build(),
+            amount: get_asset("1.0 GRAEL"),
+            memo: vec![1, 2, 3],
+        });
+
+        let mut buf = Vec::with_capacity(4096);
+        tx.serialize_without_sigs(&mut buf);
+        assert_eq!(tx.precompute().bytes_without_sigs(), buf.as_slice());
     }
 
     fn get_asset(s: &str) -> Asset {

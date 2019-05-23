@@ -2,7 +2,7 @@ use sodiumoxide::crypto::sign;
 use std::borrow::Cow;
 
 use super::{stack::*, *};
-use crate::{crypto::PublicKey, tx::TxVariant};
+use crate::{crypto::PublicKey, tx::TxPrecompData};
 
 macro_rules! map_err_type {
     ($self:expr, $var:expr) => {
@@ -19,28 +19,28 @@ pub enum InitErr {
 #[derive(Debug)]
 pub struct ScriptEngine<'a> {
     script: Cow<'a, Script>,
-    tx: Cow<'a, TxVariant>,
+    data: Cow<'a, TxPrecompData<'a>>,
     pos: usize,
     stack: Stack,
     sig_pair_pos: usize,
 }
 
 impl<'a> ScriptEngine<'a> {
-    pub fn checked_new<T, S>(tx: T, script: S) -> Result<Self, InitErr>
+    pub fn checked_new<T, S>(data: T, script: S) -> Result<Self, InitErr>
     where
-        T: Into<Cow<'a, TxVariant>>,
+        T: Into<Cow<'a, TxPrecompData<'a>>>,
         S: Into<Cow<'a, Script>>,
     {
         let script = script.into();
-        let tx = tx.into();
+        let data = data.into();
         if script.len() > MAX_BYTE_SIZE {
             return Err(InitErr::ScriptTooLarge);
-        } else if tx.signature_pairs.len() > MAX_SIGNATURES {
+        } else if data.tx().signature_pairs.len() > MAX_SIGNATURES {
             return Err(InitErr::TooManySignatures);
         }
         Ok(Self {
             script,
-            tx,
+            data,
             pos: 0,
             stack: Stack::new(),
             sig_pair_pos: 0,
@@ -242,22 +242,23 @@ impl<'a> ScriptEngine<'a> {
     fn check_sigs(&mut self, threshold: usize, keys: &[PublicKey]) -> bool {
         if threshold == 0 {
             return true;
-        } else if threshold > keys.len() || self.sig_pair_pos >= self.tx.signature_pairs.len() {
+        } else if threshold > keys.len()
+            || self.sig_pair_pos >= self.data.tx().signature_pairs.len()
+        {
             return false;
         }
 
-        let mut buf = Vec::with_capacity(4096);
-        self.tx.serialize_without_sigs(&mut buf);
+        let buf = self.data.bytes_without_sigs();
 
         let mut valid_threshold = 0;
         let mut key_iter = keys.iter();
-        'pair_loop: for pair in &self.tx.signature_pairs[self.sig_pair_pos..] {
+        'pair_loop: for pair in &self.data.tx().signature_pairs[self.sig_pair_pos..] {
             loop {
                 match key_iter.next() {
                     Some(key) => {
                         if key == &pair.pub_key {
                             self.sig_pair_pos += 1;
-                            if key.verify(&buf, &pair.signature) {
+                            if key.verify(buf, &pair.signature) {
                                 valid_threshold += 1;
                                 continue 'pair_loop;
                             } else {
@@ -282,13 +283,13 @@ impl<'a> ScriptEngine<'a> {
 mod tests {
     use super::*;
     use crate::crypto::{KeyPair, SigPair, Signature};
-    use crate::tx::{SignTx, TransferTx, Tx, TxType};
+    use crate::tx::{SignTx, TransferTx, Tx, TxType, TxVariant};
 
     #[test]
     fn script_too_large_err() {
         let script = Script((0..=MAX_BYTE_SIZE).map(|_| 0).collect());
         let tx = new_transfer_tx(script.clone(), &[]);
-        let engine = ScriptEngine::checked_new(TxVariant::TransferTx(tx), script);
+        let engine = ScriptEngine::checked_new(TxVariant::TransferTx(tx).precompute(), script);
         assert_eq!(engine.unwrap_err(), InitErr::ScriptTooLarge);
     }
 
@@ -297,7 +298,7 @@ mod tests {
         let script = Builder::new().build();
         let keys: Vec<KeyPair> = (0..=MAX_SIGNATURES).map(|_| KeyPair::gen()).collect();
         let tx = new_transfer_tx(script.clone(), &keys);
-        let engine = ScriptEngine::checked_new(TxVariant::TransferTx(tx), script);
+        let engine = ScriptEngine::checked_new(TxVariant::TransferTx(tx).precompute(), script);
         assert_eq!(engine.unwrap_err(), InitErr::TooManySignatures);
     }
 
@@ -610,7 +611,7 @@ mod tests {
             tx.append_sign(&key_2);
             tx.append_sign(&key_1);
 
-            ScriptEngine::checked_new(TxVariant::TransferTx(tx), script).unwrap()
+            ScriptEngine::checked_new(TxVariant::TransferTx(tx).precompute(), script).unwrap()
         };
         assert!(!engine.eval().unwrap());
     }
@@ -834,7 +835,7 @@ mod tests {
     fn new_engine_with_signers<'a>(keys: &[KeyPair], b: Builder) -> ScriptEngine<'a> {
         let script = b.build();
         let tx = new_transfer_tx(script.clone(), keys);
-        ScriptEngine::checked_new(TxVariant::TransferTx(tx), script).unwrap()
+        ScriptEngine::checked_new(TxVariant::TransferTx(tx).precompute(), script).unwrap()
     }
 
     fn new_transfer_tx(script: Script, keys: &[KeyPair]) -> TransferTx {

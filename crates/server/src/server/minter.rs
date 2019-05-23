@@ -92,6 +92,8 @@ impl Handler<PushTx> for Minter {
 
     fn handle(&mut self, msg: PushTx, _: &mut Self::Context) -> Self::Result {
         static CONFIG: verify::Config = verify::Config::strict();
-        self.tx_pool.push(msg.0, CONFIG).map_err(TxValidateError)
+        self.tx_pool
+            .push(msg.0.precompute(), CONFIG)
+            .map_err(TxValidateError)
     }
 }

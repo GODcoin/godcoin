@@ -47,11 +47,11 @@ fn mint_tx_verification() {
         };
 
         let tx = create_tx("0 GRAEL");
-        assert!(chain.verify_tx(&tx, &[], config).is_ok());
+        assert!(chain.verify_tx(&tx.precompute(), &[], config).is_ok());
 
         let tx = create_tx("1 GRAEL");
         assert_eq!(
-            chain.verify_tx(&tx, &[], config).unwrap_err(),
+            chain.verify_tx(&tx.precompute(), &[], config).unwrap_err(),
             verify::TxErr::InsufficientFeeAmount
         );
 
@@ -59,7 +59,7 @@ fn mint_tx_verification() {
         tx.signature_pairs.remove(1);
         assert!(check_sigs(&tx));
         assert_eq!(
-            chain.verify_tx(&tx, &[], config).unwrap_err(),
+            chain.verify_tx(&tx.precompute(), &[], config).unwrap_err(),
             verify::TxErr::ScriptRetFalse
         );
 
@@ -67,7 +67,7 @@ fn mint_tx_verification() {
         tx.signature_pairs.clear();
         assert!(check_sigs(&tx));
         assert_eq!(
-            chain.verify_tx(&tx, &[], config).unwrap_err(),
+            chain.verify_tx(&tx.precompute(), &[], config).unwrap_err(),
             verify::TxErr::ScriptRetFalse
         );
 
@@ -79,7 +79,7 @@ fn mint_tx_verification() {
         });
         assert!(!check_sigs(&tx));
         assert_eq!(
-            chain.verify_tx(&tx, &[], config).unwrap_err(),
+            chain.verify_tx(&tx.precompute(), &[], config).unwrap_err(),
             verify::TxErr::ScriptRetFalse
         );
 
