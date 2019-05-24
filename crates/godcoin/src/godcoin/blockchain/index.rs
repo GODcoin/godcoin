@@ -299,7 +299,7 @@ mod tests {
             let cf = indexer.db.cf_handle(CF_TX_EXPIRY).unwrap();
             indexer.db.delete_cf(cf, &id).unwrap();
             assert!(!manager.has(&id));
-            manager.insert(&id, ts - TX_EXPIRY_TIME - 1000);
+            manager.insert(&id, ts - TX_EXPIRY_TIME - 1100);
             assert!(manager.has(&id));
             manager.purge_expired();
             // Test that the expiry is completely over
