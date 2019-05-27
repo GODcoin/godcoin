@@ -15,7 +15,7 @@ pub const EMPTY_GRAEL: Asset = Asset::new(0);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct Asset {
-    pub amount: i64
+    pub amount: i64,
 }
 
 impl Asset {
@@ -26,12 +26,16 @@ impl Asset {
 
     #[inline]
     pub fn add(&self, other: Self) -> Option<Self> {
-        Some(Asset { amount: self.amount.checked_add(other.amount)? })
+        Some(Asset {
+            amount: self.amount.checked_add(other.amount)?,
+        })
     }
 
     #[inline]
     pub fn sub(&self, other: Self) -> Option<Self> {
-        Some(Asset { amount: self.amount.checked_sub(other.amount)? })
+        Some(Asset {
+            amount: self.amount.checked_sub(other.amount)?,
+        })
     }
 
     pub fn mul(&self, other: Self) -> Option<Self> {
@@ -41,7 +45,9 @@ impl Asset {
         if final_mul > i128::from(::std::i64::MAX) {
             return None;
         }
-        Some(Asset { amount: final_mul as i64 })
+        Some(Asset {
+            amount: final_mul as i64,
+        })
     }
 
     pub fn div(&self, other: Self) -> Option<Self> {
@@ -50,12 +56,16 @@ impl Asset {
         }
         const DIV_PRECISION: u8 = MAX_PRECISION * 2;
         let a = set_decimals_i64(self.amount, MAX_PRECISION, DIV_PRECISION)?;
-        Some(Asset { amount: a.checked_div(other.amount)? })
+        Some(Asset {
+            amount: a.checked_div(other.amount)?,
+        })
     }
 
     pub fn pow(&self, num: u16) -> Option<Self> {
         if num == 0 {
-            return Some(Asset { amount: set_decimals_i64(1, 0, MAX_PRECISION)? });
+            return Some(Asset {
+                amount: set_decimals_i64(1, 0, MAX_PRECISION)?,
+            });
         }
 
         let decimals = u16::from(MAX_PRECISION).checked_mul(num)?;
@@ -76,7 +86,9 @@ impl Asset {
         }
 
         res = set_decimals_big(&res, decimals, u16::from(MAX_PRECISION));
-        Some(Asset { amount: res.to_i64()? })
+        Some(Asset {
+            amount: res.to_i64()?,
+        })
     }
 }
 
@@ -268,16 +280,17 @@ mod tests {
         c(a.pow(3).unwrap(), "1881640.2952 GRAEL");
         c(a, "123.4560 GRAEL");
 
+        c(get_asset("1.0002 GRAEL").pow(1000).unwrap(), "1.2213 GRAEL");
         c(
-            get_asset("1.0002 GRAEL").pow(1000).unwrap(),
-            "1.2213 GRAEL",
-        );
-        c(
-            get_asset("10.0000 GRAEL").div(get_asset("2.0000 GRAEL")).unwrap(),
+            get_asset("10.0000 GRAEL")
+                .div(get_asset("2.0000 GRAEL"))
+                .unwrap(),
             "5.0000 GRAEL",
         );
         c(
-            get_asset("5.0000 GRAEL").div(get_asset("10.0000 GRAEL")).unwrap(),
+            get_asset("5.0000 GRAEL")
+                .div(get_asset("10.0000 GRAEL"))
+                .unwrap(),
             "0.5000 GRAEL",
         );
 

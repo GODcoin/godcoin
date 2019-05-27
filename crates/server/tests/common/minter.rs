@@ -1,9 +1,9 @@
+use super::create_tx_header;
 use actix::prelude::*;
 use godcoin::{blockchain::GenesisBlockInfo, prelude::*};
 use godcoin_server::{handle_request, prelude::*, ServerData};
 use sodiumoxide::randombytes;
 use std::{env, fs, path::PathBuf, sync::Arc};
-use super::create_tx_header;
 
 pub struct TestMinter(ServerData, GenesisBlockInfo, PathBuf);
 

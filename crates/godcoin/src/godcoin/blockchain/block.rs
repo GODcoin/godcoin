@@ -138,7 +138,10 @@ impl Deref for SignedBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{asset::{Asset, EMPTY_GRAEL}, crypto::KeyPair};
+    use crate::{
+        asset::{Asset, EMPTY_GRAEL},
+        crypto::KeyPair,
+    };
 
     #[test]
     fn test_serialize_block() {

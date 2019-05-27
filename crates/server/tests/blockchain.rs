@@ -53,15 +53,13 @@ fn tx_dupe() {
             .and_then(|res| {
                 assert!(res.is_err());
                 match res {
-                    MsgResponse::Error(err) => {
-                        match err {
-                            net::ErrorKind::TxValidation(err) => {
-                                assert_eq!(err, verify::TxErr::TxDupe);
-                            },
-                            _ => panic!("Unexpected error: {:?}", err)
+                    MsgResponse::Error(err) => match err {
+                        net::ErrorKind::TxValidation(err) => {
+                            assert_eq!(err, verify::TxErr::TxDupe);
                         }
+                        _ => panic!("Unexpected error: {:?}", err),
                     },
-                    _ => panic!("Unexpected response: {:?}", res)
+                    _ => panic!("Unexpected response: {:?}", res),
                 }
 
                 System::current().stop();
