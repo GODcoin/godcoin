@@ -245,7 +245,7 @@ impl Blockchain {
         macro_rules! check_zero_fee {
             ($asset:expr) => {
                 if $asset.amount != 0 {
-                    return Err(TxErr::InsufficientFeeAmount);
+                    return Err(TxErr::InvalidFeeAmount);
                 }
             };
         }
@@ -320,7 +320,7 @@ impl Blockchain {
                     .get_total_fee(&transfer.from, additional_txs)
                     .ok_or(TxErr::Arithmetic)?;
                 if tx.fee < total_fee {
-                    return Err(TxErr::InsufficientFeeAmount);
+                    return Err(TxErr::InvalidFeeAmount);
                 } else if transfer.from != (&transfer.script).into() {
                     return Err(TxErr::ScriptHashMismatch);
                 }

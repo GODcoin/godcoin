@@ -29,7 +29,7 @@ fn mint_tx_verification() {
         let tx = create_tx("1.0000 GRAEL");
         assert_eq!(
             chain.verify_tx(&tx.precompute(), &[], config).unwrap_err(),
-            verify::TxErr::InsufficientFeeAmount
+            verify::TxErr::InvalidFeeAmount
         );
 
         let mut tx = create_tx("0.0000 GRAEL");
