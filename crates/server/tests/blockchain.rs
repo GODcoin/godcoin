@@ -28,6 +28,51 @@ fn fresh_blockchain() {
 }
 
 #[test]
+fn tx_dupe() {
+    System::run(|| {
+        let minter = TestMinter::new();
+
+        let mut tx = MintTx {
+            base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
+            to: (&minter.genesis_info().script).into(),
+            amount: get_asset("10.0000 GRAEL"),
+            script: minter.genesis_info().script.clone(),
+        };
+
+        tx.append_sign(&minter.genesis_info().wallet_keys[1]);
+        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+
+        let tx = TxVariant::MintTx(tx);
+        let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
+        System::current().arbiter().send(
+            fut.and_then(move |res| {
+                assert!(!res.is_err(), format!("{:?}", res));
+
+                minter.request(MsgRequest::Broadcast(tx))
+            })
+            .and_then(|res| {
+                assert!(res.is_err());
+                match res {
+                    MsgResponse::Error(err) => {
+                        match err {
+                            net::ErrorKind::TxValidation(err) => {
+                                assert_eq!(err, verify::TxErr::TxDupe);
+                            },
+                            _ => panic!("Unexpected error: {:?}", err)
+                        }
+                    },
+                    _ => panic!("Unexpected response: {:?}", res)
+                }
+
+                System::current().stop();
+                Ok(())
+            }),
+        );
+    })
+    .unwrap();
+}
+
+#[test]
 fn tx_expired() {
     use godcoin::constants::TX_EXPIRY_TIME;
 
