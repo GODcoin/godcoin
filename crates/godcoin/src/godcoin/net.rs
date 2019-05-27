@@ -93,7 +93,7 @@ impl ErrorKind {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MsgResponse {
     Error(ErrorKind),
     GetProperties(Properties),

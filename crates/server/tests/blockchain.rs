@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use godcoin::prelude::*;
+use godcoin::prelude::{net::ErrorKind, verify::TxErr, *};
 
 mod common;
 pub use common::*;
@@ -52,15 +52,10 @@ fn tx_dupe() {
             })
             .and_then(|res| {
                 assert!(res.is_err());
-                match res {
-                    MsgResponse::Error(err) => match err {
-                        net::ErrorKind::TxValidation(err) => {
-                            assert_eq!(err, verify::TxErr::TxDupe);
-                        }
-                        _ => panic!("Unexpected error: {:?}", err),
-                    },
-                    _ => panic!("Unexpected response: {:?}", res),
-                }
+                assert_eq!(
+                    res,
+                    MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxDupe))
+                );
 
                 System::current().stop();
                 Ok(())
@@ -89,12 +84,11 @@ fn tx_expired() {
         let fut = minter.request(MsgRequest::Broadcast(tx));
         System::current().arbiter().send(fut.then(move |res| {
             let res = res.unwrap();
-            match res {
-                MsgResponse::Error(err) => {
-                    assert_eq!(err, net::ErrorKind::TxValidation(verify::TxErr::TxExpired));
-                }
-                _ => panic!("Unexpected response: {:?}", res),
-            }
+            assert!(res.is_err());
+            assert_eq!(
+                res,
+                MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxExpired))
+            );
 
             System::current().stop();
             Ok(())
@@ -120,12 +114,11 @@ fn tx_far_in_the_future() {
         let fut = minter.request(MsgRequest::Broadcast(tx));
         System::current().arbiter().send(fut.then(move |res| {
             let res = res.unwrap();
-            match res {
-                MsgResponse::Error(err) => {
-                    assert_eq!(err, net::ErrorKind::TxValidation(verify::TxErr::TxExpired));
-                }
-                _ => panic!("Unexpected response: {:?}", res),
-            }
+            assert!(res.is_err());
+            assert_eq!(
+                res,
+                MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxExpired))
+            );
 
             System::current().stop();
             Ok(())

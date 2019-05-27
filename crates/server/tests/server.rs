@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use godcoin::prelude::*;
+use godcoin::prelude::{net::ErrorKind, *};
 
 mod common;
 
@@ -14,26 +14,17 @@ fn get_block() {
             fut.then(move |res| {
                 let res = res.unwrap();
                 assert!(!res.is_err());
-                match res {
-                    MsgResponse::GetBlock(block) => {
-                        assert_eq!(block.height, 0);
-                        let other = minter.chain().get_block(0).unwrap();
-                        assert_eq!(&block, other.as_ref());
-                    }
-                    _ => panic!("Unexpected response: {:?}", res),
-                }
+
+                let other = minter.chain().get_block(0).unwrap();
+                assert_eq!(res, MsgResponse::GetBlock((*other).clone()));
 
                 minter.request(MsgRequest::GetBlock(2))
             })
             .then(|res| {
                 let res = res.unwrap();
                 assert!(res.is_err());
-                match res {
-                    MsgResponse::Error(kind) => {
-                        assert_eq!(kind, net::ErrorKind::InvalidHeight);
-                    }
-                    _ => panic!("Unexpected response: {:?}", res),
-                }
+                assert_eq!(res, MsgResponse::Error(ErrorKind::InvalidHeight));
+
                 System::current().stop();
                 Ok(())
             }),

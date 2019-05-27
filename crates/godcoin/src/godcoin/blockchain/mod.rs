@@ -21,7 +21,7 @@ use crate::{
     tx::*,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Properties {
     pub height: u64,
     pub owner: Box<OwnerTx>,
