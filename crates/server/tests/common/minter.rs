@@ -3,6 +3,7 @@ use godcoin::{blockchain::GenesisBlockInfo, prelude::*};
 use godcoin_server::{handle_request, prelude::*, ServerData};
 use sodiumoxide::randombytes;
 use std::{env, fs, path::PathBuf, sync::Arc};
+use super::create_tx_header;
 
 pub struct TestMinter(ServerData, GenesisBlockInfo, PathBuf);
 
@@ -22,6 +23,41 @@ impl TestMinter {
         let chain = Arc::new(Blockchain::new(&tmp_dir));
         let minter_key = KeyPair::gen();
         let info = chain.create_genesis_block(minter_key.clone());
+
+        {
+            let txs = {
+                let mut txs = Vec::with_capacity(1);
+
+                let mut tx = MintTx {
+                    base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
+                    to: (&info.script).into(),
+                    amount: "1000.0000 GRAEL".parse().unwrap(),
+                    script: info.script.clone(),
+                };
+
+                tx.append_sign(&info.wallet_keys[1]);
+                tx.append_sign(&info.wallet_keys[0]);
+
+                let tx = TxVariant::MintTx(tx);
+                txs.push(tx);
+
+                txs.push(TxVariant::RewardTx(RewardTx {
+                    base: Tx {
+                        tx_type: TxType::REWARD,
+                        fee: "0.0000 GRAEL".parse().unwrap(),
+                        timestamp: 0,
+                        signature_pairs: Vec::new(),
+                    },
+                    to: (&info.script).into(),
+                    rewards: Asset::default(),
+                }));
+                txs
+            };
+
+            let head = chain.get_chain_head();
+            let child = head.new_child(txs).sign(&info.minter_key);
+            chain.insert_block(child).unwrap();
+        }
 
         let minter = Minter::new(Arc::clone(&chain), minter_key, (&info.script).into()).start();
         let data = ServerData { chain, minter };

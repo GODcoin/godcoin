@@ -23,7 +23,7 @@ fn get_block() {
                     _ => panic!("Unexpected response: {:?}", res),
                 }
 
-                minter.request(MsgRequest::GetBlock(1))
+                minter.request(MsgRequest::GetBlock(2))
             })
             .then(|res| {
                 let res = res.unwrap();

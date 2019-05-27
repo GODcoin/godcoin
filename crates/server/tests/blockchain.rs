@@ -10,7 +10,8 @@ fn fresh_blockchain() {
         let minter = TestMinter::new();
         let chain = minter.chain();
         assert!(chain.get_block(0).is_some());
-        assert_eq!(chain.get_chain_height(), 0);
+        assert!(chain.get_block(1).is_some());
+        assert_eq!(chain.get_chain_height(), 1);
 
         let owner = chain.get_owner();
         assert_eq!(owner.minter, minter.genesis_info().minter_key.0);
@@ -20,7 +21,7 @@ fn fresh_blockchain() {
         );
         assert_eq!(owner.wallet, (&minter.genesis_info().script).into());
 
-        assert!(chain.get_block(1).is_none());
+        assert!(chain.get_block(2).is_none());
         System::current().stop();
     })
     .unwrap();

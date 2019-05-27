@@ -93,7 +93,8 @@ fn mint_tx_updates_balances() {
                 let minter = res.unwrap();
                 let chain = minter.chain();
                 let props = chain.get_properties();
-                let expected_bal = get_asset("10.0000 GRAEL");
+                // The test blockchain comes preminted with tokens
+                let expected_bal = get_asset("1010.0000 GRAEL");
                 assert_eq!(props.token_supply, expected_bal);
 
                 let bal = chain.get_balance(&(&minter.genesis_info().script).into());
