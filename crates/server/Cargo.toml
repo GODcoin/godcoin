@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 bytes = "0.4.12"
-dirs = "1.0.5"
+dirs = "2.0.0"
 env_logger = "0.6.1"
 futures = "0.1.27"
 godcoin = { path = "../godcoin" }
