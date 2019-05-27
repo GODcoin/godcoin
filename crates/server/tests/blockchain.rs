@@ -35,9 +35,9 @@ fn tx_expired() {
         let time = util::get_epoch_ms();
 
         let tx = MintTx {
-            base: create_tx_header_with_ts(TxType::MINT, "0 GRAEL", time + TX_EXPIRY_TIME),
+            base: create_tx_header_with_ts(TxType::MINT, "0.0000 GRAEL", time + TX_EXPIRY_TIME),
             to: (&minter.genesis_info().script).into(),
-            amount: get_asset("10.0 GRAEL"),
+            amount: get_asset("10.0000 GRAEL"),
             script: minter.genesis_info().script.clone(),
         };
 
@@ -66,9 +66,9 @@ fn tx_far_in_the_future() {
         let time = util::get_epoch_ms();
 
         let tx = MintTx {
-            base: create_tx_header_with_ts(TxType::MINT, "0 GRAEL", time + 4000),
+            base: create_tx_header_with_ts(TxType::MINT, "0.0000 GRAEL", time + 4000),
             to: (&minter.genesis_info().script).into(),
-            amount: get_asset("10.0 GRAEL"),
+            amount: get_asset("10.0000 GRAEL"),
             script: minter.genesis_info().script.clone(),
         };
 

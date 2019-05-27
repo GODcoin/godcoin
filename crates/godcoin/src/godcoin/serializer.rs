@@ -89,7 +89,6 @@ impl BufWrite for Vec<u8> {
 
     fn push_asset(&mut self, asset: Asset) {
         self.push_i64(asset.amount);
-        self.push(asset.decimals);
     }
 }
 
@@ -174,9 +173,7 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
 
     fn take_asset(&mut self) -> Result<Asset, Error> {
         let amount = self.take_i64()?;
-        let decimals = self.take_u8()?;
-        Asset::checked_new(amount, decimals)
-            .ok_or_else(|| Error::new(ErrorKind::Other, "invalid asset"))
+        Ok(Asset::new(amount))
     }
 }
 
@@ -205,26 +202,12 @@ mod tests {
 
     #[test]
     fn test_asset_serialization() {
-        {
-            let a = "12.34 GRAEL".parse().unwrap();
-            let mut v = vec![];
-            v.push_asset(a);
+        let a = "12.3400 GRAEL".parse().unwrap();
+        let mut v = vec![];
+        v.push_asset(a);
 
-            let mut c = Cursor::<&[u8]>::new(&v);
-            let b = c.take_asset().unwrap();
-            assert_eq!(a.to_string(), b.to_string());
-        }
-        {
-            let a = Asset {
-                amount: 1,
-                decimals: crate::asset::MAX_PRECISION + 1,
-            };
-            let mut v = vec![];
-            v.push_asset(a);
-
-            let mut c = Cursor::<&[u8]>::new(&v);
-            let b = c.take_asset();
-            assert!(b.is_err());
-        }
+        let mut c = Cursor::<&[u8]>::new(&v);
+        let b = c.take_asset().unwrap();
+        assert_eq!(a.to_string(), b.to_string());
     }
 }

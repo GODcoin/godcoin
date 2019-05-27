@@ -130,8 +130,7 @@ impl Blockchain {
             }
         }
 
-        let prec = asset::MAX_PRECISION;
-        GRAEL_FEE_MIN.mul(GRAEL_FEE_MULT.pow(tx_count as u16, prec)?, prec)
+        GRAEL_FEE_MIN.mul(GRAEL_FEE_MULT.pow(tx_count as u16)?)
     }
 
     pub fn get_network_fee(&self) -> Option<Asset> {
@@ -155,8 +154,7 @@ impl Blockchain {
             return None;
         }
 
-        let prec = asset::MAX_PRECISION;
-        GRAEL_FEE_MIN.mul(GRAEL_FEE_NET_MULT.pow(tx_count as u16, prec)?, prec)
+        GRAEL_FEE_MIN.mul(GRAEL_FEE_NET_MULT.pow(tx_count as u16)?)
     }
 
     pub fn get_balance(&self, hash: &ScriptHash) -> Asset {
@@ -321,7 +319,7 @@ impl Blockchain {
                 let total_fee = self
                     .get_total_fee(&transfer.from, additional_txs)
                     .ok_or(TxErr::Arithmetic)?;
-                if tx.fee.lt(total_fee).ok_or(TxErr::Arithmetic)? {
+                if tx.fee < total_fee {
                     return Err(TxErr::InsufficientFeeAmount);
                 } else if transfer.from != (&transfer.script).into() {
                     return Err(TxErr::ScriptHashMismatch);
@@ -374,7 +372,7 @@ impl Blockchain {
         let owner_tx = OwnerTx {
             base: Tx {
                 tx_type: TxType::OWNER,
-                fee: "0 GRAEL".parse().unwrap(),
+                fee: asset::EMPTY_GRAEL,
                 timestamp,
                 signature_pairs: Vec::new(),
             },

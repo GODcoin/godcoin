@@ -1,19 +1,9 @@
 use crate::asset::*;
 
-pub const GRAEL_FEE_MIN: Asset = Asset {
-    amount: 25,
-    decimals: MAX_PRECISION,
-};
+pub const GRAEL_FEE_MIN: Asset = Asset::new(25);
 
-pub const GRAEL_FEE_MULT: Asset = Asset {
-    amount: 20_000,
-    decimals: MAX_PRECISION,
-};
-
-pub const GRAEL_FEE_NET_MULT: Asset = Asset {
-    amount: 10_150,
-    decimals: MAX_PRECISION,
-};
+pub const GRAEL_FEE_MULT: Asset = Asset::new(20_000);
+pub const GRAEL_FEE_NET_MULT: Asset = Asset::new(10_150);
 
 pub const NETWORK_FEE_AVG_WINDOW: u64 = 10;
 pub const FEE_RESET_WINDOW: usize = 4;

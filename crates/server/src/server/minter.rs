@@ -43,7 +43,7 @@ impl Minter {
         transactions.push(TxVariant::RewardTx(RewardTx {
             base: Tx {
                 tx_type: TxType::REWARD,
-                fee: "0 GRAEL".parse().unwrap(),
+                fee: asset::EMPTY_GRAEL,
                 timestamp: 0,
                 signature_pairs: Vec::new(),
             },
