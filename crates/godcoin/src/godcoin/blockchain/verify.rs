@@ -16,7 +16,7 @@ impl Config {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum BlockError {
+pub enum BlockErr {
     InvalidBlockHeight,
     InvalidMerkleRoot,
     InvalidSignature,

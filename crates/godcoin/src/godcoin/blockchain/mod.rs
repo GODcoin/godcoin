@@ -190,7 +190,7 @@ impl Blockchain {
         Some(bal)
     }
 
-    pub fn insert_block(&self, block: SignedBlock) -> Result<(), verify::BlockError> {
+    pub fn insert_block(&self, block: SignedBlock) -> Result<(), verify::BlockErr> {
         static CONFIG: verify::Config = verify::Config { skip_reward: true };
         self.verify_block(&block, &self.get_chain_head(), CONFIG)?;
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
@@ -208,20 +208,20 @@ impl Blockchain {
         block: &SignedBlock,
         prev_block: &SignedBlock,
         config: verify::Config,
-    ) -> Result<(), verify::BlockError> {
+    ) -> Result<(), verify::BlockErr> {
         if prev_block.height + 1 != block.height {
-            return Err(verify::BlockError::InvalidBlockHeight);
+            return Err(verify::BlockErr::InvalidBlockHeight);
         } else if !block.verify_tx_merkle_root() {
-            return Err(verify::BlockError::InvalidMerkleRoot);
+            return Err(verify::BlockErr::InvalidMerkleRoot);
         } else if !block.verify_previous_hash(prev_block) {
-            return Err(verify::BlockError::InvalidPrevHash);
+            return Err(verify::BlockErr::InvalidPrevHash);
         }
 
         let owner = self.get_owner();
         if !block.sig_pair.verify(block.calc_hash().as_ref()) {
-            return Err(verify::BlockError::InvalidHash);
+            return Err(verify::BlockErr::InvalidHash);
         } else if block.sig_pair.pub_key != owner.minter {
-            return Err(verify::BlockError::InvalidSignature);
+            return Err(verify::BlockErr::InvalidSignature);
         }
 
         let len = block.transactions.len();
@@ -229,7 +229,7 @@ impl Blockchain {
             let tx = &block.transactions[i];
             let txs = &block.transactions[0..i];
             if let Err(e) = self.verify_tx(&TxPrecompData::from_tx(tx), txs, config) {
-                return Err(verify::BlockError::Tx(e));
+                return Err(verify::BlockErr::Tx(e));
             }
         }
 
