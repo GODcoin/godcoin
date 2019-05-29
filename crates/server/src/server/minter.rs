@@ -27,6 +27,7 @@ impl Actor for Minter {
 
 impl Minter {
     pub fn new(chain: Arc<Blockchain>, minter_key: KeyPair, wallet_addr: ScriptHash) -> Self {
+        assert_eq!(chain.get_owner().minter, minter_key.0);
         Self {
             chain: Arc::clone(&chain),
             minter_key,
