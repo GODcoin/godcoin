@@ -83,14 +83,11 @@ fn mint_tx_updates_balances() {
         let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
         System::current().arbiter().send(
-            fut.then(move |res| {
-                let res = res.unwrap();
-                assert!(!res.is_err(), format!("{:?}", res));
-
+            fut.and_then(move |res| {
+                assert_eq!(res, MsgResponse::Broadcast());
                 minter.produce_block().map(|_| minter)
             })
-            .then(|res| {
-                let minter = res.unwrap();
+            .and_then(|minter| {
                 let chain = minter.chain();
                 let props = chain.get_properties();
                 // The test blockchain comes preminted with tokens
