@@ -476,6 +476,19 @@ mod tests {
     }
 
     #[test]
+    fn checksig_pubkey_into_script_converted() {
+        let key = KeyPair::gen();
+        let script: Script = key.0.clone().into();
+
+        let mut engine = {
+            let tx = new_transfer_tx(script.clone(), &[key]);
+            ScriptEngine::checked_new(TxVariant::TransferTx(tx).precompute(), script).unwrap()
+        };
+
+        assert!(engine.eval().unwrap());
+    }
+
+    #[test]
     fn checksig() {
         let key = KeyPair::gen();
         let mut engine = new_engine_with_signers(
