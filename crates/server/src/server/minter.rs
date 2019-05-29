@@ -17,7 +17,6 @@ pub struct ForceProduceBlock;
 pub struct Minter {
     chain: Arc<Blockchain>,
     minter_key: KeyPair,
-    wallet_addr: ScriptHash,
     tx_pool: TxPool,
 }
 
@@ -26,12 +25,11 @@ impl Actor for Minter {
 }
 
 impl Minter {
-    pub fn new(chain: Arc<Blockchain>, minter_key: KeyPair, wallet_addr: ScriptHash) -> Self {
+    pub fn new(chain: Arc<Blockchain>, minter_key: KeyPair) -> Self {
         assert_eq!(chain.get_owner().minter, minter_key.0);
         Self {
             chain: Arc::clone(&chain),
             minter_key,
-            wallet_addr,
             tx_pool: TxPool::new(chain),
         }
     }
@@ -44,6 +42,9 @@ impl Minter {
                 .iter()
                 .fold(Asset::default(), |acc, tx| acc.add(tx.fee).unwrap());
             if rewards.amount > 0 {
+                // Retrieve the owner wallet here in case the owner changes, ensuring that the
+                // reward distribution always points to the correct address.
+                let wallet_addr = self.chain.get_owner().wallet;
                 transactions.push(TxVariant::RewardTx(RewardTx {
                     base: Tx {
                         tx_type: TxType::REWARD,
@@ -51,7 +52,7 @@ impl Minter {
                         timestamp: 0,
                         signature_pairs: Vec::new(),
                     },
-                    to: self.wallet_addr.clone(),
+                    to: wallet_addr,
                     rewards,
                 }));
             }

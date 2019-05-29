@@ -59,7 +59,7 @@ impl TestMinter {
             chain.insert_block(child).unwrap();
         }
 
-        let minter = Minter::new(Arc::clone(&chain), minter_key, (&info.script).into()).start();
+        let minter = Minter::new(Arc::clone(&chain), minter_key).start();
         let data = ServerData { chain, minter };
         Self(data, info, tmp_dir)
     }

@@ -43,8 +43,7 @@ pub fn start(config: ServerConfig) {
         }
     }
 
-    let wallet_addr = blockchain.get_owner().wallet;
-    let minter = Minter::new(Arc::clone(&blockchain), config.minter_key, wallet_addr).start();
+    let minter = Minter::new(Arc::clone(&blockchain), config.minter_key).start();
     minter.do_send(minter::StartProductionLoop);
 
     HttpServer::new(move || {
