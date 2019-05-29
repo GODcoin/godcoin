@@ -100,7 +100,7 @@ pub fn handle_request(
             let fut = data.minter.send(minter::PushTx(tx)).then(|res| {
                 Ok(match res.unwrap() {
                     Ok(_) => MsgResponse::Broadcast(),
-                    Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e.0)),
+                    Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e)),
                 })
             });
             Box::new(fut)

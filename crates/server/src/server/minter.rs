@@ -7,14 +7,12 @@ use std::{sync::Arc, time::Duration};
 pub struct StartProductionLoop;
 
 #[derive(Message)]
-pub struct ForceProduceBlock;
-
-#[derive(Message)]
-#[rtype(result = "Result<(), TxValidateError>")]
+#[rtype(result = "Result<(), verify::TxErr>")]
 pub struct PushTx(pub TxVariant);
 
-#[derive(MessageResponse)]
-pub struct TxValidateError(pub verify::TxErr);
+#[derive(Message)]
+#[rtype(result = "Result<(), verify::BlockErr>")]
+pub struct ForceProduceBlock;
 
 pub struct Minter {
     chain: Arc<Blockchain>,
@@ -37,7 +35,7 @@ impl Minter {
         }
     }
 
-    fn produce(&mut self) {
+    fn produce(&mut self) -> Result<(), verify::BlockErr> {
         let mut transactions = self.tx_pool.flush();
 
         transactions.push(TxVariant::RewardTx(RewardTx {
@@ -57,12 +55,13 @@ impl Minter {
         let height = block.height;
         let tx_len = block.transactions.len();
 
-        self.chain.insert_block(block).unwrap();
+        self.chain.insert_block(block)?;
         let txs = if tx_len == 1 { "tx" } else { "txs" };
         info!(
             "Produced block at height {} with {} {}",
             height, tx_len, txs
         );
+        Ok(())
     }
 }
 
@@ -72,28 +71,26 @@ impl Handler<StartProductionLoop> for Minter {
     fn handle(&mut self, _: StartProductionLoop, ctx: &mut Self::Context) -> Self::Result {
         let dur = Duration::from_secs(3);
         ctx.run_later(dur, |minter, ctx| {
-            minter.produce();
+            minter.produce().unwrap();
             ctx.notify(StartProductionLoop);
         });
     }
 }
 
 impl Handler<ForceProduceBlock> for Minter {
-    type Result = ();
+    type Result = Result<(), verify::BlockErr>;
 
     fn handle(&mut self, _: ForceProduceBlock, _: &mut Self::Context) -> Self::Result {
         warn!("Forcing produced block...");
-        self.produce();
+        self.produce()
     }
 }
 
 impl Handler<PushTx> for Minter {
-    type Result = Result<(), TxValidateError>;
+    type Result = Result<(), verify::TxErr>;
 
     fn handle(&mut self, msg: PushTx, _: &mut Self::Context) -> Self::Result {
         static CONFIG: verify::Config = verify::Config::strict();
-        self.tx_pool
-            .push(msg.0.precompute(), CONFIG)
-            .map_err(TxValidateError)
+        self.tx_pool.push(msg.0.precompute(), CONFIG)
     }
 }

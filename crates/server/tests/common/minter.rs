@@ -72,7 +72,7 @@ impl TestMinter {
         &self.1
     }
 
-    pub fn produce_block(&self) -> impl Future<Item = (), Error = ()> {
+    pub fn produce_block(&self) -> impl Future<Item = Result<(), verify::BlockErr>, Error = ()> {
         self.0
             .minter
             .send(ForceProduceBlock)
