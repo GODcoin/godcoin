@@ -13,13 +13,7 @@ pub use self::{
     verify::TxErr,
 };
 
-use crate::{
-    asset::{self, Asset},
-    constants::*,
-    crypto::*,
-    script::*,
-    tx::*,
-};
+use crate::{asset::Asset, constants::*, crypto::*, script::*, tx::*};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Properties {
@@ -372,7 +366,7 @@ impl Blockchain {
         let owner_tx = OwnerTx {
             base: Tx {
                 tx_type: TxType::OWNER,
-                fee: asset::EMPTY_GRAEL,
+                fee: Asset::default(),
                 timestamp,
                 signature_pairs: Vec::new(),
             },

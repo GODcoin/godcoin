@@ -48,7 +48,7 @@ impl Minter {
                 transactions.push(TxVariant::RewardTx(RewardTx {
                     base: Tx {
                         tx_type: TxType::REWARD,
-                        fee: asset::EMPTY_GRAEL,
+                        fee: Asset::default(),
                         timestamp: 0,
                         signature_pairs: Vec::new(),
                     },

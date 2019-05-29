@@ -11,8 +11,6 @@ pub use self::error::*;
 pub const MAX_STR_LEN: usize = 26;
 pub const MAX_PRECISION: u8 = 4;
 
-pub const EMPTY_GRAEL: Asset = Asset::new(0);
-
 #[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct Asset {
     pub amount: i64,
