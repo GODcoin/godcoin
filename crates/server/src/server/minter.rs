@@ -38,16 +38,23 @@ impl Minter {
     fn produce(&mut self) -> Result<(), verify::BlockErr> {
         let mut transactions = self.tx_pool.flush();
 
-        transactions.push(TxVariant::RewardTx(RewardTx {
-            base: Tx {
-                tx_type: TxType::REWARD,
-                fee: asset::EMPTY_GRAEL,
-                timestamp: 0,
-                signature_pairs: Vec::new(),
-            },
-            to: self.wallet_addr.clone(),
-            rewards: Asset::default(),
-        }));
+        {
+            let rewards = transactions
+                .iter()
+                .fold(Asset::default(), |acc, tx| acc.add(tx.fee).unwrap());
+            if rewards.amount > 0 {
+                transactions.push(TxVariant::RewardTx(RewardTx {
+                    base: Tx {
+                        tx_type: TxType::REWARD,
+                        fee: asset::EMPTY_GRAEL,
+                        timestamp: 0,
+                        signature_pairs: Vec::new(),
+                    },
+                    to: self.wallet_addr.clone(),
+                    rewards,
+                }));
+            }
+        }
 
         let head = self.chain.get_chain_head();
         let block = head.new_child(transactions).sign(&self.minter_key);
