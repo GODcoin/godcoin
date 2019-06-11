@@ -2,7 +2,134 @@ use crate::{
     prelude::{verify::TxErr, Properties, SignedBlock, TxVariant},
     serializer::*,
 };
-use std::io::{self, Cursor, Error};
+use std::{
+    io::{self, Cursor, Error},
+    ops::Deref,
+};
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum RequestType {
+    Batch(Vec<MsgRequest>),
+    Single(MsgRequest),
+}
+
+impl RequestType {
+    pub fn serialize(&self, buf: &mut Vec<u8>) {
+        match self {
+            RequestType::Batch(batch) => {
+                buf.push(0);
+                buf.push_u32(batch.len() as u32);
+                for req in batch {
+                    req.serialize(buf);
+                }
+            }
+            RequestType::Single(req) => {
+                buf.push(1);
+                req.serialize(buf);
+            }
+        }
+    }
+
+    pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
+        let tag = cursor.take_u8()?;
+        match tag {
+            0 => {
+                let len = cursor.take_u32()?;
+                let mut batch = Vec::with_capacity(len as usize);
+                for _ in 0..len {
+                    batch.push(MsgRequest::deserialize(cursor)?);
+                }
+                Ok(RequestType::Batch(batch))
+            }
+            1 => Ok(RequestType::Single(MsgRequest::deserialize(cursor)?)),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "failed to deserialize type",
+                ))
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ResponseType {
+    Batch(Vec<MsgResponse>),
+    Single(MsgResponse),
+}
+
+impl ResponseType {
+    pub fn unwrap_batch(self) -> Vec<MsgResponse> {
+        match self {
+            ResponseType::Batch(batch) => batch,
+            _ => panic!("expected batch response type"),
+        }
+    }
+
+    pub fn unwrap_single(self) -> MsgResponse {
+        match self {
+            ResponseType::Single(res) => res,
+            _ => panic!("expected single response type"),
+        }
+    }
+
+    pub fn serialize(&self, buf: &mut Vec<u8>) {
+        match self {
+            ResponseType::Batch(batch) => {
+                buf.push(0);
+                buf.push_u32(batch.len() as u32);
+                for res in batch {
+                    res.serialize(buf);
+                }
+            }
+            ResponseType::Single(res) => {
+                buf.push(1);
+                res.serialize(buf);
+            }
+        }
+    }
+
+    pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
+        let tag = cursor.take_u8()?;
+        match tag {
+            0 => {
+                let len = cursor.take_u32()?;
+                let mut batch = Vec::with_capacity(len as usize);
+                for _ in 0..len {
+                    batch.push(MsgResponse::deserialize(cursor)?);
+                }
+                Ok(ResponseType::Batch(batch))
+            }
+            1 => Ok(ResponseType::Single(MsgResponse::deserialize(cursor)?)),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "failed to deserialize type",
+                ))
+            }
+        }
+    }
+}
+
+pub struct BatchMsgRequest(pub Vec<MsgRequest>);
+
+impl Deref for BatchMsgRequest {
+    type Target = [MsgRequest];
+
+    fn deref(&self) -> &[MsgRequest] {
+        &self.0
+    }
+}
+
+pub struct BatchMsgResponse(pub Vec<MsgResponse>);
+
+impl Deref for BatchMsgResponse {
+    type Target = [MsgResponse];
+
+    fn deref(&self) -> &[MsgResponse] {
+        &self.0
+    }
+}
 
 #[repr(u8)]
 pub enum MsgType {
@@ -12,6 +139,7 @@ pub enum MsgType {
     Broadcast = 3,
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum MsgRequest {
     GetProperties,
     GetBlock(u64), // height
@@ -19,20 +147,18 @@ pub enum MsgRequest {
 }
 
 impl MsgRequest {
-    pub fn serialize(self) -> Vec<u8> {
+    pub fn serialize(&self, buf: &mut Vec<u8>) {
         match self {
-            MsgRequest::GetProperties => vec![MsgType::GetProperties as u8],
+            MsgRequest::GetProperties => buf.push(MsgType::GetProperties as u8),
             MsgRequest::GetBlock(height) => {
-                let mut buf = Vec::with_capacity(9);
+                buf.reserve_exact(9);
                 buf.push(MsgType::GetBlock as u8);
-                buf.push_u64(height);
-                buf
+                buf.push_u64(*height);
             }
             MsgRequest::Broadcast(tx) => {
-                let mut buf = Vec::with_capacity(4096);
+                buf.reserve_exact(4096);
                 buf.push(MsgType::Broadcast as u8);
-                tx.serialize(&mut buf);
-                buf
+                tx.serialize(buf);
             }
         }
     }
@@ -109,36 +235,33 @@ impl MsgResponse {
         }
     }
 
-    pub fn serialize(self) -> Vec<u8> {
+    pub fn serialize(&self, buf: &mut Vec<u8>) {
         use std::mem;
 
         match self {
             MsgResponse::Error(err) => {
-                let mut buf = Vec::with_capacity(2048);
+                buf.reserve_exact(2048);
                 buf.push(MsgType::Error as u8);
-                err.serialize(&mut buf);
-                buf
+                err.serialize(buf);
             }
             MsgResponse::GetProperties(props) => {
-                let mut buf = Vec::with_capacity(4096 + mem::size_of::<Properties>());
+                buf.reserve_exact(4096 + mem::size_of::<Properties>());
                 buf.push(MsgType::GetProperties as u8);
                 buf.push_u64(props.height);
                 {
                     let mut tx_buf = Vec::with_capacity(4096);
-                    TxVariant::OwnerTx(*props.owner).serialize(&mut tx_buf);
+                    TxVariant::OwnerTx(props.owner.as_ref().clone()).serialize(&mut tx_buf);
                     buf.extend_from_slice(&tx_buf);
                 }
                 buf.push_asset(props.network_fee);
                 buf.push_asset(props.token_supply);
-                buf
             }
             MsgResponse::GetBlock(block) => {
-                let mut buf = Vec::with_capacity(1_048_576);
+                buf.reserve_exact(1_048_576);
                 buf.push(MsgType::GetBlock as u8);
-                block.serialize_with_tx(&mut buf);
-                buf
+                block.serialize_with_tx(buf);
             }
-            MsgResponse::Broadcast() => vec![MsgType::Broadcast as u8],
+            MsgResponse::Broadcast() => buf.push(MsgType::Broadcast as u8),
         }
     }
 

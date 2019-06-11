@@ -1,6 +1,9 @@
 use actix::prelude::*;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
-use futures::{future::ok, Future};
+use futures::{
+    future::{join_all, ok},
+    Future,
+};
 use godcoin::{net::*, prelude::*};
 use log::{error, info};
 use std::{io::Cursor, path::PathBuf, sync::Arc};
@@ -71,18 +74,39 @@ fn index(
     data: web::Data<ServerData>,
     body: bytes::Bytes,
 ) -> Box<Future<Item = HttpResponse, Error = ()>> {
-    match MsgRequest::deserialize(&mut Cursor::new(&body)) {
-        Ok(msg_req) => Box::new(handle_request(&data, msg_req).map(IntoHttpResponse::into_res)),
-        Err(e) => match e.kind() {
-            _ => {
-                error!("Unknown error occurred during deserialization: {:?}", e);
-                Box::new(ok(MsgResponse::Error(ErrorKind::Io).into_res()))
-            }
-        },
+    match RequestType::deserialize(&mut Cursor::new(&body)) {
+        Ok(req_type) => {
+            Box::new(handle_request_type(&data, req_type).map(IntoHttpResponse::into_res))
+        }
+        Err(e) => {
+            error!("Unknown error occurred during deserialization: {:?}", e);
+            Box::new(ok(
+                ResponseType::Single(MsgResponse::Error(ErrorKind::Io)).into_res()
+            ))
+        }
     }
 }
 
-pub fn handle_request(
+pub fn handle_request_type(
+    data: &ServerData,
+    req_type: RequestType,
+) -> Box<Future<Item = ResponseType, Error = ()> + Send> {
+    match req_type {
+        RequestType::Batch(mut reqs) => {
+            let mut futs = Vec::with_capacity(reqs.len());
+            for req in reqs.drain(..) {
+                futs.push(handle_direct_request(&data, req));
+            }
+
+            Box::new(join_all(futs).map(|responses| ResponseType::Batch(responses)))
+        }
+        RequestType::Single(req) => {
+            Box::new(handle_direct_request(&data, req).map(ResponseType::Single))
+        }
+    }
+}
+
+pub fn handle_direct_request(
     data: &ServerData,
     req: MsgRequest,
 ) -> Box<Future<Item = MsgResponse, Error = ()> + Send> {

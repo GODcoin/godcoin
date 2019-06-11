@@ -1,7 +1,7 @@
 use super::create_tx_header;
 use actix::prelude::*;
 use godcoin::{blockchain::GenesisBlockInfo, prelude::*};
-use godcoin_server::{handle_request, prelude::*, ServerData};
+use godcoin_server::{handle_direct_request, handle_request_type, prelude::*, ServerData};
 use sodiumoxide::randombytes;
 use std::{env, fs, path::PathBuf, sync::Arc};
 
@@ -80,7 +80,14 @@ impl TestMinter {
     }
 
     pub fn request(&self, req: MsgRequest) -> impl Future<Item = MsgResponse, Error = ()> {
-        handle_request(&self.0, req)
+        handle_direct_request(&self.0, req)
+    }
+
+    pub fn batch_request(
+        &self,
+        reqs: Vec<MsgRequest>,
+    ) -> impl Future<Item = Vec<MsgResponse>, Error = ()> {
+        handle_request_type(&self.0, net::RequestType::Batch(reqs)).map(|res| res.unwrap_batch())
     }
 }
 

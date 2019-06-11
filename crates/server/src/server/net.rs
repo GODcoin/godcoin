@@ -1,13 +1,14 @@
 use actix_web::HttpResponse;
-use godcoin::net::MsgResponse;
+use godcoin::net::ResponseType;
 
 pub trait IntoHttpResponse {
     fn into_res(self) -> HttpResponse;
 }
 
-impl IntoHttpResponse for MsgResponse {
+impl IntoHttpResponse for ResponseType {
     fn into_res(self) -> HttpResponse {
-        let buf = self.serialize();
+        let mut buf = Vec::new();
+        self.serialize(&mut buf);
         HttpResponse::Ok().body(buf)
     }
 }
