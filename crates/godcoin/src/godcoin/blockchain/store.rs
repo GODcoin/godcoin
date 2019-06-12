@@ -1,10 +1,12 @@
 use crc32c::*;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
-use std::io::{Cursor, Read, Seek, SeekFrom, Write};
-use std::path::Path;
-use std::sync::Arc;
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    fs::{File, OpenOptions},
+    io::{Cursor, Read, Seek, SeekFrom, Write},
+    path::Path,
+    sync::Arc,
+};
 
 use crate::blockchain::{block::*, index::*};
 
@@ -56,7 +58,7 @@ impl BlockStore {
             };
             let max = min + MAX_CACHE_SIZE;
             for height in min..=max {
-                if let Some(block) = store.get_from_disk(height) {
+                if let Some(block) = store.read_from_disk(height) {
                     store.blocks.insert(height, Arc::new(block));
                 } else {
                     break;
@@ -83,11 +85,42 @@ impl BlockStore {
         if let Some(block) = self.blocks.get(&height) {
             Some(Arc::clone(block))
         } else {
-            Some(Arc::new(self.get_from_disk(height)?))
+            Some(Arc::new(self.read_from_disk(height)?))
         }
     }
 
-    fn get_from_disk(&self, height: u64) -> Option<SignedBlock> {
+    pub fn insert(&mut self, batch: &mut WriteBatch, block: SignedBlock) {
+        assert_eq!(self.height + 1, block.height, "invalid block height");
+        let byte_pos = self.byte_pos_tail;
+        self.write_to_disk(&block);
+
+        // Update internal cache
+        let height = block.height;
+        self.height = height;
+        batch.set_block_byte_pos(height, byte_pos);
+        batch.set_chain_height(height);
+
+        let opt = self.blocks.insert(height, Arc::new(block));
+        debug_assert!(opt.is_none(), "block already in the chain");
+
+        if self.blocks.len() > MAX_CACHE_SIZE as usize {
+            let b = self.blocks.remove(&(height - MAX_CACHE_SIZE));
+            debug_assert!(b.is_some(), "nothing removed from cache");
+        }
+    }
+
+    pub fn insert_genesis(&mut self, batch: &mut WriteBatch, block: SignedBlock) {
+        assert_eq!(block.height, 0, "expected to be 0");
+        assert!(
+            self.genesis_block.is_none(),
+            "expected genesis block to not exist"
+        );
+        self.write_to_disk(&block);
+        self.genesis_block = Some(Arc::new(block));
+        batch.set_block_byte_pos(0, 0);
+    }
+
+    fn read_from_disk(&self, height: u64) -> Option<SignedBlock> {
         if height > self.height {
             return None;
         }
@@ -119,38 +152,6 @@ impl BlockStore {
             SignedBlock::deserialize_with_tx(&mut cursor)
                 .expect("failed to decode block from disk"),
         )
-    }
-
-    pub fn insert(&mut self, batch: &mut WriteBatch, block: SignedBlock) {
-        assert_eq!(self.height + 1, block.height, "invalid block height");
-        let byte_pos = self.byte_pos_tail;
-        self.write_to_disk(&block);
-
-        {
-            // Update internal cache
-            let height = block.height;
-            self.height = height;
-            batch.set_block_byte_pos(height, byte_pos);
-            batch.set_chain_height(height);
-
-            let opt = self.blocks.insert(height, Arc::new(block));
-            if self.blocks.len() > MAX_CACHE_SIZE as usize {
-                let b = self.blocks.remove(&(height - MAX_CACHE_SIZE));
-                debug_assert!(b.is_some(), "nothing removed from cache");
-            }
-            debug_assert!(opt.is_none(), "block already in the chain");
-        }
-    }
-
-    pub fn insert_genesis(&mut self, batch: &mut WriteBatch, block: SignedBlock) {
-        assert_eq!(block.height, 0, "expected to be 0");
-        assert!(
-            self.genesis_block.is_none(),
-            "expected genesis block to not exist"
-        );
-        self.write_to_disk(&block);
-        self.genesis_block = Some(Arc::new(block));
-        batch.set_block_byte_pos(0, 0);
     }
 
     fn write_to_disk(&mut self, block: &SignedBlock) {

@@ -2,10 +2,7 @@ use crate::{
     prelude::{verify::TxErr, Properties, SignedBlock, TxVariant},
     serializer::*,
 };
-use std::{
-    io::{self, Cursor, Error},
-    ops::Deref,
-};
+use std::io::{self, Cursor, Error};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum RequestType {
@@ -108,26 +105,6 @@ impl ResponseType {
                 ))
             }
         }
-    }
-}
-
-pub struct BatchMsgRequest(pub Vec<MsgRequest>);
-
-impl Deref for BatchMsgRequest {
-    type Target = [MsgRequest];
-
-    fn deref(&self) -> &[MsgRequest] {
-        &self.0
-    }
-}
-
-pub struct BatchMsgResponse(pub Vec<MsgResponse>);
-
-impl Deref for BatchMsgResponse {
-    type Target = [MsgResponse];
-
-    fn deref(&self) -> &[MsgResponse] {
-        &self.0
     }
 }
 
