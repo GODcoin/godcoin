@@ -310,6 +310,9 @@ impl Blockchain {
                 }
             }
             TxVariant::TransferTx(transfer) => {
+                if transfer.memo.len() > MAX_MEMO_BYTE_SIZE {
+                    return Err(TxErr::TxTooLarge);
+                }
                 let total_fee = self
                     .get_total_fee(&transfer.from, additional_txs)
                     .ok_or(TxErr::Arithmetic)?;

@@ -11,6 +11,8 @@ pub const FEE_RESET_WINDOW: usize = 4;
 pub const TX_EXPIRY_TIME: u64 = 30000;
 pub const BLOCK_PROD_TIME: u64 = 3000;
 
+pub const MAX_MEMO_BYTE_SIZE: usize = 1024;
+
 mod tests {
     #[allow(unused_imports)]
     use super::*;
