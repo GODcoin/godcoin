@@ -1,4 +1,4 @@
-use godcoin::prelude::*;
+use godcoin::{constants::MAX_TX_SIGNATURES, prelude::*};
 
 pub mod minter;
 pub use minter::*;
@@ -13,7 +13,7 @@ pub fn create_tx_header(tx_type: TxType, fee: &str) -> Tx {
         tx_type,
         timestamp,
         fee: fee.parse().unwrap(),
-        signature_pairs: Vec::with_capacity(script::MAX_SIGNATURES),
+        signature_pairs: Vec::with_capacity(MAX_TX_SIGNATURES),
     }
 }
 
@@ -22,7 +22,7 @@ pub fn create_tx_header_with_ts(tx_type: TxType, fee: &str, timestamp: u64) -> T
         tx_type,
         timestamp,
         fee: fee.parse().unwrap(),
-        signature_pairs: Vec::with_capacity(script::MAX_SIGNATURES),
+        signature_pairs: Vec::with_capacity(MAX_TX_SIGNATURES),
     }
 }
 

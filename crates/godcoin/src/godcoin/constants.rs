@@ -12,6 +12,8 @@ pub const TX_EXPIRY_TIME: u64 = 30000;
 pub const BLOCK_PROD_TIME: u64 = 3000;
 
 pub const MAX_MEMO_BYTE_SIZE: usize = 1024;
+pub const MAX_SCRIPT_BYTE_SIZE: usize = 2048;
+pub const MAX_TX_SIGNATURES: usize = 8;
 
 mod tests {
     #[allow(unused_imports)]

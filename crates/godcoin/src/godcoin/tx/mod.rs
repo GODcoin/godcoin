@@ -128,6 +128,15 @@ impl TxVariant {
         TxPrecompData::from_tx(Cow::Owned(self))
     }
 
+    pub fn script(&self) -> Option<&Script> {
+        match self {
+            TxVariant::OwnerTx(tx) => Some(&tx.script),
+            TxVariant::MintTx(tx) => Some(&tx.script),
+            TxVariant::RewardTx(_) => None,
+            TxVariant::TransferTx(tx) => Some(&tx.script),
+        }
+    }
+
     pub fn serialize_without_sigs(&self, buf: &mut Vec<u8>) {
         match self {
             TxVariant::OwnerTx(tx) => tx.serialize(buf),

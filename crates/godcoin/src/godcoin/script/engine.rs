@@ -10,12 +10,6 @@ macro_rules! map_err_type {
     };
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum InitErr {
-    ScriptTooLarge,
-    TooManySignatures,
-}
-
 #[derive(Debug)]
 pub struct ScriptEngine<'a> {
     script: Cow<'a, Script>,
@@ -26,25 +20,20 @@ pub struct ScriptEngine<'a> {
 }
 
 impl<'a> ScriptEngine<'a> {
-    pub fn checked_new<T, S>(data: T, script: S) -> Result<Self, InitErr>
+    pub fn new<T, S>(data: T, script: S) -> Self
     where
         T: Into<Cow<'a, TxPrecompData<'a>>>,
         S: Into<Cow<'a, Script>>,
     {
         let script = script.into();
         let data = data.into();
-        if script.len() > MAX_BYTE_SIZE {
-            return Err(InitErr::ScriptTooLarge);
-        } else if data.tx().signature_pairs.len() > MAX_SIGNATURES {
-            return Err(InitErr::TooManySignatures);
-        }
-        Ok(Self {
+        Self {
             script,
             data,
             pos: 0,
             stack: Stack::new(),
             sig_pair_pos: 0,
-        })
+        }
     }
 
     pub fn eval(&mut self) -> Result<bool, EvalErr> {
@@ -286,23 +275,6 @@ mod tests {
     use crate::tx::{SignTx, TransferTx, Tx, TxType, TxVariant};
 
     #[test]
-    fn script_too_large_err() {
-        let script = Script((0..=MAX_BYTE_SIZE).map(|_| 0).collect());
-        let tx = new_transfer_tx(script.clone(), &[]);
-        let engine = ScriptEngine::checked_new(TxVariant::TransferTx(tx).precompute(), script);
-        assert_eq!(engine.unwrap_err(), InitErr::ScriptTooLarge);
-    }
-
-    #[test]
-    fn tx_too_many_signatures_err() {
-        let script = Builder::new().build();
-        let keys: Vec<KeyPair> = (0..=MAX_SIGNATURES).map(|_| KeyPair::gen()).collect();
-        let tx = new_transfer_tx(script.clone(), &keys);
-        let engine = ScriptEngine::checked_new(TxVariant::TransferTx(tx).precompute(), script);
-        assert_eq!(engine.unwrap_err(), InitErr::TooManySignatures);
-    }
-
-    #[test]
     fn true_only_script() {
         let mut engine = new_engine(Builder::new().push(OpFrame::True));
         assert!(engine.eval().unwrap());
@@ -482,7 +454,7 @@ mod tests {
 
         let mut engine = {
             let tx = new_transfer_tx(script.clone(), &[key]);
-            ScriptEngine::checked_new(TxVariant::TransferTx(tx).precompute(), script).unwrap()
+            ScriptEngine::new(TxVariant::TransferTx(tx).precompute(), script)
         };
 
         assert!(engine.eval().unwrap());
@@ -624,7 +596,7 @@ mod tests {
             tx.append_sign(&key_2);
             tx.append_sign(&key_1);
 
-            ScriptEngine::checked_new(TxVariant::TransferTx(tx).precompute(), script).unwrap()
+            ScriptEngine::new(TxVariant::TransferTx(tx).precompute(), script)
         };
         assert!(!engine.eval().unwrap());
     }
@@ -848,7 +820,7 @@ mod tests {
     fn new_engine_with_signers<'a>(keys: &[KeyPair], b: Builder) -> ScriptEngine<'a> {
         let script = b.build();
         let tx = new_transfer_tx(script.clone(), keys);
-        ScriptEngine::checked_new(TxVariant::TransferTx(tx).precompute(), script).unwrap()
+        ScriptEngine::new(TxVariant::TransferTx(tx).precompute(), script)
     }
 
     fn new_transfer_tx(script: Script, keys: &[KeyPair]) -> TransferTx {

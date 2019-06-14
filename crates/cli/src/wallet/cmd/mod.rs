@@ -1,5 +1,5 @@
 use super::{db::Password, *};
-use godcoin::prelude::*;
+use godcoin::{constants::*, prelude::*};
 use reqwest::Client;
 use std::io::{Cursor, Read};
 
@@ -56,10 +56,10 @@ pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
     let script = script_builder::build(&args[1..]);
     match script {
         Ok(script) => {
-            if script.len() > script::MAX_BYTE_SIZE {
+            if script.len() > MAX_SCRIPT_BYTE_SIZE {
                 println!(
                     "WARNING: Script exceeds the max byte size {}",
-                    script::MAX_BYTE_SIZE
+                    MAX_SCRIPT_BYTE_SIZE
                 );
             }
             println!("{:?}", script);
@@ -75,10 +75,10 @@ pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
 pub fn check_script_size(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
     check_args!(args, 1);
     let script = Script::new(hex_to_bytes!(args[1])?);
-    if script.len() > script::MAX_BYTE_SIZE {
+    if script.len() > MAX_SCRIPT_BYTE_SIZE {
         println!(
             "WARNING: Script exceeds the max byte size {}",
-            script::MAX_BYTE_SIZE
+            MAX_SCRIPT_BYTE_SIZE
         );
     }
     let word = if script.len() == 1 { "byte" } else { "bytes" };

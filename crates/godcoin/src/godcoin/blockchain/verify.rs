@@ -1,5 +1,5 @@
 use crate::{
-    script::{EvalErr, EvalErrType, InitErr},
+    script::{EvalErr, EvalErrType},
     serializer::*,
 };
 use std::io::{self, Cursor};
@@ -100,14 +100,5 @@ impl TxErr {
                 ))
             }
         })
-    }
-}
-
-impl From<InitErr> for TxErr {
-    fn from(err: InitErr) -> Self {
-        match err {
-            InitErr::ScriptTooLarge => TxErr::TxTooLarge,
-            InitErr::TooManySignatures => TxErr::TooManySignatures,
-        }
     }
 }

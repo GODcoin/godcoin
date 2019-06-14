@@ -1,5 +1,8 @@
 use actix::prelude::*;
-use godcoin::prelude::{net::ErrorKind, verify::TxErr, *};
+use godcoin::{
+    constants,
+    prelude::{net::ErrorKind, verify::TxErr, *},
+};
 
 mod common;
 pub use common::*;
@@ -118,6 +121,63 @@ fn tx_far_in_the_future() {
             assert_eq!(
                 res,
                 MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxExpired))
+            );
+
+            System::current().stop();
+            Ok(())
+        }));
+    })
+    .unwrap();
+}
+
+#[test]
+fn tx_script_too_large_err() {
+    System::run(|| {
+        let minter = TestMinter::new();
+
+        let tx = MintTx {
+            base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
+            to: (&minter.genesis_info().script).into(),
+            amount: get_asset("10.0000 GRAEL"),
+            script: Script::new((0..=constants::MAX_SCRIPT_BYTE_SIZE).map(|_| 0).collect()),
+        };
+
+        let tx = TxVariant::MintTx(tx);
+        let fut = minter.request(MsgRequest::Broadcast(tx));
+        System::current().arbiter().send(fut.and_then(move |res| {
+            assert!(res.is_err());
+            assert_eq!(
+                res,
+                MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxTooLarge))
+            );
+
+            System::current().stop();
+            Ok(())
+        }));
+    })
+    .unwrap();
+}
+
+#[test]
+fn tx_too_many_signatures_err() {
+    System::run(|| {
+        let minter = TestMinter::new();
+
+        let mut tx = MintTx {
+            base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
+            to: (&minter.genesis_info().script).into(),
+            amount: get_asset("10.0000 GRAEL"),
+            script: Script::new(vec![]),
+        };
+        (0..=constants::MAX_TX_SIGNATURES).for_each(|_| tx.append_sign(&KeyPair::gen()));
+
+        let tx = TxVariant::MintTx(tx);
+        let fut = minter.request(MsgRequest::Broadcast(tx));
+        System::current().arbiter().send(fut.and_then(move |res| {
+            assert!(res.is_err());
+            assert_eq!(
+                res,
+                MsgResponse::Error(ErrorKind::TxValidation(TxErr::TooManySignatures))
             );
 
             System::current().stop();

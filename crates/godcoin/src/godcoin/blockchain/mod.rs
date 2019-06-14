@@ -253,6 +253,15 @@ impl Blockchain {
         }
 
         let tx = data.tx();
+
+        if tx.signature_pairs.len() > MAX_TX_SIGNATURES {
+            return Err(TxErr::TooManySignatures);
+        } else if let Some(script) = tx.script() {
+            if script.len() > MAX_SCRIPT_BYTE_SIZE {
+                return Err(TxErr::TxTooLarge);
+            }
+        }
+
         match tx {
             TxVariant::OwnerTx(new_owner) => {
                 check_zero_fee!(tx.fee);
@@ -262,8 +271,7 @@ impl Blockchain {
                     return Err(TxErr::ScriptHashMismatch);
                 }
 
-                let success = ScriptEngine::checked_new(data, &new_owner.script)
-                    .map_err(TxErr::from)?
+                let success = ScriptEngine::new(data, &new_owner.script)
                     .eval()
                     .map_err(TxErr::ScriptEval)?;
                 if !success {
@@ -277,8 +285,7 @@ impl Blockchain {
                 if owner.wallet != (&mint_tx.script).into() {
                     return Err(TxErr::ScriptHashMismatch);
                 }
-                let success = ScriptEngine::checked_new(data, &mint_tx.script)
-                    .map_err(TxErr::from)?
+                let success = ScriptEngine::new(data, &mint_tx.script)
                     .eval()
                     .map_err(TxErr::ScriptEval)?;
                 if !success {
@@ -322,8 +329,7 @@ impl Blockchain {
                     return Err(TxErr::ScriptHashMismatch);
                 }
 
-                let success = ScriptEngine::checked_new(data, &transfer.script)
-                    .map_err(TxErr::from)?
+                let success = ScriptEngine::new(data, &transfer.script)
                     .eval()
                     .map_err(TxErr::ScriptEval)?;
                 if !success {
