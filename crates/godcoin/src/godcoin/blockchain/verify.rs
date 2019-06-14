@@ -27,7 +27,6 @@ pub enum BlockErr {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum TxErr {
-    ScriptTooLarge,
     ScriptEval(EvalErr),
     ScriptHashMismatch,
     ScriptRetFalse,
@@ -35,6 +34,7 @@ pub enum TxErr {
     InsufficientBalance,
     InvalidFeeAmount,
     TooManySignatures,
+    TxTooLarge,
     TxProhibited,
     TxExpired,
     TxDupe,
@@ -43,18 +43,18 @@ pub enum TxErr {
 impl TxErr {
     pub fn serialize(self, buf: &mut Vec<u8>) {
         match self {
-            TxErr::ScriptTooLarge => buf.push(0),
             TxErr::ScriptEval(err) => {
-                buf.push(1);
+                buf.push(0);
                 buf.push_u32(err.pos);
                 buf.push(err.err as u8);
             }
-            TxErr::ScriptHashMismatch => buf.push(2),
-            TxErr::ScriptRetFalse => buf.push(3),
-            TxErr::Arithmetic => buf.push(4),
-            TxErr::InsufficientBalance => buf.push(5),
-            TxErr::InvalidFeeAmount => buf.push(6),
-            TxErr::TooManySignatures => buf.push(7),
+            TxErr::ScriptHashMismatch => buf.push(1),
+            TxErr::ScriptRetFalse => buf.push(2),
+            TxErr::Arithmetic => buf.push(3),
+            TxErr::InsufficientBalance => buf.push(4),
+            TxErr::InvalidFeeAmount => buf.push(5),
+            TxErr::TooManySignatures => buf.push(6),
+            TxErr::TxTooLarge => buf.push(7),
             TxErr::TxProhibited => buf.push(8),
             TxErr::TxExpired => buf.push(9),
             TxErr::TxDupe => buf.push(10),
@@ -64,8 +64,7 @@ impl TxErr {
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
         let tag = cursor.take_u8()?;
         Ok(match tag {
-            0 => TxErr::ScriptTooLarge,
-            1 => {
+            0 => {
                 let pos = cursor.take_u32()?;
                 let kind = match cursor.take_u8()? {
                     t if t == EvalErrType::UnexpectedEOF as u8 => EvalErrType::UnexpectedEOF,
@@ -84,12 +83,13 @@ impl TxErr {
                 };
                 TxErr::ScriptEval(EvalErr::new(pos, kind))
             }
-            2 => TxErr::ScriptHashMismatch,
-            3 => TxErr::ScriptRetFalse,
-            4 => TxErr::Arithmetic,
-            5 => TxErr::InsufficientBalance,
-            6 => TxErr::InvalidFeeAmount,
-            7 => TxErr::TooManySignatures,
+            1 => TxErr::ScriptHashMismatch,
+            2 => TxErr::ScriptRetFalse,
+            3 => TxErr::Arithmetic,
+            4 => TxErr::InsufficientBalance,
+            5 => TxErr::InvalidFeeAmount,
+            6 => TxErr::TooManySignatures,
+            7 => TxErr::TxTooLarge,
             8 => TxErr::TxProhibited,
             9 => TxErr::TxExpired,
             10 => TxErr::TxDupe,
@@ -106,7 +106,7 @@ impl TxErr {
 impl From<InitErr> for TxErr {
     fn from(err: InitErr) -> Self {
         match err {
-            InitErr::ScriptTooLarge => TxErr::ScriptTooLarge,
+            InitErr::ScriptTooLarge => TxErr::TxTooLarge,
             InitErr::TooManySignatures => TxErr::TooManySignatures,
         }
     }
