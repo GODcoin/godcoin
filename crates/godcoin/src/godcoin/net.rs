@@ -276,6 +276,7 @@ impl MsgResponse {
                     .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
                 Ok(MsgResponse::GetBlock(block))
             }
+            t if t == MsgType::Broadcast as u8 => Ok(MsgResponse::Broadcast()),
             _ => Err(Error::new(
                 io::ErrorKind::InvalidData,
                 "invalid msg response",
