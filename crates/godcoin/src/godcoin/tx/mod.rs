@@ -293,6 +293,8 @@ pub struct MintTx {
     pub base: Tx,
     pub to: ScriptHash,
     pub amount: Asset,
+    pub attachment: Vec<u8>,
+    pub attachment_name: String,
     pub script: Script,
 }
 
@@ -301,6 +303,8 @@ impl SerializeTx for MintTx {
         self.serialize_header(v);
         v.push_script_hash(&self.to);
         v.push_asset(self.amount);
+        v.push_bytes(&self.attachment);
+        v.push_bytes(self.attachment_name.as_bytes());
         v.push_bytes(&self.script);
     }
 }
@@ -310,11 +314,18 @@ impl DeserializeTx<MintTx> for MintTx {
         assert_eq!(tx.tx_type, TxType::MINT);
         let to = cur.take_script_hash().ok()?;
         let amount = cur.take_asset().ok()?;
+        let attachment = cur.take_bytes().ok()?;
+        let attachment_name = {
+            let bytes = cur.take_bytes().ok()?;
+            String::from_utf8(bytes).ok()?
+        };
         let script = Script::from(cur.take_bytes().ok()?);
         Some(Self {
             base: tx,
             to,
             amount,
+            attachment,
+            attachment_name,
             script,
         })
     }
@@ -476,6 +487,8 @@ mod tests {
             },
             to: wallet.0.clone().into(),
             amount: get_asset("10.0000 GRAEL"),
+            attachment: vec![1, 2, 3],
+            attachment_name: "abc.pdf".to_owned(),
             script: wallet.0.into(),
         };
 
@@ -489,6 +502,7 @@ mod tests {
         cmp_base_tx!(dec, TxType::MINT, 1234, "123.0000 GRAEL");
         assert_eq!(mint_tx.to, dec.to);
         assert_eq!(mint_tx.amount, dec.amount);
+        assert_eq!(mint_tx, dec);
     }
 
     #[test]

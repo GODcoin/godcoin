@@ -39,6 +39,8 @@ fn tx_dupe() {
             base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.0000 GRAEL"),
+            attachment: vec![],
+            attachment_name: "".to_owned(),
             script: minter.genesis_info().script.clone(),
         };
 
@@ -80,6 +82,8 @@ fn tx_expired() {
             base: create_tx_header_with_ts(TxType::MINT, "0.0000 GRAEL", time + TX_EXPIRY_TIME),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.0000 GRAEL"),
+            attachment: vec![],
+            attachment_name: "".to_owned(),
             script: minter.genesis_info().script.clone(),
         };
 
@@ -110,6 +114,8 @@ fn tx_far_in_the_future() {
             base: create_tx_header_with_ts(TxType::MINT, "0.0000 GRAEL", time + 4000),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.0000 GRAEL"),
+            attachment: vec![],
+            attachment_name: "".to_owned(),
             script: minter.genesis_info().script.clone(),
         };
 
@@ -139,6 +145,8 @@ fn tx_script_too_large_err() {
             base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.0000 GRAEL"),
+            attachment: vec![],
+            attachment_name: "".to_owned(),
             script: Script::new((0..=constants::MAX_SCRIPT_BYTE_SIZE).map(|_| 0).collect()),
         };
 
@@ -167,6 +175,8 @@ fn tx_too_many_signatures_err() {
             base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.0000 GRAEL"),
+            attachment: vec![],
+            attachment_name: "".to_owned(),
             script: Script::new(vec![]),
         };
         (0..=constants::MAX_TX_SIGNATURES).for_each(|_| tx.append_sign(&KeyPair::gen()));

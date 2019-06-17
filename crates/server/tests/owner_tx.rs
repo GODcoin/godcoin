@@ -88,6 +88,8 @@ fn owner_tx_deny_mint_tokens() {
                     base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
                     to: (&minter.genesis_info().script).into(),
                     amount: get_asset("10.0000 GRAEL"),
+                    attachment: vec![],
+                    attachment_name: "".to_owned(),
                     // This is the old owner script, validation should fail
                     script: minter.genesis_info().script.clone(),
                 };
@@ -151,6 +153,8 @@ fn owner_tx_accept_mint_tokens() {
                         base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
                         to: wallet_key.0.clone().into(),
                         amount: get_asset("1000.0000 GRAEL"),
+                        attachment: vec![],
+                        attachment_name: "".to_owned(),
                         script: wallet_key.0.clone().into(),
                     };
                     tx.append_sign(&wallet_key);

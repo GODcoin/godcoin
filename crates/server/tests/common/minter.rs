@@ -32,6 +32,8 @@ impl TestMinter {
                     base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
                     to: (&info.script).into(),
                     amount: "1000.0000 GRAEL".parse().unwrap(),
+                    attachment: vec![1, 2, 3],
+                    attachment_name: "".to_owned(),
                     script: info.script.clone(),
                 };
 

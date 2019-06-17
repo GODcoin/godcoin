@@ -1,7 +1,11 @@
 use super::{db::Password, *};
 use godcoin::{constants::*, prelude::*};
 use reqwest::Client;
-use std::io::{Cursor, Read};
+use std::{
+    fs::File,
+    io::{Cursor, Read},
+    path::Path,
+};
 
 #[macro_use]
 pub mod util;
@@ -171,7 +175,7 @@ pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, St
 }
 
 pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
-    check_args!(args, 3);
+    check_args!(args, 4);
     let timestamp: u64 = {
         let ts: u64 = args[1]
             .parse()
@@ -189,15 +193,33 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
     }
     .owner;
 
+    let (attachment, attachment_name) = if !args[4].is_empty() {
+        let path = Path::new(&args[4]);
+        let mut file = File::open(path).map_err(|e| format!("Failed to open file: {:?}", e))?;
+        let meta = file
+            .metadata()
+            .map_err(|e| format!("Failed to query file metadata: {:?}", e))?;
+        let mut buf = Vec::with_capacity(meta.len() as usize);
+        file.read_to_end(&mut buf)
+            .map_err(|e| format!("Failed to read file entirely: {:?}", e))?;
+
+        let file_name = path.file_name().unwrap().to_str().unwrap();
+        (buf, file_name.to_owned())
+    } else {
+        (vec![], "".to_owned())
+    };
+
     let mint_tx = TxVariant::MintTx(MintTx {
         base: Tx {
             tx_type: TxType::MINT,
             timestamp,
             signature_pairs: vec![],
-            fee: "0 GRAEL".parse().unwrap(),
+            fee: Asset::new(0),
         },
         to: owner.wallet,
         amount,
+        attachment,
+        attachment_name,
         script,
     });
     let mut buf = Vec::with_capacity(4096);
