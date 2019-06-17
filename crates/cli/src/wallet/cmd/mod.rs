@@ -111,24 +111,25 @@ pub fn decode_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, S
 
 pub fn sign_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
     check_unlocked!(wallet);
-    check_args!(args, 2);
+    check_at_least_args!(args, 2);
 
-    let account = wallet
-        .db
-        .get_account(&args[1])
-        .ok_or("Account does not exist")?;
-
-    let mut tx_bytes = hex_to_bytes!(args[2])?;
+    let mut tx_bytes = hex_to_bytes!(args[1])?;
     let mut tx = {
         let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
         TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?
     };
 
-    match &mut tx {
-        TxVariant::OwnerTx(tx) => tx.append_sign(&account),
-        TxVariant::MintTx(tx) => tx.append_sign(&account),
-        TxVariant::RewardTx(_) => return Err("Cannot sign reward tx".to_owned()),
-        TxVariant::TransferTx(tx) => tx.append_sign(&account),
+    for account in &args[2..] {
+        let account = wallet
+            .db
+            .get_account(account)
+            .ok_or("Account does not exist")?;
+        match &mut tx {
+            TxVariant::OwnerTx(tx) => tx.append_sign(&account),
+            TxVariant::MintTx(tx) => tx.append_sign(&account),
+            TxVariant::RewardTx(_) => return Err("Cannot sign reward tx".to_owned()),
+            TxVariant::TransferTx(tx) => tx.append_sign(&account),
+        }
     }
 
     tx_bytes.clear();

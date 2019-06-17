@@ -15,6 +15,15 @@ macro_rules! check_args {
     };
 }
 
+macro_rules! check_at_least_args {
+    ($args:expr, $count:expr) => {
+        if $args.len() < $count + 1 {
+            let word = if $count == 1 { "argument" } else { "arguments" };
+            return Err(format!("Expected at least {} {}", $count, word));
+        }
+    };
+}
+
 macro_rules! send_rpc_req {
     ($wallet:expr, $req:expr) => {{
         let body = {

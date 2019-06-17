@@ -129,7 +129,7 @@ impl Wallet {
             "decode_tx <tx_hex>",
             "Decodes a transaction and prints it to console",
         ]);
-        cmds.push(["sign_tx <account> <tx_hex>", "Signs a raw transaction"]);
+        cmds.push(["sign_tx <tx_hex> <account...>", "Signs a raw transaction"]);
         cmds.push([
             "unsign_tx <sig_pos> <tx_hex>",
             "Removes a signature from a raw transaction",
