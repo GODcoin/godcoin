@@ -98,8 +98,8 @@ fn mint_tx_updates_balances() {
                 let expected_bal = get_asset("1010.0000 GRAEL");
                 assert_eq!(props.token_supply, expected_bal);
 
-                let bal = chain.get_balance(&(&minter.genesis_info().script).into());
-                assert_eq!(bal, expected_bal);
+                let bal = chain.get_balance(&(&minter.genesis_info().script).into(), &[]);
+                assert_eq!(bal, Some(expected_bal));
 
                 System::current().stop();
                 Ok(())

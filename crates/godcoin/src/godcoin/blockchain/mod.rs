@@ -151,11 +151,7 @@ impl Blockchain {
         GRAEL_FEE_MIN.mul(GRAEL_FEE_NET_MULT.pow(tx_count as u16)?)
     }
 
-    pub fn get_balance(&self, hash: &ScriptHash) -> Asset {
-        self.indexer.get_balance(hash).unwrap_or_default()
-    }
-
-    pub fn get_balance_with_txs(&self, hash: &ScriptHash, txs: &[TxVariant]) -> Option<Asset> {
+    pub fn get_balance(&self, hash: &ScriptHash, txs: &[TxVariant]) -> Option<Asset> {
         let mut bal = self.indexer.get_balance(hash).unwrap_or_default();
         for tx in txs {
             match tx {
@@ -293,7 +289,7 @@ impl Blockchain {
                 }
 
                 // Sanity check to ensure too many new coins can't be minted
-                self.get_balance_with_txs(&mint_tx.to, additional_txs)
+                self.get_balance(&mint_tx.to, additional_txs)
                     .ok_or(TxErr::Arithmetic)?
                     .add(mint_tx.amount)
                     .ok_or(TxErr::Arithmetic)?;
@@ -337,7 +333,7 @@ impl Blockchain {
                 }
 
                 let bal = self
-                    .get_balance_with_txs(&transfer.from, additional_txs)
+                    .get_balance(&transfer.from, additional_txs)
                     .ok_or(TxErr::Arithmetic)?
                     .sub(transfer.fee)
                     .ok_or(TxErr::Arithmetic)?

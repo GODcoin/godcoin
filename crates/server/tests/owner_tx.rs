@@ -175,8 +175,8 @@ fn owner_tx_accept_mint_tokens() {
                 let expected_bal = get_asset("2000.0000 GRAEL");
                 assert_eq!(props.token_supply, expected_bal);
 
-                let bal = chain.get_balance(&wallet_key.0.clone().into());
-                assert_eq!(bal, get_asset("1000.0000 GRAEL"));
+                let bal = chain.get_balance(&wallet_key.0.clone().into(), &[]);
+                assert_eq!(bal, Some(get_asset("1000.0000 GRAEL")));
 
                 System::current().stop();
                 Ok(())
