@@ -8,12 +8,15 @@ pub use common::*;
 fn transfer_from_minter() {
     System::run(|| {
         let minter = TestMinter::new();
-        let from_addr = ScriptHash::from(&minter.genesis_info().script);
-        let to_addr = KeyPair::gen();
 
-        let create_tx = |fee: &str, amount: Asset| {
+        let from_addr = ScriptHash::from(&minter.genesis_info().script);
+        let from_bal = minter.chain().get_balance(&from_addr, &[]).unwrap();
+        let to_addr = KeyPair::gen();
+        let amount = get_asset("1.0000 GRAEL");
+
+        let tx = {
             let mut tx = TransferTx {
-                base: create_tx_header(TxType::TRANSFER, fee),
+                base: create_tx_header(TxType::TRANSFER, "1.0000 GRAEL"),
                 from: from_addr.clone(),
                 to: (&to_addr.0).into(),
                 amount,
@@ -24,10 +27,6 @@ fn transfer_from_minter() {
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
             TxVariant::TransferTx(tx)
         };
-
-        let from_bal = minter.chain().get_balance(&from_addr, &[]).unwrap();
-        let amount = get_asset("1.0000 GRAEL");
-        let tx = create_tx("1.0000 GRAEL", amount);
         let fut = minter.request(MsgRequest::Broadcast(tx));
         System::current().arbiter().send(
             fut.and_then(move |res| {
