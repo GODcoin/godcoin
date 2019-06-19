@@ -124,3 +124,97 @@ fn transfer_from_user() {
     })
     .unwrap();
 }
+
+#[test]
+fn insufficient_balance_caused_by_fee() {
+    System::run(|| {
+        let minter = TestMinter::new();
+
+        let from_addr = ScriptHash::from(&minter.genesis_info().script);
+        let to_addr = KeyPair::gen();
+        let tx = {
+            let mut tx = TransferTx {
+                base: create_tx_header(TxType::TRANSFER, "1001.0000 GRAEL"),
+                from: from_addr.clone(),
+                to: (&to_addr.0).into(),
+                amount: get_asset("0.0000 GRAEL"),
+                memo: vec![],
+                script: minter.genesis_info().script.clone(),
+            };
+            tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+            tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+            TxVariant::TransferTx(tx)
+        };
+        let fut = minter.request(MsgRequest::Broadcast(tx));
+        System::current().arbiter().send(
+            fut.and_then(move |res| {
+                assert_eq!(
+                    res,
+                    MsgResponse::Error(net::ErrorKind::TxValidation(
+                        verify::TxErr::InsufficientBalance
+                    ))
+                );
+                minter.produce_block().map(|_| minter)
+            })
+            .and_then(move |minter| {
+                let chain = minter.chain();
+                let cur_bal = chain.get_balance(&to_addr.0.into(), &[]);
+                assert_eq!(cur_bal, Some(get_asset("0.0000 GRAEL")));
+
+                let cur_bal = chain.get_balance(&from_addr, &[]);
+                assert_eq!(cur_bal, Some(get_asset("1000.0000 GRAEL")));
+
+                System::current().stop();
+                Ok(())
+            }),
+        );
+    })
+    .unwrap();
+}
+
+#[test]
+fn insufficient_balance_caused_by_amt() {
+    System::run(|| {
+        let minter = TestMinter::new();
+
+        let from_addr = ScriptHash::from(&minter.genesis_info().script);
+        let to_addr = KeyPair::gen();
+        let tx = {
+            let mut tx = TransferTx {
+                base: create_tx_header(TxType::TRANSFER, "1.0000 GRAEL"),
+                from: from_addr.clone(),
+                to: (&to_addr.0).into(),
+                amount: get_asset("500000.0000 GRAEL"),
+                memo: vec![],
+                script: minter.genesis_info().script.clone(),
+            };
+            tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+            tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+            TxVariant::TransferTx(tx)
+        };
+        let fut = minter.request(MsgRequest::Broadcast(tx));
+        System::current().arbiter().send(
+            fut.and_then(move |res| {
+                assert_eq!(
+                    res,
+                    MsgResponse::Error(net::ErrorKind::TxValidation(
+                        verify::TxErr::InsufficientBalance
+                    ))
+                );
+                minter.produce_block().map(|_| minter)
+            })
+            .and_then(move |minter| {
+                let chain = minter.chain();
+                let cur_bal = chain.get_balance(&to_addr.0.into(), &[]);
+                assert_eq!(cur_bal, Some(get_asset("0.0000 GRAEL")));
+
+                let cur_bal = chain.get_balance(&from_addr, &[]);
+                assert_eq!(cur_bal, Some(get_asset("1000.0000 GRAEL")));
+
+                System::current().stop();
+                Ok(())
+            }),
+        );
+    })
+    .unwrap();
+}
