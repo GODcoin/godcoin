@@ -265,3 +265,41 @@ fn memo_too_large() {
     })
     .unwrap();
 }
+
+#[test]
+fn script_too_large() {
+    System::run(|| {
+        let minter = TestMinter::new();
+
+        let from_script = Script::new(
+            (0..=godcoin::constants::MAX_SCRIPT_BYTE_SIZE)
+                .map(|_| 0)
+                .collect(),
+        );
+        let from_addr = ScriptHash::from(&from_script);
+        let to_addr = KeyPair::gen();
+        let tx = {
+            let mut tx = TransferTx {
+                base: create_tx_header(TxType::TRANSFER, "1.0000 GRAEL"),
+                from: from_addr,
+                to: (&to_addr.0).into(),
+                amount: get_asset("1.0000 GRAEL"),
+                memo: vec![],
+                script: from_script,
+            };
+            tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+            tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+            TxVariant::TransferTx(tx)
+        };
+        let fut = minter.request(MsgRequest::Broadcast(tx));
+        System::current().arbiter().send(fut.and_then(move |res| {
+            assert_eq!(
+                res,
+                MsgResponse::Error(net::ErrorKind::TxValidation(verify::TxErr::TxTooLarge))
+            );
+            System::current().stop();
+            Ok(())
+        }));
+    })
+    .unwrap();
+}
