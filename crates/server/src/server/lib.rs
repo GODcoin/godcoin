@@ -77,6 +77,12 @@ pub fn index(
     let mut cur = Cursor::<&[u8]>::new(&body);
     match RequestType::deserialize(&mut cur) {
         Ok(req_type) => {
+            if cur.position() != body.len() as u64 {
+                return Box::new(ok(ResponseType::Single(MsgResponse::Error(
+                    ErrorKind::BytesRemaining,
+                ))
+                .into_res()));
+            }
             Box::new(handle_request_type(&data, req_type).map(IntoHttpResponse::into_res))
         }
         Err(e) => {

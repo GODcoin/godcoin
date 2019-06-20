@@ -98,16 +98,17 @@ impl TestMinter {
             .map(|res| res.unwrap_batch())
     }
 
-    fn send_request(
+    pub fn send_request(
         &self,
         req: net::RequestType,
     ) -> impl Future<Item = net::ResponseType, Error = ()> {
-        let buf = {
-            let mut buf = Vec::with_capacity(1_048_576);
-            req.serialize(&mut buf);
-            bytes::Bytes::from(buf)
-        };
+        let mut buf = Vec::with_capacity(1_048_576);
+        req.serialize(&mut buf);
+        self.raw_request(buf)
+    }
 
+    pub fn raw_request(&self, bytes: Vec<u8>) -> impl Future<Item = net::ResponseType, Error = ()> {
+        let buf = bytes::Bytes::from(bytes);
         index(web::Data::new(self.0.clone()), buf).map(|res| {
             let body = match res.body() {
                 ResponseBody::Body(body) => body,

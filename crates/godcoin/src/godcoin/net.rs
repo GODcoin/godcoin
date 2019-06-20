@@ -164,6 +164,7 @@ impl MsgRequest {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ErrorKind {
     Io,
+    BytesRemaining,
     InvalidHeight,
     TxValidation(TxErr),
 }
@@ -172,9 +173,10 @@ impl ErrorKind {
     fn serialize(self, buf: &mut Vec<u8>) {
         match self {
             ErrorKind::Io => buf.push(0),
-            ErrorKind::InvalidHeight => buf.push(1),
+            ErrorKind::BytesRemaining => buf.push(1),
+            ErrorKind::InvalidHeight => buf.push(2),
             ErrorKind::TxValidation(err) => {
-                buf.push(2);
+                buf.push(3);
                 err.serialize(buf);
             }
         }
@@ -184,8 +186,9 @@ impl ErrorKind {
         let tag = cursor.take_u8()?;
         Ok(match tag {
             0 => ErrorKind::Io,
-            1 => ErrorKind::InvalidHeight,
-            2 => ErrorKind::TxValidation(TxErr::deserialize(cursor)?),
+            1 => ErrorKind::BytesRemaining,
+            2 => ErrorKind::InvalidHeight,
+            3 => ErrorKind::TxValidation(TxErr::deserialize(cursor)?),
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
