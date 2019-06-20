@@ -10,7 +10,7 @@ fn get_block() {
     System::run(|| {
         let minter = TestMinter::new();
         let fut = minter.request(MsgRequest::GetBlock(0));
-        Arbiter::current().send(
+        Arbiter::spawn(
             fut.and_then(move |res| {
                 assert!(!res.is_err());
 
@@ -41,7 +41,7 @@ fn batch_preserves_order() {
             MsgRequest::GetBlock(2),
             MsgRequest::GetBlock(1),
         ]);
-        Arbiter::current().send(fut.and_then(move |responses| {
+        Arbiter::spawn(fut.and_then(move |responses| {
             assert_eq!(responses.len(), 3);
 
             let block_0 = minter.chain().get_block(0).unwrap();

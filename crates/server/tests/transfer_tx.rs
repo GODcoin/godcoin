@@ -28,7 +28,7 @@ fn transfer_from_minter() {
             TxVariant::TransferTx(tx)
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
-        System::current().arbiter().send(
+        Arbiter::spawn(
             fut.and_then(move |res| {
                 assert_eq!(res, MsgResponse::Broadcast());
                 minter.produce_block().map(|_| minter)
@@ -76,7 +76,7 @@ fn transfer_from_user() {
             minter.request(MsgRequest::Broadcast(tx))
         };
 
-        System::current().arbiter().send(
+        Arbiter::spawn(
             fut.and_then({
                 let user_1_addr = user_1_addr.clone();
                 let user_2_addr = user_2_addr.clone();
@@ -145,7 +145,7 @@ fn insufficient_balance_caused_by_fee() {
             TxVariant::TransferTx(tx)
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
-        System::current().arbiter().send(
+        Arbiter::spawn(
             fut.and_then(move |res| {
                 assert_eq!(
                     res,
@@ -192,7 +192,7 @@ fn insufficient_balance_caused_by_amt() {
             TxVariant::TransferTx(tx)
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
-        System::current().arbiter().send(
+        Arbiter::spawn(
             fut.and_then(move |res| {
                 assert_eq!(
                     res,
@@ -241,7 +241,7 @@ fn memo_too_large() {
             TxVariant::TransferTx(tx)
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
-        System::current().arbiter().send(
+        Arbiter::spawn(
             fut.and_then(move |res| {
                 assert_eq!(
                     res,
@@ -291,7 +291,7 @@ fn script_too_large() {
             TxVariant::TransferTx(tx)
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
-        System::current().arbiter().send(fut.and_then(move |res| {
+        Arbiter::spawn(fut.and_then(move |res| {
             assert_eq!(
                 res,
                 MsgResponse::Error(net::ErrorKind::TxValidation(verify::TxErr::TxTooLarge))

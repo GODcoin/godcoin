@@ -1,9 +1,13 @@
 use super::create_tx_header;
 use actix::prelude::*;
+use actix_web::{
+    dev::{Body, ResponseBody},
+    web,
+};
 use godcoin::{blockchain::GenesisBlockInfo, prelude::*};
-use godcoin_server::{handle_direct_request, handle_request_type, prelude::*, ServerData};
+use godcoin_server::{index, prelude::*, ServerData};
 use sodiumoxide::randombytes;
-use std::{env, fs, path::PathBuf, sync::Arc};
+use std::{env, fs, io::Cursor, path::PathBuf, sync::Arc};
 
 pub struct TestMinter(ServerData, GenesisBlockInfo, PathBuf);
 
@@ -82,14 +86,39 @@ impl TestMinter {
     }
 
     pub fn request(&self, req: MsgRequest) -> impl Future<Item = MsgResponse, Error = ()> {
-        handle_direct_request(&self.0, req)
+        self.send_request(net::RequestType::Single(req))
+            .map(|res| res.unwrap_single())
     }
 
     pub fn batch_request(
         &self,
         reqs: Vec<MsgRequest>,
     ) -> impl Future<Item = Vec<MsgResponse>, Error = ()> {
-        handle_request_type(&self.0, net::RequestType::Batch(reqs)).map(|res| res.unwrap_batch())
+        self.send_request(net::RequestType::Batch(reqs))
+            .map(|res| res.unwrap_batch())
+    }
+
+    fn send_request(
+        &self,
+        req: net::RequestType,
+    ) -> impl Future<Item = net::ResponseType, Error = ()> {
+        let buf = {
+            let mut buf = Vec::with_capacity(1_048_576);
+            req.serialize(&mut buf);
+            bytes::Bytes::from(buf)
+        };
+
+        index(web::Data::new(self.0.clone()), buf).map(|res| {
+            let body = match res.body() {
+                ResponseBody::Body(body) => body,
+                ResponseBody::Other(body) => body,
+            };
+            let buf = match body {
+                Body::Bytes(bytes) => bytes,
+                _ => panic!("Expected bytes body: {:?}", body),
+            };
+            net::ResponseType::deserialize(&mut Cursor::new(buf)).unwrap()
+        })
     }
 }
 

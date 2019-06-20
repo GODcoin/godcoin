@@ -49,7 +49,7 @@ fn tx_dupe() {
 
         let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
-        System::current().arbiter().send(
+        Arbiter::spawn(
             fut.and_then(move |res| {
                 assert!(!res.is_err(), format!("{:?}", res));
 
@@ -89,7 +89,7 @@ fn tx_expired() {
 
         let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
-        System::current().arbiter().send(fut.then(move |res| {
+        Arbiter::spawn(fut.then(move |res| {
             let res = res.unwrap();
             assert!(res.is_err());
             assert_eq!(
@@ -121,7 +121,7 @@ fn tx_far_in_the_future() {
 
         let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
-        System::current().arbiter().send(fut.then(move |res| {
+        Arbiter::spawn(fut.then(move |res| {
             let res = res.unwrap();
             assert!(res.is_err());
             assert_eq!(
@@ -152,7 +152,7 @@ fn tx_script_too_large_err() {
 
         let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
-        System::current().arbiter().send(fut.and_then(move |res| {
+        Arbiter::spawn(fut.and_then(move |res| {
             assert!(res.is_err());
             assert_eq!(
                 res,
@@ -183,7 +183,7 @@ fn tx_too_many_signatures_err() {
 
         let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
-        System::current().arbiter().send(fut.and_then(move |res| {
+        Arbiter::spawn(fut.and_then(move |res| {
             assert!(res.is_err());
             assert_eq!(
                 res,

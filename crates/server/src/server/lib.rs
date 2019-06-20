@@ -70,11 +70,12 @@ pub fn start(config: ServerConfig) {
     .start();
 }
 
-fn index(
+pub fn index(
     data: web::Data<ServerData>,
     body: bytes::Bytes,
 ) -> Box<Future<Item = HttpResponse, Error = ()>> {
-    match RequestType::deserialize(&mut Cursor::new(&body)) {
+    let mut cur = Cursor::<&[u8]>::new(&body);
+    match RequestType::deserialize(&mut cur) {
         Ok(req_type) => {
             Box::new(handle_request_type(&data, req_type).map(IntoHttpResponse::into_res))
         }
@@ -87,7 +88,7 @@ fn index(
     }
 }
 
-pub fn handle_request_type(
+fn handle_request_type(
     data: &ServerData,
     req_type: RequestType,
 ) -> Box<Future<Item = ResponseType, Error = ()> + Send> {
@@ -106,7 +107,7 @@ pub fn handle_request_type(
     }
 }
 
-pub fn handle_direct_request(
+fn handle_direct_request(
     data: &ServerData,
     req: MsgRequest,
 ) -> Box<Future<Item = MsgResponse, Error = ()> + Send> {

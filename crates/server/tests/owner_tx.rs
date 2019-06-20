@@ -25,7 +25,7 @@ fn owner_tx_minter_key_change() {
         };
 
         let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
-        System::current().arbiter().send(
+        Arbiter::spawn(
             fut.and_then(move |res| {
                 assert!(!res.is_err(), format!("{:?}", res));
                 assert_eq!(res, MsgResponse::Broadcast());
@@ -70,7 +70,7 @@ fn owner_tx_deny_mint_tokens() {
         };
 
         let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
-        System::current().arbiter().send(
+        Arbiter::spawn(
             fut.and_then(move |res| {
                 assert!(!res.is_err(), format!("{:?}", res));
                 assert_eq!(res, MsgResponse::Broadcast());
@@ -133,7 +133,7 @@ fn owner_tx_accept_mint_tokens() {
         };
 
         let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
-        System::current().arbiter().send(
+        Arbiter::spawn(
             fut.and_then(move |res| {
                 assert!(!res.is_err(), format!("{:?}", res));
                 assert_eq!(res, MsgResponse::Broadcast());
