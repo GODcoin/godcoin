@@ -17,7 +17,7 @@ pub struct Wallet {
 
 impl Wallet {
     pub fn new(home: PathBuf) -> Wallet {
-        let db = Db::new(home.join("db"));
+        let db = Db::new(home.join("wallet_db"));
         let prompt = (if db.state() == DbState::Locked {
             "locked>> "
         } else {
