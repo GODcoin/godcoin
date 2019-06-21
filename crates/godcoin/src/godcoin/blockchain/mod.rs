@@ -181,7 +181,9 @@ impl Blockchain {
     }
 
     pub fn insert_block(&self, block: SignedBlock) -> Result<(), verify::BlockErr> {
-        static CONFIG: verify::Config = verify::Config { skip_reward: true };
+        static CONFIG: verify::Config = verify::Config {
+            reject_reward: false,
+        };
         self.verify_block(&block, &self.get_chain_head(), CONFIG)?;
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
         for tx in &block.transactions {
@@ -300,7 +302,7 @@ impl Blockchain {
                     .ok_or(TxErr::Arithmetic)?;
             }
             TxVariant::RewardTx(tx) => {
-                if !config.skip_reward {
+                if config.reject_reward {
                     return Err(TxErr::TxProhibited);
                 }
                 // Reward transactions are internally generated, thus should panic on failure

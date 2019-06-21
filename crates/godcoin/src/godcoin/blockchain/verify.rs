@@ -6,12 +6,14 @@ use std::io::{self, Cursor};
 
 #[derive(Copy, Clone, Debug)]
 pub struct Config {
-    pub skip_reward: bool,
+    pub reject_reward: bool,
 }
 
 impl Config {
     pub const fn strict() -> Self {
-        Self { skip_reward: false }
+        Self {
+            reject_reward: true,
+        }
     }
 }
 
