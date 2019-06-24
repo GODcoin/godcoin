@@ -32,10 +32,6 @@ pub struct ServerData {
 
 pub fn start(config: ServerConfig) {
     let blockchain = Arc::new(Blockchain::new(&config.home));
-    info!(
-        "Using height in block log at {}",
-        blockchain.get_chain_height()
-    );
 
     if blockchain.get_block(0).is_none() {
         let info = blockchain.create_genesis_block(config.minter_key.clone());
@@ -45,6 +41,11 @@ pub fn start(config: ServerConfig) {
             info!("=> Wallet key {}: {}", index + 1, key.1.to_wif());
         }
     }
+
+    info!(
+        "Using height in block log at {}",
+        blockchain.get_chain_height()
+    );
 
     let minter = Minter::new(Arc::clone(&blockchain), config.minter_key).start();
     minter.do_send(minter::StartProductionLoop);

@@ -17,6 +17,7 @@ const CF_TX_EXPIRY: &str = "tx_expiry";
 const KEY_NET_OWNER: &[u8] = b"network_owner";
 const KEY_CHAIN_HEIGHT: &[u8] = b"chain_height";
 const KEY_TOKEN_SUPPLY: &[u8] = b"token_supply";
+const KEY_INDEX_STATUS: &[u8] = b"index_status";
 
 pub struct Indexer {
     db: DB,
@@ -36,6 +37,28 @@ impl Indexer {
         ];
         let db = DB::open_cf_descriptors(&db_opts, path, col_families).unwrap();
         Indexer { db }
+    }
+
+    pub fn index_status(&self) -> IndexStatus {
+        let buf_status = self.db.get_pinned(KEY_INDEX_STATUS).unwrap();
+        match buf_status {
+            Some(buf_status) => match buf_status[0] {
+                0 => IndexStatus::None,
+                1 => IndexStatus::Partial,
+                2 => IndexStatus::Complete,
+                _ => panic!("unhandled index status: {:?}", &buf_status[..]),
+            },
+            None => IndexStatus::None,
+        }
+    }
+
+    pub fn set_index_status(&self, status: IndexStatus) {
+        let buf = match status {
+            IndexStatus::None => vec![0],
+            IndexStatus::Partial => vec![1],
+            IndexStatus::Complete => vec![2],
+        };
+        self.db.put(KEY_INDEX_STATUS, buf).unwrap();
     }
 
     pub fn get_block_byte_pos(&self, height: u64) -> Option<u64> {
@@ -246,6 +269,13 @@ impl TxManager {
         }
         db.write(batch).unwrap();
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum IndexStatus {
+    None,
+    Partial,
+    Complete,
 }
 
 #[cfg(test)]

@@ -14,14 +14,13 @@ pub struct TestMinter(ServerData, GenesisBlockInfo, PathBuf);
 impl TestMinter {
     pub fn new() -> Self {
         godcoin::init().unwrap();
-        let mut tmp_dir = env::temp_dir();
-        {
-            let mut s = String::from("godcoin_test_");
+        let tmp_dir = {
+            let mut tmp_dir = env::temp_dir();
             let mut num: [u8; 8] = [0; 8];
             randombytes::randombytes_into(&mut num);
-            s.push_str(&format!("{}", u64::from_be_bytes(num)));
-            tmp_dir.push(s);
-        }
+            tmp_dir.push(&format!("godcoin_test_{}", u64::from_be_bytes(num)));
+            tmp_dir
+        };
         fs::create_dir(&tmp_dir).expect(&format!("Could not create temp dir {:?}", &tmp_dir));
 
         let chain = Arc::new(Blockchain::new(&tmp_dir));
@@ -68,6 +67,21 @@ impl TestMinter {
         let minter = Minter::new(Arc::clone(&chain), minter_key).start();
         let data = ServerData { chain, minter };
         Self(data, info, tmp_dir)
+    }
+
+    pub fn unindexed(&mut self) {
+        let unindexed_path = {
+            let mut unindexed_path = self.2.clone();
+            let mut num: [u8; 8] = [0; 8];
+            randombytes::randombytes_into(&mut num);
+            unindexed_path.push(&format!("unindexed_{}", u64::from_be_bytes(num)));
+            unindexed_path
+        };
+        fs::create_dir(&unindexed_path)
+            .expect(&format!("Could not create temp dir {:?}", &unindexed_path));
+        fs::copy(self.2.join("blklog"), unindexed_path.join("blklog"))
+            .expect("Could not copy block log");
+        self.0.chain = Arc::new(Blockchain::new(&unindexed_path));
     }
 
     pub fn chain(&self) -> &Blockchain {

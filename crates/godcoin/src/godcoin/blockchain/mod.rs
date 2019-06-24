@@ -1,3 +1,4 @@
+use log::info;
 use parking_lot::Mutex;
 use std::{path::*, sync::Arc};
 
@@ -8,7 +9,7 @@ pub mod verify;
 
 pub use self::{
     block::*,
-    index::{Indexer, WriteBatch},
+    index::{IndexStatus, Indexer, WriteBatch},
     store::BlockStore,
     verify::TxErr,
 };
@@ -33,7 +34,7 @@ impl Blockchain {
     /// Creates a new `Blockchain` with an associated indexer and backing
     /// storage is automatically created based on the given `path`.
     ///
-    pub fn new(path: &Path) -> Blockchain {
+    pub fn new(path: &Path) -> Self {
         let indexer = Arc::new(Indexer::new(&Path::join(path, "index")));
         let store = BlockStore::new(&Path::join(path, "blklog"), Arc::clone(&indexer));
         Blockchain {
@@ -44,6 +45,28 @@ impl Blockchain {
 
     pub fn indexer(&self) -> Arc<Indexer> {
         Arc::clone(&self.indexer)
+    }
+
+    pub fn index_status(&self) -> IndexStatus {
+        self.indexer.index_status()
+    }
+
+    pub fn reindex(&self) {
+        {
+            let status = self.indexer.index_status();
+            if status != IndexStatus::None {
+                panic!("expected index status to be None, got: {:?}", status);
+            }
+        }
+        self.store.lock().reindex_blocks(|batch, block| {
+            for tx in &block.transactions {
+                Blockchain::index_tx(batch, &tx);
+            }
+            if block.height % 1000 == 0 {
+                info!("Indexed block {}", block.height);
+            }
+        });
+        info!("Reindexing complete");
     }
 
     pub fn get_properties(&self) -> Properties {
@@ -395,6 +418,7 @@ impl Blockchain {
         self.store.lock().insert_genesis(&mut batch, block);
         batch.set_owner(owner_tx);
         batch.commit();
+        self.indexer.set_index_status(IndexStatus::Complete);
 
         info
     }

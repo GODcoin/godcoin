@@ -1,4 +1,5 @@
 use crc32c::*;
+use log::{debug, warn};
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -36,36 +37,18 @@ impl BlockStore {
             (f, m.len())
         };
 
-        let height = indexer.get_chain_height();
         let mut store = BlockStore {
             indexer,
 
-            height,
+            height: 0,
             blocks: HashMap::new(),
             genesis_block: None,
 
             file: RefCell::new(file),
             byte_pos_tail: tail,
         };
-        store.genesis_block = store.get(0);
 
-        {
-            // Initialize the cache
-            let min = if height < MAX_CACHE_SIZE {
-                height
-            } else {
-                height - 100
-            };
-            let max = min + MAX_CACHE_SIZE;
-            for height in min..=max {
-                if let Some(block) = store.read_from_disk(height) {
-                    store.blocks.insert(height, Arc::new(block));
-                } else {
-                    break;
-                }
-            }
-        }
-
+        store.init_state();
         store
     }
 
@@ -120,18 +103,74 @@ impl BlockStore {
         batch.set_block_byte_pos(0, 0);
     }
 
+    pub fn reindex_blocks<F>(&mut self, index_fn: F)
+    where
+        F: Fn(&mut WriteBatch, &SignedBlock),
+    {
+        let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
+        let mut last_known_good_height = 0;
+        let mut pos = 0;
+        loop {
+            match self.raw_read_from_disk(pos) {
+                Ok(block) => {
+                    let height = block.height;
+                    let new_pos = {
+                        let mut f = self.file.borrow_mut();
+                        f.seek(SeekFrom::Current(0)).unwrap()
+                    };
+                    if !(last_known_good_height == 0 || height == last_known_good_height + 1) {
+                        warn!(
+                            "Invalid height ({}) detected at byte pos {}, truncating...",
+                            height, pos
+                        );
+                        let f = self.file.borrow();
+                        f.set_len(pos).unwrap();
+                        self.byte_pos_tail = pos;
+                        break;
+                    }
+
+                    batch.set_block_byte_pos(height, pos);
+                    batch.set_chain_height(height);
+                    index_fn(&mut batch, &block);
+                    debug!("Reindexed block {} at pos {}", height, pos);
+
+                    pos = new_pos;
+                    last_known_good_height = height;
+                }
+                Err(e) => match e {
+                    ReadError::Eof => break,
+                    _ => {
+                        let info = format!(
+                            "(last known good height: {}, block end byte pos: {})",
+                            last_known_good_height, pos
+                        );
+                        panic!("unexpected error reindexing block: {:?} {}", e, info);
+                    }
+                },
+            }
+        }
+
+        batch.commit();
+        self.indexer.set_index_status(IndexStatus::Complete);
+        self.init_state();
+    }
+
     fn read_from_disk(&self, height: u64) -> Option<SignedBlock> {
         if height > self.height {
             return None;
         }
 
         let pos = self.indexer.get_block_byte_pos(height)?;
+        self.raw_read_from_disk(pos).ok()
+    }
+
+    fn raw_read_from_disk(&self, pos: u64) -> Result<SignedBlock, ReadError> {
         let mut f = self.file.borrow_mut();
         f.seek(SeekFrom::Start(pos)).unwrap();
 
         let (block_len, crc) = {
             let mut meta = [0u8; 8];
-            f.read_exact(&mut meta).unwrap();
+            f.read_exact(&mut meta).map_err(|_| ReadError::Eof)?;
             let len = u32_from_buf!(meta, 0) as usize;
             let crc = u32_from_buf!(meta, 4);
             (len, crc)
@@ -142,16 +181,14 @@ impl BlockStore {
             unsafe {
                 buf.set_len(block_len);
             }
-            f.read_exact(&mut buf).unwrap();
+            f.read_exact(&mut buf)
+                .map_err(|_| ReadError::CorruptBlock)?;
             assert_eq!(crc, crc32c(&buf));
             buf
         };
 
         let mut cursor = Cursor::<&[u8]>::new(&block_vec);
-        Some(
-            SignedBlock::deserialize_with_tx(&mut cursor)
-                .expect("failed to decode block from disk"),
-        )
+        SignedBlock::deserialize_with_tx(&mut cursor).ok_or(ReadError::CorruptBlock)
     }
 
     fn write_to_disk(&mut self, block: &SignedBlock) {
@@ -181,4 +218,32 @@ impl BlockStore {
 
         self.byte_pos_tail += u64::from(len) + 8;
     }
+
+    fn init_state(&mut self) {
+        self.height = self.indexer.get_chain_height();
+        self.genesis_block = self.get(0);
+        {
+            // Init block cache
+            self.blocks.clear();
+            let min = if self.height < MAX_CACHE_SIZE {
+                self.height
+            } else {
+                self.height - 100
+            };
+            let max = min + MAX_CACHE_SIZE;
+            for height in min..=max {
+                if let Some(block) = self.read_from_disk(height) {
+                    self.blocks.insert(height, Arc::new(block));
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum ReadError {
+    Eof,
+    CorruptBlock,
 }

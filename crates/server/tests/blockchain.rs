@@ -25,7 +25,76 @@ fn fresh_blockchain() {
         assert_eq!(owner.wallet, (&minter.genesis_info().script).into());
 
         assert!(chain.get_block(2).is_none());
+        assert_eq!(chain.index_status(), IndexStatus::Complete);
         System::current().stop();
+    })
+    .unwrap();
+}
+
+#[test]
+fn reindexed_blockchain() {
+    System::run(|| {
+        let minter = TestMinter::new();
+
+        let from_addr = ScriptHash::from(&minter.genesis_info().script);
+        let from_bal = minter.chain().get_balance(&from_addr, &[]).unwrap();
+        let to_addr = KeyPair::gen();
+        let amount = get_asset("1.0000 GRAEL");
+
+        let tx = {
+            let mut tx = TransferTx {
+                base: create_tx_header(TxType::TRANSFER, "1.0000 GRAEL"),
+                from: from_addr.clone(),
+                to: (&to_addr.0).into(),
+                amount,
+                memo: vec![],
+                script: minter.genesis_info().script.clone(),
+            };
+            tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+            tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+            TxVariant::TransferTx(tx)
+        };
+        let fut = minter.request(MsgRequest::Broadcast(tx));
+        Arbiter::spawn(
+            fut.and_then(move |res| {
+                assert_eq!(res, MsgResponse::Broadcast());
+                minter.produce_block().map(|_| minter)
+            })
+            .and_then(move |mut minter| {
+                minter.unindexed();
+
+                let chain = minter.chain();
+                assert_eq!(chain.index_status(), IndexStatus::None);
+                assert!(chain.get_block(0).is_none());
+
+                chain.reindex();
+                assert_eq!(chain.index_status(), IndexStatus::Complete);
+                assert!(chain.get_block(0).is_some());
+                assert!(chain.get_block(1).is_some());
+                assert!(chain.get_block(2).is_some());
+                assert!(chain.get_block(3).is_none());
+                assert_eq!(chain.get_chain_height(), 2);
+
+                let owner = chain.get_owner();
+                assert_eq!(owner.minter, minter.genesis_info().minter_key.0);
+                assert_eq!(
+                    owner.script,
+                    script::Builder::new().push(OpFrame::False).build()
+                );
+                assert_eq!(owner.wallet, (&minter.genesis_info().script).into());
+
+                let cur_bal = chain.get_balance(&to_addr.0.into(), &[]);
+                assert_eq!(cur_bal, Some(amount));
+
+                // The fee transfers back to the minter wallet in the form of a reward tx so it
+                // must not be subtracted during the assertion
+                let cur_bal = chain.get_balance(&from_addr, &[]);
+                assert_eq!(cur_bal, from_bal.sub(amount));
+
+                System::current().stop();
+                Ok(())
+            }),
+        );
     })
     .unwrap();
 }
