@@ -5,7 +5,7 @@ use futures::{
     Future,
 };
 use godcoin::{net::*, prelude::*};
-use log::{error, info};
+use log::{error, info, warn};
 use std::{io::Cursor, path::PathBuf, sync::Arc};
 
 pub mod minter;
@@ -32,6 +32,14 @@ pub struct ServerData {
 
 pub fn start(config: ServerConfig) {
     let blockchain = Arc::new(Blockchain::new(&config.home));
+
+    if blockchain.index_status() != IndexStatus::Complete {
+        warn!(
+            "Indexing not complete (status = {:?}), starting auto reindexing",
+            blockchain.index_status()
+        );
+        blockchain.reindex();
+    }
 
     if blockchain.get_block(0).is_none() {
         let info = blockchain.create_genesis_block(config.minter_key.clone());
