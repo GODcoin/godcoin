@@ -1,5 +1,6 @@
 use actix::prelude::*;
 use godcoin::{
+    blockchain::index::TxManager,
     constants,
     prelude::{net::ErrorKind, verify::TxErr, *},
 };
@@ -54,26 +55,35 @@ fn reindexed_blockchain() {
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
             TxVariant::TransferTx(tx)
         };
-        let fut = minter.request(MsgRequest::Broadcast(tx));
+        let tx_data = TxPrecompData::from_tx(tx.clone());
+        let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
         Arbiter::spawn(
             fut.and_then(move |res| {
                 assert_eq!(res, MsgResponse::Broadcast());
                 minter.produce_block().map(|_| minter)
             })
             .and_then(move |mut minter| {
-                minter.unindexed();
+                {
+                    minter.unindexed();
+                    let chain = minter.chain();
+                    let manager = TxManager::new(chain.indexer());
 
+                    assert_eq!(chain.index_status(), IndexStatus::None);
+                    assert!(chain.get_block(0).is_none());
+                    assert!(!manager.has(tx_data.txid()));
+                }
+
+                minter.reindex();
                 let chain = minter.chain();
-                assert_eq!(chain.index_status(), IndexStatus::None);
-                assert!(chain.get_block(0).is_none());
+                let manager = TxManager::new(chain.indexer());
 
-                chain.reindex();
                 assert_eq!(chain.index_status(), IndexStatus::Complete);
                 assert!(chain.get_block(0).is_some());
                 assert!(chain.get_block(1).is_some());
                 assert!(chain.get_block(2).is_some());
                 assert!(chain.get_block(3).is_none());
                 assert_eq!(chain.get_chain_height(), 2);
+                assert!(manager.has(tx_data.txid()));
 
                 let owner = chain.get_owner();
                 assert_eq!(owner.minter, minter.genesis_info().minter_key.0);
@@ -90,6 +100,15 @@ fn reindexed_blockchain() {
                 // must not be subtracted during the assertion
                 let cur_bal = chain.get_balance(&from_addr, &[]);
                 assert_eq!(cur_bal, from_bal.sub(amount));
+
+                // Test to ensure that after a reindex the tx cannot be rebroadcasted
+                minter.request(MsgRequest::Broadcast(tx.clone()))
+            })
+            .and_then(|res| {
+                assert_eq!(
+                    res,
+                    MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxDupe))
+                );
 
                 System::current().stop();
                 Ok(())

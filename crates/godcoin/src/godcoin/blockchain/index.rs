@@ -19,6 +19,8 @@ const KEY_CHAIN_HEIGHT: &[u8] = b"chain_height";
 const KEY_TOKEN_SUPPLY: &[u8] = b"token_supply";
 const KEY_INDEX_STATUS: &[u8] = b"index_status";
 
+const EXPIRED_TX_REMOVAL: u64 = TX_EXPIRY_TIME + 30000;
+
 pub struct Indexer {
     db: DB,
 }
@@ -261,9 +263,8 @@ impl TxManager {
         let mut batch = rocksdb::WriteBatch::default();
         for (key, value) in db.iterator_cf(cf, IteratorMode::Start).unwrap() {
             let ts = u64::from_be_bytes(value.as_ref().try_into().unwrap());
-            // We increase the expiry time by an extra second for extra assurance if system time
-            // slightly adjusts.
-            if ts < current_time - TX_EXPIRY_TIME - 1000 {
+            // Increase the expiry time for extra assurance if system time slightly adjusts.
+            if ts < current_time - EXPIRED_TX_REMOVAL {
                 batch.delete_cf(cf, key).unwrap();
             }
         }
@@ -329,7 +330,7 @@ mod tests {
             let cf = indexer.db.cf_handle(CF_TX_EXPIRY).unwrap();
             indexer.db.delete_cf(cf, &id).unwrap();
             assert!(!manager.has(&id));
-            manager.insert(&id, ts - TX_EXPIRY_TIME - 1100);
+            manager.insert(&id, ts - EXPIRED_TX_REMOVAL - 100);
             assert!(manager.has(&id));
             manager.purge_expired();
             // Test that the expiry is completely over

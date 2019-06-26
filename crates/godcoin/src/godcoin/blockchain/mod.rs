@@ -58,7 +58,8 @@ impl Blockchain {
                 panic!("expected index status to be None, got: {:?}", status);
             }
         }
-        self.store.lock().reindex_blocks(|batch, block| {
+        let mut store = self.store.lock();
+        store.reindex_blocks(|batch, block| {
             for tx in &block.transactions {
                 Blockchain::index_tx(batch, &tx);
             }
@@ -66,6 +67,23 @@ impl Blockchain {
                 info!("Indexed block {}", block.height);
             }
         });
+
+        info!("Rebuilding tx expiry index");
+        let manager = index::TxManager::new(self.indexer());
+        for height in (0..=self.get_chain_height()).rev() {
+            let sys_time = crate::util::get_epoch_ms();
+            let block = store.get(height).unwrap();
+            // Test a huge timestamp gap to ensure all active txs are indexed
+            if block.timestamp > sys_time - (TX_EXPIRY_TIME * 2) {
+                for tx in &block.transactions {
+                    let data = TxPrecompData::from_tx(tx);
+                    manager.insert(data.txid(), data.tx().timestamp);
+                }
+            } else {
+                break;
+            }
+        }
+
         info!("Reindexing complete");
     }
 

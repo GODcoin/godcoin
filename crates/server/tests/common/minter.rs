@@ -9,7 +9,9 @@ use godcoin_server::{index, prelude::*, ServerData};
 use sodiumoxide::randombytes;
 use std::{env, fs, io::Cursor, path::PathBuf, sync::Arc};
 
-pub struct TestMinter(ServerData, GenesisBlockInfo, PathBuf);
+type Indexed = bool;
+
+pub struct TestMinter(ServerData, GenesisBlockInfo, PathBuf, Indexed);
 
 impl TestMinter {
     pub fn new() -> Self {
@@ -66,7 +68,7 @@ impl TestMinter {
 
         let minter = Minter::new(Arc::clone(&chain), minter_key).start();
         let data = ServerData { chain, minter };
-        Self(data, info, tmp_dir)
+        Self(data, info, tmp_dir, true)
     }
 
     pub fn unindexed(&mut self) {
@@ -82,6 +84,15 @@ impl TestMinter {
         fs::copy(self.2.join("blklog"), unindexed_path.join("blklog"))
             .expect("Could not copy block log");
         self.0.chain = Arc::new(Blockchain::new(&unindexed_path));
+        self.3 = false;
+    }
+
+    pub fn reindex(&mut self) {
+        let chain = Arc::clone(&self.0.chain);
+        assert_eq!(chain.index_status(), IndexStatus::None);
+        chain.reindex();
+        self.0.minter = Minter::new(chain, self.1.minter_key.clone()).start();
+        self.3 = true;
     }
 
     pub fn chain(&self) -> &Blockchain {
@@ -122,6 +133,10 @@ impl TestMinter {
     }
 
     pub fn raw_request(&self, bytes: Vec<u8>) -> impl Future<Item = net::ResponseType, Error = ()> {
+        assert!(
+            self.3,
+            "attempting to send a request to an unindexed minter"
+        );
         let buf = bytes::Bytes::from(bytes);
         index(web::Data::new(self.0.clone()), buf).map(|res| {
             let body = match res.body() {
