@@ -14,6 +14,10 @@ pub struct PushTx(pub TxVariant);
 #[rtype(result = "Result<(), verify::BlockErr>")]
 pub struct ForceProduceBlock;
 
+#[derive(Message)]
+#[rtype(result = "Result<AddressInfo, verify::TxErr>")]
+pub struct GetAddrInfo(pub ScriptHash);
+
 pub struct Minter {
     chain: Arc<Blockchain>,
     minter_key: KeyPair,
@@ -101,5 +105,16 @@ impl Handler<PushTx> for Minter {
     fn handle(&mut self, msg: PushTx, _: &mut Self::Context) -> Self::Result {
         static CONFIG: verify::Config = verify::Config::strict();
         self.tx_pool.push(msg.0.precompute(), CONFIG)
+    }
+}
+
+impl Handler<GetAddrInfo> for Minter {
+    type Result = Result<AddressInfo, verify::TxErr>;
+
+    fn handle(&mut self, msg: GetAddrInfo, _: &mut Self::Context) -> Self::Result {
+        Ok(self
+            .tx_pool
+            .get_address_info(&msg.0)
+            .ok_or(verify::TxErr::Arithmetic)?)
     }
 }

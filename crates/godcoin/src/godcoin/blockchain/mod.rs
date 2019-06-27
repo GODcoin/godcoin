@@ -24,6 +24,13 @@ pub struct Properties {
     pub network_fee: Asset,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct AddressInfo {
+    pub net_fee: Asset,
+    pub addr_fee: Asset,
+    pub balance: Asset,
+}
+
 pub struct Blockchain {
     indexer: Arc<Indexer>,
     store: Mutex<BlockStore>,
@@ -121,15 +128,30 @@ impl Blockchain {
         store.get(height)
     }
 
-    pub fn get_total_fee(&self, hash: &ScriptHash, additional_txs: &[TxVariant]) -> Option<Asset> {
+    pub fn get_total_fee(&self, addr: &ScriptHash, additional_txs: &[TxVariant]) -> Option<Asset> {
         let net_fee = self.get_network_fee()?;
-        let addr_fee = self.get_address_fee(hash, additional_txs)?;
+        let addr_fee = self.get_address_fee(addr, additional_txs)?;
         addr_fee.add(net_fee)
+    }
+
+    pub fn get_address_info(
+        &self,
+        addr: &ScriptHash,
+        additional_txs: &[TxVariant],
+    ) -> Option<AddressInfo> {
+        let net_fee = self.get_network_fee()?;
+        let addr_fee = self.get_address_fee(addr, additional_txs)?;
+        let balance = self.get_balance(addr, additional_txs)?;
+        Some(AddressInfo {
+            net_fee,
+            addr_fee,
+            balance,
+        })
     }
 
     pub fn get_address_fee(
         &self,
-        hash: &ScriptHash,
+        addr: &ScriptHash,
         additional_txs: &[TxVariant],
     ) -> Option<Asset> {
         let mut tx_count = 1;
@@ -141,7 +163,7 @@ impl Blockchain {
                     TxVariant::OwnerTx(_) => false,
                     TxVariant::MintTx(_) => false,
                     TxVariant::RewardTx(_) => false,
-                    TxVariant::TransferTx(tx) => &tx.from == hash,
+                    TxVariant::TransferTx(tx) => &tx.from == addr,
                 };
                 if has_match {
                     tx_count += 1;
@@ -192,26 +214,26 @@ impl Blockchain {
         GRAEL_FEE_MIN.mul(GRAEL_FEE_NET_MULT.pow(tx_count as u16)?)
     }
 
-    pub fn get_balance(&self, hash: &ScriptHash, txs: &[TxVariant]) -> Option<Asset> {
-        let mut bal = self.indexer.get_balance(hash).unwrap_or_default();
-        for tx in txs {
+    pub fn get_balance(&self, addr: &ScriptHash, additional_txs: &[TxVariant]) -> Option<Asset> {
+        let mut bal = self.indexer.get_balance(addr).unwrap_or_default();
+        for tx in additional_txs {
             match tx {
                 TxVariant::OwnerTx(_) => {}
                 TxVariant::MintTx(tx) => {
-                    if &tx.to == hash {
+                    if &tx.to == addr {
                         bal = bal.add(tx.amount)?;
                     }
                 }
                 TxVariant::RewardTx(tx) => {
-                    if &tx.to == hash {
+                    if &tx.to == addr {
                         bal = bal.add(tx.rewards)?;
                     }
                 }
                 TxVariant::TransferTx(tx) => {
-                    if &tx.from == hash {
+                    if &tx.from == addr {
                         bal = bal.sub(tx.fee)?;
                         bal = bal.sub(tx.amount)?;
-                    } else if &tx.to == hash {
+                    } else if &tx.to == addr {
                         bal = bal.add(tx.amount)?;
                     }
                 }

@@ -1,9 +1,41 @@
 use actix::prelude::*;
-use godcoin::prelude::{net::ErrorKind, *};
+use godcoin::{
+    constants,
+    prelude::{net::ErrorKind, *},
+};
 use std::io::Cursor;
 
 mod common;
 pub use common::*;
+
+#[test]
+fn successful_broadcast() {
+    System::run(|| {
+        let minter = TestMinter::new();
+
+        let mut tx = MintTx {
+            base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
+            to: (&minter.genesis_info().script).into(),
+            amount: get_asset("10.0000 GRAEL"),
+            attachment: vec![],
+            attachment_name: "".to_owned(),
+            script: minter.genesis_info().script.clone(),
+        };
+
+        tx.append_sign(&minter.genesis_info().wallet_keys[1]);
+        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+
+        let tx = TxVariant::MintTx(tx);
+        let fut = minter.request(MsgRequest::Broadcast(tx));
+        Arbiter::spawn(fut.and_then(move |res| {
+            assert_eq!(res, MsgResponse::Broadcast());
+
+            System::current().stop();
+            Ok(())
+        }));
+    })
+    .unwrap();
+}
 
 #[test]
 fn get_properties() {
@@ -50,26 +82,22 @@ fn get_block() {
 }
 
 #[test]
-fn successful_broadcast() {
+fn get_address_info() {
     System::run(|| {
         let minter = TestMinter::new();
-
-        let mut tx = MintTx {
-            base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
-            to: (&minter.genesis_info().script).into(),
-            amount: get_asset("10.0000 GRAEL"),
-            attachment: vec![],
-            attachment_name: "".to_owned(),
-            script: minter.genesis_info().script.clone(),
-        };
-
-        tx.append_sign(&minter.genesis_info().wallet_keys[1]);
-        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-
-        let tx = TxVariant::MintTx(tx);
-        let fut = minter.request(MsgRequest::Broadcast(tx));
+        let addr = (&minter.genesis_info().script).into();
+        let fut = minter.request(MsgRequest::GetAddressInfo(addr));
         Arbiter::spawn(fut.and_then(move |res| {
-            assert_eq!(res, MsgResponse::Broadcast());
+            assert!(!res.is_err());
+
+            let expected = MsgResponse::GetAddressInfo(AddressInfo {
+                net_fee: constants::GRAEL_FEE_MIN,
+                addr_fee: constants::GRAEL_FEE_MIN
+                    .mul(constants::GRAEL_FEE_MULT)
+                    .unwrap(),
+                balance: get_asset("1000.0000 GRAEL"),
+            });
+            assert_eq!(res, expected);
 
             System::current().stop();
             Ok(())

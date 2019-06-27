@@ -18,7 +18,7 @@ pub fn init() -> Result<(), ()> {
 pub mod prelude {
     pub use super::asset::{self, Asset, AssetError, AssetErrorKind};
     pub use super::blockchain::{
-        index::IndexStatus, verify, Block, Blockchain, Properties, SignedBlock,
+        index::IndexStatus, verify, AddressInfo, Block, Blockchain, Properties, SignedBlock,
     };
     pub use super::crypto::{
         KeyPair, PrivateKey, PublicKey, ScriptHash, SigPair, Wif, WifError, WifErrorKind,

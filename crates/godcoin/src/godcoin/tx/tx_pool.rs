@@ -4,7 +4,7 @@ use crate::{
     prelude::{
         util,
         verify::{Config, TxErr},
-        Blockchain, TxPrecompData, TxVariant,
+        AddressInfo, Blockchain, ScriptHash, TxPrecompData, TxVariant,
     },
 };
 use std::{mem, sync::Arc};
@@ -25,6 +25,11 @@ impl TxPool {
             manager,
             txs: Vec::with_capacity(DEFAULT_TX_CAP),
         }
+    }
+
+    #[inline]
+    pub fn get_address_info(&self, addr: &ScriptHash) -> Option<AddressInfo> {
+        self.chain.get_address_info(addr, &self.txs)
     }
 
     pub fn push(&mut self, data: TxPrecompData, config: Config) -> Result<(), TxErr> {

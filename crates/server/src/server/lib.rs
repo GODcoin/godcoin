@@ -127,6 +127,15 @@ fn handle_direct_request(
     req: MsgRequest,
 ) -> Box<Future<Item = MsgResponse, Error = ()> + Send> {
     match req {
+        MsgRequest::Broadcast(tx) => {
+            let fut = data.minter.send(minter::PushTx(tx)).then(|res| {
+                Ok(match res.unwrap() {
+                    Ok(_) => MsgResponse::Broadcast(),
+                    Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e)),
+                })
+            });
+            Box::new(fut)
+        }
         MsgRequest::GetProperties => {
             let props = data.chain.get_properties();
             Box::new(ok(MsgResponse::GetProperties(props)))
@@ -135,10 +144,10 @@ fn handle_direct_request(
             Some(block) => Box::new(ok(MsgResponse::GetBlock(block.as_ref().clone()))),
             None => Box::new(ok(MsgResponse::Error(ErrorKind::InvalidHeight))),
         },
-        MsgRequest::Broadcast(tx) => {
-            let fut = data.minter.send(minter::PushTx(tx)).then(|res| {
+        MsgRequest::GetAddressInfo(addr) => {
+            let fut = data.minter.send(minter::GetAddrInfo(addr)).then(|res| {
                 Ok(match res.unwrap() {
-                    Ok(_) => MsgResponse::Broadcast(),
+                    Ok(info) => MsgResponse::GetAddressInfo(info),
                     Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e)),
                 })
             });
