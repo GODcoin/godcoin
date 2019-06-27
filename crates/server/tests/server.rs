@@ -28,7 +28,7 @@ fn successful_broadcast() {
         let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(fut.and_then(move |res| {
-            assert_eq!(res, MsgResponse::Broadcast());
+            assert_eq!(res, MsgResponse::Broadcast);
 
             System::current().stop();
             Ok(())

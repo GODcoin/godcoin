@@ -130,7 +130,7 @@ fn handle_direct_request(
         MsgRequest::Broadcast(tx) => {
             let fut = data.minter.send(minter::PushTx(tx)).then(|res| {
                 Ok(match res.unwrap() {
-                    Ok(_) => MsgResponse::Broadcast(),
+                    Ok(_) => MsgResponse::Broadcast,
                     Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e)),
                 })
             });

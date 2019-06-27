@@ -59,7 +59,7 @@ fn reindexed_blockchain() {
         let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
         Arbiter::spawn(
             fut.and_then(move |res| {
-                assert_eq!(res, MsgResponse::Broadcast());
+                assert_eq!(res, MsgResponse::Broadcast);
                 minter.produce_block().map(|_| minter)
             })
             .and_then(move |mut minter| {

@@ -213,7 +213,7 @@ impl ErrorKind {
 #[derive(Clone, Debug, PartialEq)]
 pub enum MsgResponse {
     Error(ErrorKind),
-    Broadcast(),
+    Broadcast,
     GetProperties(Properties),
     GetBlock(SignedBlock),
     GetAddressInfo(AddressInfo),
@@ -236,7 +236,7 @@ impl MsgResponse {
                 buf.push(MsgType::Error as u8);
                 err.serialize(buf);
             }
-            MsgResponse::Broadcast() => buf.push(MsgType::Broadcast as u8),
+            MsgResponse::Broadcast => buf.push(MsgType::Broadcast as u8),
             MsgResponse::GetProperties(props) => {
                 buf.reserve_exact(4096 + mem::size_of::<Properties>());
                 buf.push(MsgType::GetProperties as u8);
@@ -271,7 +271,7 @@ impl MsgResponse {
                 let err = ErrorKind::deserialize(cursor)?;
                 Ok(MsgResponse::Error(err))
             }
-            t if t == MsgType::Broadcast as u8 => Ok(MsgResponse::Broadcast()),
+            t if t == MsgType::Broadcast as u8 => Ok(MsgResponse::Broadcast),
             t if t == MsgType::GetProperties as u8 => {
                 let height = cursor.take_u64()?;
                 let owner = {

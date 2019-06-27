@@ -28,7 +28,7 @@ fn owner_tx_minter_key_change() {
         Arbiter::spawn(
             fut.and_then(move |res| {
                 assert!(!res.is_err(), format!("{:?}", res));
-                assert_eq!(res, MsgResponse::Broadcast());
+                assert_eq!(res, MsgResponse::Broadcast);
 
                 minter.produce_block().map(|_| minter)
             })
@@ -73,7 +73,7 @@ fn owner_tx_deny_mint_tokens() {
         Arbiter::spawn(
             fut.and_then(move |res| {
                 assert!(!res.is_err(), format!("{:?}", res));
-                assert_eq!(res, MsgResponse::Broadcast());
+                assert_eq!(res, MsgResponse::Broadcast);
 
                 minter.produce_block().map(|_| minter)
             })
@@ -136,7 +136,7 @@ fn owner_tx_accept_mint_tokens() {
         Arbiter::spawn(
             fut.and_then(move |res| {
                 assert!(!res.is_err(), format!("{:?}", res));
-                assert_eq!(res, MsgResponse::Broadcast());
+                assert_eq!(res, MsgResponse::Broadcast);
 
                 minter.produce_block().map(|_| minter)
             })
@@ -166,7 +166,7 @@ fn owner_tx_accept_mint_tokens() {
                 }
             })
             .and_then(|(res, minter)| {
-                assert_eq!(res, MsgResponse::Broadcast());
+                assert_eq!(res, MsgResponse::Broadcast);
                 minter.produce_block().map(|_| minter)
             })
             .and_then(move |minter| {

@@ -88,7 +88,7 @@ fn mint_tx_updates_balances() {
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(
             fut.and_then(move |res| {
-                assert_eq!(res, MsgResponse::Broadcast());
+                assert_eq!(res, MsgResponse::Broadcast);
                 minter.produce_block().map(|_| minter)
             })
             .and_then(|minter| {

@@ -30,7 +30,7 @@ fn transfer_from_minter() {
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(
             fut.and_then(move |res| {
-                assert_eq!(res, MsgResponse::Broadcast());
+                assert_eq!(res, MsgResponse::Broadcast);
                 minter.produce_block().map(|_| minter)
             })
             .and_then(move |minter| {
@@ -81,7 +81,7 @@ fn transfer_from_user() {
                 let user_1_addr = user_1_addr.clone();
                 let user_2_addr = user_2_addr.clone();
                 move |res| {
-                    assert_eq!(res, MsgResponse::Broadcast());
+                    assert_eq!(res, MsgResponse::Broadcast);
                     let tx = {
                         let mut tx = TransferTx {
                             base: create_tx_header(TxType::TRANSFER, "1.0000 GRAEL"),
@@ -100,7 +100,7 @@ fn transfer_from_user() {
                 }
             })
             .and_then(|(res, minter)| {
-                assert_eq!(res, MsgResponse::Broadcast());
+                assert_eq!(res, MsgResponse::Broadcast);
                 minter.produce_block().map(|_| minter)
             })
             .and_then(move |minter| {
