@@ -128,12 +128,6 @@ impl Blockchain {
         store.get(height)
     }
 
-    pub fn get_total_fee(&self, addr: &ScriptHash, additional_txs: &[TxVariant]) -> Option<Asset> {
-        let net_fee = self.get_network_fee()?;
-        let addr_fee = self.get_address_fee(addr, additional_txs)?;
-        addr_fee.add(net_fee)
-    }
-
     pub fn get_address_info(
         &self,
         addr: &ScriptHash,
@@ -381,9 +375,10 @@ impl Blockchain {
                 if transfer.memo.len() > MAX_MEMO_BYTE_SIZE {
                     return Err(TxErr::TxTooLarge);
                 }
-                let total_fee = self
-                    .get_total_fee(&transfer.from, additional_txs)
+                let info = self
+                    .get_address_info(&transfer.from, additional_txs)
                     .ok_or(TxErr::Arithmetic)?;
+                let total_fee = info.net_fee.add(info.addr_fee).ok_or(TxErr::Arithmetic)?;
                 if tx.fee < total_fee {
                     return Err(TxErr::InvalidFeeAmount);
                 } else if transfer.from != (&transfer.script).into() {
@@ -397,9 +392,8 @@ impl Blockchain {
                     return Err(TxErr::ScriptRetFalse);
                 }
 
-                let bal = self
-                    .get_balance(&transfer.from, additional_txs)
-                    .ok_or(TxErr::Arithmetic)?
+                let bal = info
+                    .balance
                     .sub(transfer.fee)
                     .ok_or(TxErr::Arithmetic)?
                     .sub(transfer.amount)
