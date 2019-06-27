@@ -172,6 +172,44 @@ fn insufficient_balance_caused_by_fee() {
 }
 
 #[test]
+fn insufficient_fee() {
+    System::run(|| {
+        let minter = TestMinter::new();
+
+        let from_addr = ScriptHash::from(&minter.genesis_info().script);
+        let info = minter.chain().get_address_info(&from_addr, &[]).unwrap();
+        let bad_fee = info.net_fee.add(info.addr_fee).unwrap().sub(get_asset("0.0001 GRAEL")).unwrap();
+        let tx = {
+            let mut tx = TransferTx {
+                base: create_tx_header(TxType::TRANSFER, &bad_fee.to_string()),
+                from: from_addr.clone(),
+                to: KeyPair::gen().0.into(),
+                amount: get_asset("0.0000 GRAEL"),
+                memo: vec![],
+                script: minter.genesis_info().script.clone(),
+            };
+            tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+            tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+            TxVariant::TransferTx(tx)
+        };
+        let fut = minter.request(MsgRequest::Broadcast(tx));
+        Arbiter::spawn(
+            fut.and_then(move |res| {
+                assert_eq!(
+                    res,
+                    MsgResponse::Error(net::ErrorKind::TxValidation(
+                        verify::TxErr::InvalidFeeAmount
+                    ))
+                );
+                System::current().stop();
+                Ok(())
+            }),
+        );
+    })
+    .unwrap();
+}
+
+#[test]
 fn insufficient_balance_caused_by_amt() {
     System::run(|| {
         let minter = TestMinter::new();
