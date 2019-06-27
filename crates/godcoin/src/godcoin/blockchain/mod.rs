@@ -31,6 +31,12 @@ pub struct AddressInfo {
     pub balance: Asset,
 }
 
+impl AddressInfo {
+    pub fn total_fee(&self) -> Option<Asset> {
+        self.net_fee.add(self.addr_fee)
+    }
+}
+
 pub struct Blockchain {
     indexer: Arc<Indexer>,
     store: Mutex<BlockStore>,
@@ -378,7 +384,7 @@ impl Blockchain {
                 let info = self
                     .get_address_info(&transfer.from, additional_txs)
                     .ok_or(TxErr::Arithmetic)?;
-                let total_fee = info.net_fee.add(info.addr_fee).ok_or(TxErr::Arithmetic)?;
+                let total_fee = info.total_fee().ok_or(TxErr::Arithmetic)?;
                 if tx.fee < total_fee {
                     return Err(TxErr::InvalidFeeAmount);
                 } else if transfer.from != (&transfer.script).into() {
