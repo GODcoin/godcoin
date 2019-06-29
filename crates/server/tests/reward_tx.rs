@@ -10,9 +10,9 @@ fn deny_broadcasted_reward_tx() {
         let minter = TestMinter::new();
 
         let tx = TxVariant::RewardTx(RewardTx {
-            base: create_tx_header(TxType::REWARD, "0.0000 GRAEL"),
+            base: create_tx_header(TxType::REWARD, "0.00000 GRAEL"),
             to: KeyPair::gen().0.into(),
-            rewards: get_asset("1.0000 GRAEL"),
+            rewards: get_asset("1.00000 GRAEL"),
         });
 
         let fut = minter.request(MsgRequest::Broadcast(tx));

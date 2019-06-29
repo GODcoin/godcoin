@@ -14,7 +14,7 @@ fn owner_tx_minter_key_change() {
 
         let tx = {
             let mut tx = OwnerTx {
-                base: create_tx_header(TxType::OWNER, "0.0000 GRAEL"),
+                base: create_tx_header(TxType::OWNER, "0.00000 GRAEL"),
                 minter: minter_key.0,
                 wallet: wallet_key.0.into(),
                 script: minter.genesis_info().script.clone(),
@@ -59,7 +59,7 @@ fn owner_tx_deny_mint_tokens() {
 
         let tx = {
             let mut tx = OwnerTx {
-                base: create_tx_header(TxType::OWNER, "0.0000 GRAEL"),
+                base: create_tx_header(TxType::OWNER, "0.00000 GRAEL"),
                 minter: minter.genesis_info().minter_key.0.clone(),
                 wallet: (&wallet_key.0).into(),
                 script: minter.genesis_info().script.clone(),
@@ -85,9 +85,9 @@ fn owner_tx_deny_mint_tokens() {
             })
             .and_then(move |minter| {
                 let mut tx = MintTx {
-                    base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
+                    base: create_tx_header(TxType::MINT, "0.00000 GRAEL"),
                     to: (&minter.genesis_info().script).into(),
-                    amount: get_asset("10.0000 GRAEL"),
+                    amount: get_asset("10.00000 GRAEL"),
                     attachment: vec![],
                     attachment_name: "".to_owned(),
                     // This is the old owner script, validation should fail
@@ -122,7 +122,7 @@ fn owner_tx_accept_mint_tokens() {
 
         let tx = {
             let mut tx = OwnerTx {
-                base: create_tx_header(TxType::OWNER, "0.0000 GRAEL"),
+                base: create_tx_header(TxType::OWNER, "0.00000 GRAEL"),
                 minter: minter.genesis_info().minter_key.0.clone(),
                 wallet: (&wallet_key.0).into(),
                 script: minter.genesis_info().script.clone(),
@@ -150,9 +150,9 @@ fn owner_tx_accept_mint_tokens() {
                 let wallet_key = wallet_key.clone();
                 move |minter| {
                     let mut tx = MintTx {
-                        base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
+                        base: create_tx_header(TxType::MINT, "0.00000 GRAEL"),
                         to: wallet_key.0.clone().into(),
-                        amount: get_asset("1000.0000 GRAEL"),
+                        amount: get_asset("1000.00000 GRAEL"),
                         attachment: vec![],
                         attachment_name: "".to_owned(),
                         script: wallet_key.0.clone().into(),
@@ -172,11 +172,11 @@ fn owner_tx_accept_mint_tokens() {
             .and_then(move |minter| {
                 let chain = minter.chain();
                 let props = chain.get_properties();
-                let expected_bal = get_asset("2000.0000 GRAEL");
+                let expected_bal = get_asset("2000.00000 GRAEL");
                 assert_eq!(props.token_supply, expected_bal);
 
                 let bal = chain.get_balance(&wallet_key.0.clone().into(), &[]);
-                assert_eq!(bal, Some(get_asset("1000.0000 GRAEL")));
+                assert_eq!(bal, Some(get_asset("1000.00000 GRAEL")));
 
                 System::current().stop();
                 Ok(())

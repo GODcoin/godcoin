@@ -14,9 +14,9 @@ fn successful_broadcast() {
         let minter = TestMinter::new();
 
         let mut tx = MintTx {
-            base: create_tx_header(TxType::MINT, "0.0000 GRAEL"),
+            base: create_tx_header(TxType::MINT, "0.00000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
-            amount: get_asset("10.0000 GRAEL"),
+            amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
             attachment_name: "".to_owned(),
             script: minter.genesis_info().script.clone(),
@@ -95,7 +95,7 @@ fn get_address_info() {
                 addr_fee: constants::GRAEL_FEE_MIN
                     .mul(constants::GRAEL_FEE_MULT)
                     .unwrap(),
-                balance: get_asset("1000.0000 GRAEL"),
+                balance: get_asset("1000.00000 GRAEL"),
             });
             assert_eq!(res, expected);
 

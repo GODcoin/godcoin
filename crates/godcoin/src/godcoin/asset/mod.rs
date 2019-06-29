@@ -9,7 +9,7 @@ pub mod error;
 pub use self::error::*;
 
 pub const MAX_STR_LEN: usize = 26;
-pub const MAX_PRECISION: u8 = 4;
+pub const MAX_PRECISION: u8 = 5;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct Asset {
@@ -140,7 +140,7 @@ impl FromStr for Asset {
 
                             if decimals != MAX_PRECISION {
                                 return Err(AssetError {
-                                    kind: AssetErrorKind::InvalidAmount,
+                                    kind: AssetErrorKind::InvalidFormat,
                                 });
                             }
                         }
@@ -157,7 +157,7 @@ impl FromStr for Asset {
                     }
                     None => {
                         return Err(AssetError {
-                            kind: AssetErrorKind::InvalidAmount,
+                            kind: AssetErrorKind::InvalidFormat,
                         });
                     }
                 }
@@ -198,13 +198,13 @@ mod tests {
             assert_eq!(asset.amount.to_string(), amount);
         };
 
-        c(get_asset("1.0000 GRAEL"), "10000");
-        c(get_asset("-1.0000 GRAEL"), "-10000");
-        c(get_asset(".1000 GRAEL"), "1000");
-        c(get_asset("-.1000 GRAEL"), "-1000");
-        c(get_asset("0.1000 GRAEL"), "1000");
-        c(get_asset("0.0000 GRAEL"), "0");
-        c(get_asset("-0.0000 GRAEL"), "0");
+        c(get_asset("1.00000 GRAEL"), "100000");
+        c(get_asset("-1.00000 GRAEL"), "-100000");
+        c(get_asset(".10000 GRAEL"), "10000");
+        c(get_asset("-.10000 GRAEL"), "-10000");
+        c(get_asset("0.10000 GRAEL"), "10000");
+        c(get_asset("0.00000 GRAEL"), "0");
+        c(get_asset("-0.00000 GRAEL"), "0");
     }
 
     #[test]
@@ -212,12 +212,13 @@ mod tests {
         let c = |asset: Asset, s: &str| {
             assert_eq!(asset.to_string(), s);
         };
-        c(get_asset("1.0001 GRAEL"), "1.0001 GRAEL");
-        c(get_asset("0.0001 GRAEL"), "0.0001 GRAEL");
-        c(get_asset("-0.0001 GRAEL"), "-0.0001 GRAEL");
-        c(get_asset(".0001 GRAEL"), "0.0001 GRAEL");
-        c(get_asset(".1000 GRAEL"), "0.1000 GRAEL");
-        c(get_asset("1.0000 GRAEL"), "1.0000 GRAEL");
+        c(get_asset("1.00001 GRAEL"), "1.00001 GRAEL");
+        c(get_asset("0.00001 GRAEL"), "0.00001 GRAEL");
+        c(get_asset("0.00010 GRAEL"), "0.00010 GRAEL");
+        c(get_asset("-0.00001 GRAEL"), "-0.00001 GRAEL");
+        c(get_asset(".00001 GRAEL"), "0.00001 GRAEL");
+        c(get_asset(".10000 GRAEL"), "0.10000 GRAEL");
+        c(get_asset("1.00000 GRAEL"), "1.00000 GRAEL");
     }
 
     #[test]
@@ -227,29 +228,29 @@ mod tests {
             assert_eq!(e.kind, err);
         };
 
-        c("1e10 GRAEL", AssetErrorKind::InvalidAmount);
-        c("a100 GRAEL", AssetErrorKind::InvalidAmount);
-        c("100a GRAEL", AssetErrorKind::InvalidAmount);
+        c("1b10.00000 GRAEL", AssetErrorKind::InvalidAmount);
+        c("a100.00000 GRAEL", AssetErrorKind::InvalidAmount);
+        c("100.0000a GRAEL", AssetErrorKind::InvalidAmount);
 
-        c("1 GRAEL", AssetErrorKind::InvalidAmount);
-        c("1. GRAEL", AssetErrorKind::InvalidAmount);
-        c(".1 GRAEL", AssetErrorKind::InvalidAmount);
-        c("-.1 GRAEL", AssetErrorKind::InvalidAmount);
-        c("0.1 GRAEL", AssetErrorKind::InvalidAmount);
-        c("1.0 GRAEL", AssetErrorKind::InvalidAmount);
-        c("0 GRAEL", AssetErrorKind::InvalidAmount);
-        c("-0.0 GRAEL", AssetErrorKind::InvalidAmount);
-        c("-1.0 GRAEL", AssetErrorKind::InvalidAmount);
-        c("1.00000 GRAEL", AssetErrorKind::InvalidAmount);
+        c("1 GRAEL", AssetErrorKind::InvalidFormat);
+        c("1. GRAEL", AssetErrorKind::InvalidFormat);
+        c(".1 GRAEL", AssetErrorKind::InvalidFormat);
+        c("-.1 GRAEL", AssetErrorKind::InvalidFormat);
+        c("0.1 GRAEL", AssetErrorKind::InvalidFormat);
+        c("1.0 GRAEL", AssetErrorKind::InvalidFormat);
+        c("0 GRAEL", AssetErrorKind::InvalidFormat);
+        c("-0.0 GRAEL", AssetErrorKind::InvalidFormat);
+        c("-1.0 GRAEL", AssetErrorKind::InvalidFormat);
 
         c(
-            "1234567890123456789012345678 GRAEL",
+            "123456789012345678901 GRAEL",
             AssetErrorKind::StrTooLarge,
         );
+        c("1.000000 GRAEL", AssetErrorKind::InvalidFormat);
         c("1.0000", AssetErrorKind::InvalidFormat);
 
-        c("1.0000 GRAEL a", AssetErrorKind::InvalidAssetType);
-        c("1.0000 grael", AssetErrorKind::InvalidAssetType);
+        c("1.00000 GRAEL a", AssetErrorKind::InvalidAssetType);
+        c("1.00000 grael", AssetErrorKind::InvalidAssetType);
     }
 
     #[test]
@@ -258,47 +259,47 @@ mod tests {
             assert_eq!(asset.to_string(), amount);
         };
 
-        let a = get_asset("123.4560 GRAEL");
-        c(a.add(get_asset("2.0000 GRAEL")).unwrap(), "125.4560 GRAEL");
-        c(a.add(get_asset("-2.0000 GRAEL")).unwrap(), "121.4560 GRAEL");
-        c(a.add(get_asset(".0001 GRAEL")).unwrap(), "123.4561 GRAEL");
-        c(a.sub(get_asset("2.0000 GRAEL")).unwrap(), "121.4560 GRAEL");
-        c(a.sub(get_asset("-2.0000 GRAEL")).unwrap(), "125.4560 GRAEL");
+        let a = get_asset("123.45600 GRAEL");
+        c(a.add(get_asset("2.00000 GRAEL")).unwrap(), "125.45600 GRAEL");
+        c(a.add(get_asset("-2.00000 GRAEL")).unwrap(), "121.45600 GRAEL");
+        c(a.add(get_asset(".00001 GRAEL")).unwrap(), "123.45601 GRAEL");
+        c(a.sub(get_asset("2.00000 GRAEL")).unwrap(), "121.45600 GRAEL");
+        c(a.sub(get_asset("-2.00000 GRAEL")).unwrap(), "125.45600 GRAEL");
         c(
-            a.mul(get_asset("100000.1111 GRAEL")).unwrap(),
-            "12345613.7159 GRAEL",
+            a.mul(get_asset("100000.11111 GRAEL")).unwrap(),
+            "12345613.71719 GRAEL",
         );
         c(
-            a.mul(get_asset("-100000.1111 GRAEL")).unwrap(),
-            "-12345613.7159 GRAEL",
+            a.mul(get_asset("-100000.11111 GRAEL")).unwrap(),
+            "-12345613.71719 GRAEL",
         );
-        c(a.div(get_asset("23.0000 GRAEL")).unwrap(), "5.3676 GRAEL");
-        c(a.div(get_asset("-23.0000 GRAEL")).unwrap(), "-5.3676 GRAEL");
-        c(a.pow(2).unwrap(), "15241.3839 GRAEL");
-        c(a.pow(3).unwrap(), "1881640.2952 GRAEL");
-        c(a, "123.4560 GRAEL");
+        c(a.div(get_asset("23.00000 GRAEL")).unwrap(), "5.36765 GRAEL");
+        c(a.div(get_asset("-23.00000 GRAEL")).unwrap(), "-5.36765 GRAEL");
+        c(a.pow(2).unwrap(), "15241.38393 GRAEL");
+        c(a.pow(3).unwrap(), "1881640.29520 GRAEL");
+        c(a, "123.45600 GRAEL");
 
-        c(get_asset("1.0002 GRAEL").pow(1000).unwrap(), "1.2213 GRAEL");
+        c(get_asset("1.00020 GRAEL").pow(1000).unwrap(), "1.22137 GRAEL");
         c(
-            get_asset("10.0000 GRAEL")
-                .div(get_asset("2.0000 GRAEL"))
+            get_asset("10.00000 GRAEL")
+                .div(get_asset("2.00000 GRAEL"))
                 .unwrap(),
-            "5.0000 GRAEL",
+            "5.00000 GRAEL",
         );
         c(
-            get_asset("5.0000 GRAEL")
-                .div(get_asset("10.0000 GRAEL"))
+            get_asset("5.00000 GRAEL")
+                .div(get_asset("10.00000 GRAEL"))
                 .unwrap(),
-            "0.5000 GRAEL",
+            "0.50000 GRAEL",
         );
 
-        assert!(a.div(get_asset("0.0000 GRAEL")).is_none());
+        assert!(a.div(get_asset("0.00000 GRAEL")).is_none());
     }
 
     #[test]
     fn test_invalid_arithmetic() {
-        let a = get_asset("10.0000 GRAEL");
-        let b = get_asset("922337203685477.5807 GRAEL");
+        let a = get_asset("10.00000 GRAEL");
+        let b = get_asset("92233720368547.75807 GRAEL");
 
         assert_eq!(a.add(b), None);
         assert_eq!(a.mul(Asset::new(-1)).unwrap().sub(b), None);
