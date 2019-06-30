@@ -502,8 +502,7 @@ fn tx_addr_dynamic_fee_increase() {
                             };
 
                             // Test the delta reset for address fees
-                            let expected_fee =
-                                GRAEL_FEE_MIN.mul(GRAEL_FEE_MULT.pow(1).unwrap()).unwrap();
+                            let expected_fee = GRAEL_FEE_MIN.mul(GRAEL_FEE_MULT).unwrap();
                             assert_eq!(addr_info.addr_fee, expected_fee);
                             Ok(())
                         })
