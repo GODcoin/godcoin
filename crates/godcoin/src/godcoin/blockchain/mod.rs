@@ -167,6 +167,7 @@ impl Blockchain {
                 };
                 if has_match {
                     tx_count += 1;
+                    // Reset the delta count
                     delta = 0;
                 }
             };
@@ -180,6 +181,7 @@ impl Blockchain {
             delta += 1;
             let block = self.get_block(i).unwrap();
             for tx in &block.transactions {
+                // Delta gets reset if a match is found
                 handle_tx_match!(tx);
             }
             if delta == FEE_RESET_WINDOW {

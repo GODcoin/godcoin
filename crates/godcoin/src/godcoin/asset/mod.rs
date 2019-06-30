@@ -242,10 +242,7 @@ mod tests {
         c("-0.0 GRAEL", AssetErrorKind::InvalidFormat);
         c("-1.0 GRAEL", AssetErrorKind::InvalidFormat);
 
-        c(
-            "123456789012345678901 GRAEL",
-            AssetErrorKind::StrTooLarge,
-        );
+        c("123456789012345678901 GRAEL", AssetErrorKind::StrTooLarge);
         c("1.000000 GRAEL", AssetErrorKind::InvalidFormat);
         c("1.0000", AssetErrorKind::InvalidFormat);
 
@@ -260,11 +257,23 @@ mod tests {
         };
 
         let a = get_asset("123.45600 GRAEL");
-        c(a.add(get_asset("2.00000 GRAEL")).unwrap(), "125.45600 GRAEL");
-        c(a.add(get_asset("-2.00000 GRAEL")).unwrap(), "121.45600 GRAEL");
+        c(
+            a.add(get_asset("2.00000 GRAEL")).unwrap(),
+            "125.45600 GRAEL",
+        );
+        c(
+            a.add(get_asset("-2.00000 GRAEL")).unwrap(),
+            "121.45600 GRAEL",
+        );
         c(a.add(get_asset(".00001 GRAEL")).unwrap(), "123.45601 GRAEL");
-        c(a.sub(get_asset("2.00000 GRAEL")).unwrap(), "121.45600 GRAEL");
-        c(a.sub(get_asset("-2.00000 GRAEL")).unwrap(), "125.45600 GRAEL");
+        c(
+            a.sub(get_asset("2.00000 GRAEL")).unwrap(),
+            "121.45600 GRAEL",
+        );
+        c(
+            a.sub(get_asset("-2.00000 GRAEL")).unwrap(),
+            "125.45600 GRAEL",
+        );
         c(
             a.mul(get_asset("100000.11111 GRAEL")).unwrap(),
             "12345613.71719 GRAEL",
@@ -274,12 +283,18 @@ mod tests {
             "-12345613.71719 GRAEL",
         );
         c(a.div(get_asset("23.00000 GRAEL")).unwrap(), "5.36765 GRAEL");
-        c(a.div(get_asset("-23.00000 GRAEL")).unwrap(), "-5.36765 GRAEL");
+        c(
+            a.div(get_asset("-23.00000 GRAEL")).unwrap(),
+            "-5.36765 GRAEL",
+        );
         c(a.pow(2).unwrap(), "15241.38393 GRAEL");
         c(a.pow(3).unwrap(), "1881640.29520 GRAEL");
         c(a, "123.45600 GRAEL");
 
-        c(get_asset("1.00020 GRAEL").pow(1000).unwrap(), "1.22137 GRAEL");
+        c(
+            get_asset("1.00020 GRAEL").pow(1000).unwrap(),
+            "1.22137 GRAEL",
+        );
         c(
             get_asset("10.00000 GRAEL")
                 .div(get_asset("2.00000 GRAEL"))

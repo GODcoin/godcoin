@@ -1,5 +1,7 @@
 use actix::prelude::*;
-use godcoin::prelude::*;
+use futures::stream::iter_ok;
+use godcoin::{constants::*, prelude::*};
+use std::sync::{Arc, Mutex};
 
 mod common;
 pub use common::*;
@@ -178,7 +180,11 @@ fn insufficient_fee() {
 
         let from_addr = ScriptHash::from(&minter.genesis_info().script);
         let info = minter.chain().get_address_info(&from_addr, &[]).unwrap();
-        let bad_fee = info.net_fee.add(info.addr_fee).unwrap().sub(get_asset("0.00001 GRAEL")).unwrap();
+        let bad_fee = info
+            .total_fee()
+            .unwrap()
+            .sub(get_asset("0.00001 GRAEL"))
+            .unwrap();
         let tx = {
             let mut tx = TransferTx {
                 base: create_tx_header(TxType::TRANSFER, &bad_fee.to_string()),
@@ -193,18 +199,16 @@ fn insufficient_fee() {
             TxVariant::TransferTx(tx)
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
-        Arbiter::spawn(
-            fut.and_then(move |res| {
-                assert_eq!(
-                    res,
-                    MsgResponse::Error(net::ErrorKind::TxValidation(
-                        verify::TxErr::InvalidFeeAmount
-                    ))
-                );
-                System::current().stop();
-                Ok(())
-            }),
-        );
+        Arbiter::spawn(fut.and_then(move |res| {
+            assert_eq!(
+                res,
+                MsgResponse::Error(net::ErrorKind::TxValidation(
+                    verify::TxErr::InvalidFeeAmount
+                ))
+            );
+            System::current().stop();
+            Ok(())
+        }));
     })
     .unwrap();
 }
@@ -337,6 +341,178 @@ fn script_too_large() {
             System::current().stop();
             Ok(())
         }));
+    })
+    .unwrap();
+}
+
+#[test]
+fn tx_addr_dynamic_fee_increase_in_pool() {
+    System::run(|| {
+        let minter = TestMinter::new();
+
+        let addr_info = Arc::new(Mutex::new(AddressInfo {
+            net_fee: Asset::new(0),
+            addr_fee: Asset::new(0),
+            balance: Asset::new(0),
+        }));
+        let from_addr = ScriptHash::from(&minter.genesis_info().script);
+
+        let fut = minter.request(MsgRequest::GetAddressInfo(from_addr.clone()));
+        Arbiter::spawn(
+            fut.and_then({
+                let addr_info = addr_info.clone();
+                let from_addr = from_addr.clone();
+                move |res| {
+                    let mut addr_info = addr_info.lock().unwrap();
+                    *addr_info = match res {
+                        MsgResponse::GetAddressInfo(info) => info,
+                        _ => panic!("Expected GetAddressInfo response"),
+                    };
+
+                    let tx = {
+                        let mut tx = TransferTx {
+                            base: create_tx_header(
+                                TxType::TRANSFER,
+                                &addr_info.total_fee().unwrap().to_string(),
+                            ),
+                            from: from_addr.clone(),
+                            to: KeyPair::gen().0.into(),
+                            amount: Asset::new(0),
+                            memo: vec![],
+                            script: minter.genesis_info().script.clone(),
+                        };
+                        tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+                        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+                        TxVariant::TransferTx(tx)
+                    };
+                    minter
+                        .request(MsgRequest::Broadcast(tx))
+                        .and_then(move |res| {
+                            assert_eq!(res, MsgResponse::Broadcast);
+                            minter
+                                .request(MsgRequest::GetAddressInfo(from_addr))
+                                .map(move |res| (res, minter))
+                        })
+                }
+            })
+            .and_then({
+                move |(res, minter)| {
+                    let old_addr_info = addr_info.lock().unwrap();
+                    let addr_info = match res {
+                        MsgResponse::GetAddressInfo(info) => info,
+                        _ => panic!("Expected GetAddressInfo response"),
+                    };
+
+                    assert!(addr_info.addr_fee > old_addr_info.addr_fee);
+
+                    // Transaction count always start at 1, so test it as though two transactions
+                    // were made.
+                    let expected_fee = GRAEL_FEE_MIN.mul(GRAEL_FEE_MULT.pow(2).unwrap()).unwrap();
+                    assert_eq!(addr_info.addr_fee, expected_fee);
+
+                    minter.produce_block().and_then(move |res| {
+                        res.unwrap();
+                        minter
+                            .request(MsgRequest::GetAddressInfo(from_addr))
+                            .map(move |res| (res, expected_fee))
+                    })
+                }
+            })
+            .and_then(|(res, expected_fee)| {
+                let addr_info = match res {
+                    MsgResponse::GetAddressInfo(info) => info,
+                    _ => panic!("Expected GetAddressInfo response"),
+                };
+                assert_eq!(addr_info.addr_fee, expected_fee);
+
+                System::current().stop();
+                Ok(())
+            }),
+        );
+    })
+    .unwrap();
+}
+
+#[test]
+fn tx_addr_dynamic_fee_increase() {
+    System::run(|| {
+        let minter = Arc::new(TestMinter::new());
+        let from_addr = ScriptHash::from(&minter.genesis_info().script);
+
+        Arbiter::spawn(
+            iter_ok(1..10)
+                .for_each({
+                    let minter = Arc::clone(&minter);
+                    let from_addr = from_addr.clone();
+                    move |num| {
+                        let minter = Arc::clone(&minter);
+                        let from_addr = from_addr.clone();
+                        minter
+                            .request(MsgRequest::GetAddressInfo(from_addr.clone()))
+                            .and_then(move |res| {
+                                let addr_info = match res {
+                                    MsgResponse::GetAddressInfo(info) => info,
+                                    _ => panic!("Expected GetAddressInfo response"),
+                                };
+
+                                let expected_fee =
+                                    GRAEL_FEE_MIN.mul(GRAEL_FEE_MULT.pow(num).unwrap()).unwrap();
+                                assert_eq!(addr_info.addr_fee, expected_fee);
+
+                                let tx = {
+                                    let mut tx = TransferTx {
+                                        base: create_tx_header(
+                                            TxType::TRANSFER,
+                                            &addr_info.total_fee().unwrap().to_string(),
+                                        ),
+                                        from: from_addr.clone(),
+                                        to: KeyPair::gen().0.into(),
+                                        amount: Asset::new(0),
+                                        memo: vec![],
+                                        script: minter.genesis_info().script.clone(),
+                                    };
+                                    tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+                                    tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+                                    TxVariant::TransferTx(tx)
+                                };
+                                minter
+                                    .request(MsgRequest::Broadcast(tx))
+                                    .and_then(move |res| {
+                                        assert!(!res.is_err());
+                                        assert_eq!(res, MsgResponse::Broadcast);
+                                        minter.produce_block().map(|res| res.unwrap())
+                                    })
+                            })
+                    }
+                })
+                .and_then({
+                    let minter = Arc::clone(&minter);
+                    move |_| {
+                        iter_ok(0..=FEE_RESET_WINDOW)
+                            .for_each(move |_| minter.produce_block().map(|res| res.unwrap()))
+                    }
+                })
+                .and_then(move |_| {
+                    minter
+                        .request(MsgRequest::GetAddressInfo(from_addr.clone()))
+                        .and_then(move |res| {
+                            let addr_info = match res {
+                                MsgResponse::GetAddressInfo(info) => info,
+                                _ => panic!("Expected GetAddressInfo response"),
+                            };
+
+                            // Test the delta reset for address fees
+                            let expected_fee =
+                                GRAEL_FEE_MIN.mul(GRAEL_FEE_MULT.pow(1).unwrap()).unwrap();
+                            assert_eq!(addr_info.addr_fee, expected_fee);
+                            Ok(())
+                        })
+                })
+                .and_then(|_| {
+                    System::current().stop();
+                    Ok(())
+                }),
+        );
     })
     .unwrap();
 }
