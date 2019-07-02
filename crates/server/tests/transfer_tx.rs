@@ -1,5 +1,8 @@
 use actix::prelude::*;
-use futures::stream::iter_ok;
+use futures::{
+    future::{self, Either},
+    stream::iter_ok,
+};
 use godcoin::{constants::*, prelude::*};
 use std::sync::{Arc, Mutex};
 
@@ -512,6 +515,144 @@ fn tx_addr_dynamic_fee_increase() {
                     Ok(())
                 }),
         );
+    })
+    .unwrap();
+}
+
+#[test]
+fn net_fee_dynamic_increase() {
+    System::run(|| {
+        let minter = Arc::new(TestMinter::new());
+        let from_addr = ScriptHash::from(&minter.genesis_info().script);
+        let addrs = Arc::new((0..100).map(|_| KeyPair::gen()).collect::<Vec<_>>());
+
+        #[rustfmt::skip]
+        let fut = iter_ok(0..addrs.len()).for_each({
+            let minter = Arc::clone(&minter);
+            let from_addr = from_addr.clone();
+            let addrs = Arc::clone(&addrs);
+            move |addr_index| {
+                let minter = Arc::clone(&minter);
+                let tx = {
+                    let mut tx = TransferTx {
+                        base: create_tx_header(TxType::TRANSFER, "1.00000 GRAEL"),
+                        from: from_addr.clone(),
+                        to: (&addrs[addr_index].0).into(),
+                        amount: Asset::new(100000),
+                        memo: vec![],
+                        script: minter.genesis_info().script.clone(),
+                    };
+                    tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+                    tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+                    TxVariant::TransferTx(tx)
+                };
+
+                let req = MsgRequest::Broadcast(tx);
+                minter.request(req.clone()).and_then(move |res| {
+                    let exp = MsgResponse::Error(net::ErrorKind::TxValidation(
+                        verify::TxErr::InvalidFeeAmount,
+                    ));
+                    if res == exp {
+                        Either::A(
+                            iter_ok(0..=FEE_RESET_WINDOW)
+                                .for_each({
+                                    let minter = Arc::clone(&minter);
+                                    move |_| minter.produce_block().map(|res| res.unwrap())
+                                })
+                                .and_then(move |_| minter.request(req))
+                                .map(|res| {
+                                    assert_eq!(res, MsgResponse::Broadcast);
+                                }),
+                        )
+                    } else {
+                        assert_eq!(res, MsgResponse::Broadcast);
+                        Either::B(future::ok(()))
+                    }
+                })
+            }
+        })
+        .and_then({
+            let minter = Arc::clone(&minter);
+            move |_| {
+                iter_ok(0..addrs.len()).for_each(move |addr_index| {
+                    let addrs = Arc::clone(&addrs);
+                    let addr = &addrs[addr_index];
+
+                    let tx = {
+                        let mut tx = TransferTx {
+                            base: create_tx_header(TxType::TRANSFER, "1.00000 GRAEL"),
+                            from: (&addr.0).into(),
+                            to: from_addr.clone(),
+                            amount: Asset::new(0),
+                            memo: vec![],
+                            script: addr.0.clone().into(),
+                        };
+                        tx.append_sign(&addr);
+                        TxVariant::TransferTx(tx)
+                    };
+
+                    minter
+                        .request(MsgRequest::Broadcast(tx))
+                        .and_then(move |res| {
+                            assert_eq!(res, MsgResponse::Broadcast);
+                            Ok(())
+                        })
+                })
+            }
+        })
+        .and_then({
+            let minter = Arc::clone(&minter);
+            move |_| {
+                iter_ok(0..5).for_each({
+                    let minter = Arc::clone(&minter);
+                    move |_| {
+                        minter.produce_block().map(move |res| res.unwrap())
+                    }
+                }).and_then({
+                    let minter = Arc::clone(&minter);
+                    move |_| {
+                        minter.request(MsgRequest::GetProperties)
+                    }
+                }).map(move |res| {
+                    let props = match res {
+                        MsgResponse::GetProperties(props) => props,
+                        _ => panic!("Expected GetProperties response"),
+                    };
+
+                    let chain = minter.chain();
+                    let max_height = props.height - (props.height % 5);
+                    let min_height = max_height - NETWORK_FEE_AVG_WINDOW;
+                    assert!(min_height < max_height);
+
+                    let tx_count = (min_height..=max_height).fold(1u64, |tx_count, height| {
+                        let block = chain.get_block(height).unwrap();
+                        tx_count + block.transactions.len() as u64
+                    });
+                    let tx_count = (tx_count / NETWORK_FEE_AVG_WINDOW) as u16;
+                    assert!(tx_count > 10);
+
+                    let fee = GRAEL_FEE_MIN.mul(GRAEL_FEE_NET_MULT.pow(tx_count).unwrap());
+                    assert_eq!(Some(props.network_fee), fee);
+                })
+            }
+        }).and_then(move |_| {
+            iter_ok(0..=NETWORK_FEE_AVG_WINDOW).for_each({
+                let minter = Arc::clone(&minter);
+                move |_| {
+                    minter.produce_block().map(move |res| res.unwrap())
+                }
+            }).and_then(move |_| {
+                // Test the delta reset for network fees
+                let expected_fee = GRAEL_FEE_MIN.mul(GRAEL_FEE_NET_MULT);
+                assert_eq!(minter.chain().get_network_fee(), expected_fee);
+
+                Ok(())
+            })
+        }).and_then(|_| {
+            System::current().stop();
+            Ok(())
+        });
+        Arbiter::spawn(fut);
     })
     .unwrap();
 }
