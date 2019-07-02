@@ -22,7 +22,7 @@ pub mod prelude {
 
 use prelude::*;
 
-pub struct ServerConfig {
+pub struct ServerOpts {
     pub home: PathBuf,
     pub minter_key: KeyPair,
     pub bind_addr: String,
@@ -34,7 +34,7 @@ pub struct ServerData {
     pub minter: Addr<Minter>,
 }
 
-pub fn start(config: ServerConfig) {
+pub fn start(config: ServerOpts) {
     let blocklog_loc = &Path::join(&config.home, "blklog");
     let index_loc = &Path::join(&config.home, "index");
     let blockchain = Arc::new(Blockchain::new(blocklog_loc, index_loc));
