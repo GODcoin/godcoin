@@ -7,7 +7,12 @@ use actix_web::{
 use godcoin::{blockchain::GenesisBlockInfo, prelude::*};
 use godcoin_server::{index, prelude::*, ServerData};
 use sodiumoxide::randombytes;
-use std::{env, fs, io::Cursor, path::PathBuf, sync::Arc};
+use std::{
+    env, fs,
+    io::Cursor,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 type Indexed = bool;
 
@@ -25,7 +30,9 @@ impl TestMinter {
         };
         fs::create_dir(&tmp_dir).expect(&format!("Could not create temp dir {:?}", &tmp_dir));
 
-        let chain = Arc::new(Blockchain::new(&tmp_dir));
+        let blocklog_loc = &Path::join(&tmp_dir, "blklog");
+        let index_loc = &Path::join(&tmp_dir, "index");
+        let chain = Arc::new(Blockchain::new(blocklog_loc, index_loc));
         let minter_key = KeyPair::gen();
         let info = chain.create_genesis_block(minter_key.clone());
 
@@ -83,7 +90,10 @@ impl TestMinter {
             .expect(&format!("Could not create temp dir {:?}", &unindexed_path));
         fs::copy(self.2.join("blklog"), unindexed_path.join("blklog"))
             .expect("Could not copy block log");
-        self.0.chain = Arc::new(Blockchain::new(&unindexed_path));
+
+        let blocklog_loc = &Path::join(&unindexed_path, "blklog");
+        let index_loc = &Path::join(&unindexed_path, "index");
+        self.0.chain = Arc::new(Blockchain::new(blocklog_loc, index_loc));
         self.3 = false;
     }
 

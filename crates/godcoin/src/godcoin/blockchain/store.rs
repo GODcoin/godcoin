@@ -25,13 +25,13 @@ pub struct BlockStore {
 }
 
 impl BlockStore {
-    pub fn new(path: &Path, indexer: Arc<Indexer>) -> BlockStore {
+    pub fn new(blocklog_file: &Path, indexer: Arc<Indexer>) -> BlockStore {
         let (file, tail) = {
             let f = OpenOptions::new()
                 .create(true)
                 .read(true)
                 .append(true)
-                .open(path)
+                .open(blocklog_file)
                 .unwrap();
             let m = f.metadata().unwrap();
             (f, m.len())

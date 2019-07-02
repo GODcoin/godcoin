@@ -1,6 +1,6 @@
 use log::info;
 use parking_lot::Mutex;
-use std::{path::*, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 pub mod block;
 pub mod index;
@@ -44,12 +44,12 @@ pub struct Blockchain {
 
 impl Blockchain {
     ///
-    /// Creates a new `Blockchain` with an associated indexer and backing
-    /// storage is automatically created based on the given `path`.
+    /// Creates a new `Blockchain` with an associated indexer and block log based on the
+    /// provided paths.
     ///
-    pub fn new(path: &Path) -> Self {
-        let indexer = Arc::new(Indexer::new(&Path::join(path, "index")));
-        let store = BlockStore::new(&Path::join(path, "blklog"), Arc::clone(&indexer));
+    pub fn new(blocklog_loc: &Path, index_loc: &Path) -> Self {
+        let indexer = Arc::new(Indexer::new(index_loc));
+        let store = BlockStore::new(blocklog_loc, Arc::clone(&indexer));
         Blockchain {
             indexer,
             store: Mutex::new(store),

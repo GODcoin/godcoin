@@ -6,7 +6,11 @@ use futures::{
 };
 use godcoin::{net::*, prelude::*};
 use log::{error, info, warn};
-use std::{io::Cursor, path::PathBuf, sync::Arc};
+use std::{
+    io::Cursor,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 pub mod minter;
 pub mod net;
@@ -31,7 +35,9 @@ pub struct ServerData {
 }
 
 pub fn start(config: ServerConfig) {
-    let blockchain = Arc::new(Blockchain::new(&config.home));
+    let blocklog_loc = &Path::join(&config.home, "blklog");
+    let index_loc = &Path::join(&config.home, "index");
+    let blockchain = Arc::new(Blockchain::new(blocklog_loc, index_loc));
 
     if blockchain.index_status() != IndexStatus::Complete {
         warn!(
