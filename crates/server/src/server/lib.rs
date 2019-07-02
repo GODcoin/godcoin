@@ -4,7 +4,7 @@ use futures::{
     future::{join_all, ok},
     Future,
 };
-use godcoin::{net::*, prelude::*};
+use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
 use log::{error, info, warn};
 use std::{
     io::Cursor,
@@ -26,6 +26,7 @@ pub struct ServerOpts {
     pub home: PathBuf,
     pub minter_key: KeyPair,
     pub bind_addr: String,
+    pub reindex: Option<ReindexOpts>,
 }
 
 #[derive(Clone)]
@@ -34,9 +35,9 @@ pub struct ServerData {
     pub minter: Addr<Minter>,
 }
 
-pub fn start(config: ServerOpts) {
-    let blocklog_loc = &Path::join(&config.home, "blklog");
-    let index_loc = &Path::join(&config.home, "index");
+pub fn start(opts: ServerOpts) {
+    let blocklog_loc = &Path::join(&opts.home, "blklog");
+    let index_loc = &Path::join(&opts.home, "index");
     let blockchain = Arc::new(Blockchain::new(blocklog_loc, index_loc));
 
     if blockchain.index_status() != IndexStatus::Complete {
@@ -44,11 +45,14 @@ pub fn start(config: ServerOpts) {
             "Indexing not complete (status = {:?}), starting auto reindexing",
             blockchain.index_status()
         );
-        blockchain.reindex();
+        match opts.reindex {
+            Some(opts) => blockchain.reindex(opts),
+            None => panic!("index incomplete, aborting..."),
+        }
     }
 
     if blockchain.get_block(0).is_none() {
-        let info = blockchain.create_genesis_block(config.minter_key.clone());
+        let info = blockchain.create_genesis_block(opts.minter_key.clone());
         info!("=> Generated new block chain");
         info!("=> {:?}", info.script);
         for (index, key) in info.wallet_keys.iter().enumerate() {
@@ -61,7 +65,7 @@ pub fn start(config: ServerOpts) {
         blockchain.get_chain_height()
     );
 
-    let minter = Minter::new(Arc::clone(&blockchain), config.minter_key).start();
+    let minter = Minter::new(Arc::clone(&blockchain), opts.minter_key).start();
     minter.do_send(minter::StartProductionLoop);
 
     HttpServer::new(move || {
@@ -80,7 +84,7 @@ pub fn start(config: ServerOpts) {
                     .route(web::post().to_async(index)),
             )
     })
-    .bind(config.bind_addr)
+    .bind(opts.bind_addr)
     .unwrap()
     .start();
 }

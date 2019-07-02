@@ -40,6 +40,7 @@ fn main() {
         home,
         minter_key,
         bind_addr,
+        reindex: None,
     });
 
     sys.run().unwrap();

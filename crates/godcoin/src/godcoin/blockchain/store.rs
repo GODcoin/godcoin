@@ -1,5 +1,5 @@
 use crc32c::*;
-use log::{debug, warn};
+use log::{debug, error};
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -12,6 +12,11 @@ use std::{
 use crate::blockchain::{block::*, index::*};
 
 const MAX_CACHE_SIZE: u64 = 100;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReindexOpts {
+    pub auto_trim: bool,
+}
 
 pub struct BlockStore {
     indexer: Arc<Indexer>,
@@ -103,7 +108,7 @@ impl BlockStore {
         batch.set_block_byte_pos(0, 0);
     }
 
-    pub fn reindex_blocks<F>(&mut self, index_fn: F)
+    pub fn reindex_blocks<F>(&mut self, opts: ReindexOpts, index_fn: F)
     where
         F: Fn(&mut WriteBatch, &SignedBlock),
     {
@@ -119,13 +124,17 @@ impl BlockStore {
                         f.seek(SeekFrom::Current(0)).unwrap()
                     };
                     if !(last_known_good_height == 0 || height == last_known_good_height + 1) {
-                        warn!(
+                        error!(
                             "Invalid height ({}) detected at byte pos {}, truncating...",
                             height, pos
                         );
-                        let f = self.file.borrow();
-                        f.set_len(pos).unwrap();
-                        self.byte_pos_tail = pos;
+                        if opts.auto_trim {
+                            let f = self.file.borrow();
+                            f.set_len(pos).unwrap();
+                            self.byte_pos_tail = pos;
+                        } else {
+                            panic!("corruption detected, auto trim is disabled");
+                        }
                         break;
                     }
 
@@ -139,12 +148,19 @@ impl BlockStore {
                 }
                 Err(e) => match e {
                     ReadError::Eof => break,
-                    _ => {
-                        let info = format!(
+                    ReadError::CorruptBlock => {
+                        error!(
                             "(last known good height: {}, block end byte pos: {})",
                             last_known_good_height, pos
                         );
-                        panic!("unexpected error reindexing block: {:?} {}", e, info);
+                        if opts.auto_trim {
+                            let f = self.file.borrow();
+                            f.set_len(pos).unwrap();
+                            self.byte_pos_tail = pos;
+                            break;
+                        } else {
+                            panic!("corrupt block detected, auto trim is disabled");
+                        }
                     }
                 },
             }

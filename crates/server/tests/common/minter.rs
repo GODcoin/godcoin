@@ -4,7 +4,10 @@ use actix_web::{
     dev::{Body, ResponseBody},
     web,
 };
-use godcoin::{blockchain::GenesisBlockInfo, prelude::*};
+use godcoin::{
+    blockchain::{GenesisBlockInfo, ReindexOpts},
+    prelude::*,
+};
 use godcoin_server::{index, prelude::*, ServerData};
 use sodiumoxide::randombytes;
 use std::{
@@ -100,7 +103,7 @@ impl TestMinter {
     pub fn reindex(&mut self) {
         let chain = Arc::clone(&self.0.chain);
         assert_eq!(chain.index_status(), IndexStatus::None);
-        chain.reindex();
+        chain.reindex(ReindexOpts { auto_trim: true });
         self.0.minter = Minter::new(chain, self.1.minter_key.clone()).start();
         self.3 = true;
     }

@@ -10,7 +10,7 @@ pub mod verify;
 pub use self::{
     block::*,
     index::{IndexStatus, Indexer, WriteBatch},
-    store::BlockStore,
+    store::{BlockStore, ReindexOpts},
     verify::TxErr,
 };
 
@@ -64,7 +64,7 @@ impl Blockchain {
         self.indexer.index_status()
     }
 
-    pub fn reindex(&self) {
+    pub fn reindex(&self, opts: ReindexOpts) {
         {
             let status = self.indexer.index_status();
             if status != IndexStatus::None {
@@ -72,7 +72,7 @@ impl Blockchain {
             }
         }
         let mut store = self.store.lock();
-        store.reindex_blocks(|batch, block| {
+        store.reindex_blocks(opts, |batch, block| {
             for tx in &block.transactions {
                 Blockchain::index_tx(batch, &tx);
             }
