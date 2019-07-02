@@ -7,8 +7,8 @@ edition = "2018"
 [dependencies]
 bytes = "0.4.12"
 dirs = "2.0.1"
-env_logger = "0.6.1"
-futures = "0.1.27"
+env_logger = "0.6.2"
+futures = "0.1.28"
 godcoin = { path = "../godcoin" }
 log = "0.4.6"
 
@@ -17,7 +17,7 @@ version = "0.8.3"
 default-features = false
 
 [dependencies.actix-web]
-version = "1.0.2"
+version = "1.0.3"
 default-features = false
 
 [dev-dependencies]
