@@ -1,5 +1,5 @@
 use crc32c::*;
-use log::{debug, error};
+use log::{debug, error, warn};
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -124,11 +124,9 @@ impl BlockStore {
                         f.seek(SeekFrom::Current(0)).unwrap()
                     };
                     if !(last_known_good_height == 0 || height == last_known_good_height + 1) {
-                        error!(
-                            "Invalid height ({}) detected at byte pos {}, truncating...",
-                            height, pos
-                        );
+                        error!("Invalid height ({}) detected at byte pos {}", height, pos);
                         if opts.auto_trim {
+                            warn!("Truncating block log");
                             let f = self.file.borrow();
                             f.set_len(pos).unwrap();
                             self.byte_pos_tail = pos;
@@ -154,6 +152,7 @@ impl BlockStore {
                             last_known_good_height, pos
                         );
                         if opts.auto_trim {
+                            warn!("Truncating block log");
                             let f = self.file.borrow();
                             f.set_len(pos).unwrap();
                             self.byte_pos_tail = pos;
