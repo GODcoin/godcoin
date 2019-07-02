@@ -6,11 +6,7 @@ use futures::{
 };
 use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
 use log::{error, info, warn};
-use std::{
-    io::Cursor,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{io::Cursor, path::PathBuf, sync::Arc};
 
 pub mod minter;
 pub mod net;
@@ -23,7 +19,8 @@ pub mod prelude {
 use prelude::*;
 
 pub struct ServerOpts {
-    pub home: PathBuf,
+    pub blocklog_loc: PathBuf,
+    pub index_loc: PathBuf,
     pub minter_key: KeyPair,
     pub bind_addr: String,
     pub reindex: Option<ReindexOpts>,
@@ -36,13 +33,11 @@ pub struct ServerData {
 }
 
 pub fn start(opts: ServerOpts) {
-    let blocklog_loc = &Path::join(&opts.home, "blklog");
-    let index_loc = &Path::join(&opts.home, "index");
-    let blockchain = Arc::new(Blockchain::new(blocklog_loc, index_loc));
+    let blockchain = Arc::new(Blockchain::new(&opts.blocklog_loc, &opts.index_loc));
 
     if blockchain.index_status() != IndexStatus::Complete {
         warn!(
-            "Indexing not complete (status = {:?}), starting auto reindexing",
+            "Indexing not complete (status = {:?})",
             blockchain.index_status()
         );
         match opts.reindex {
