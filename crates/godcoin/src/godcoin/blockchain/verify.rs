@@ -4,18 +4,10 @@ use crate::{
 };
 use std::io::{self, Cursor};
 
-#[derive(Copy, Clone, Debug)]
-pub struct Config {
-    pub reject_reward: bool,
-}
+pub type SkipFlags = u8;
 
-impl Config {
-    pub const fn strict() -> Self {
-        Self {
-            reject_reward: true,
-        }
-    }
-}
+pub const SKIP_NONE: u8 = 1 << 0;
+pub const SKIP_REWARD_TX: u8 = 1 << 1;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum BlockErr {

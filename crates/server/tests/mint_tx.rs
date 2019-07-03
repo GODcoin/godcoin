@@ -9,7 +9,7 @@ fn mint_tx_verification() {
     System::run(|| {
         let minter = TestMinter::new();
         let chain = minter.chain();
-        let config = verify::Config::strict();
+        let skip_flags = verify::SKIP_NONE;
 
         let create_tx = |fee: &str| {
             let mut tx = MintTx {
@@ -26,11 +26,13 @@ fn mint_tx_verification() {
         };
 
         let tx = create_tx("0.00000 GRAEL");
-        assert!(chain.verify_tx(&tx.precompute(), &[], config).is_ok());
+        assert!(chain.verify_tx(&tx.precompute(), &[], skip_flags).is_ok());
 
         let tx = create_tx("1.00000 GRAEL");
         assert_eq!(
-            chain.verify_tx(&tx.precompute(), &[], config).unwrap_err(),
+            chain
+                .verify_tx(&tx.precompute(), &[], skip_flags)
+                .unwrap_err(),
             verify::TxErr::InvalidFeeAmount
         );
 
@@ -38,7 +40,9 @@ fn mint_tx_verification() {
         tx.signature_pairs.remove(1);
         assert!(check_sigs(&tx));
         assert_eq!(
-            chain.verify_tx(&tx.precompute(), &[], config).unwrap_err(),
+            chain
+                .verify_tx(&tx.precompute(), &[], skip_flags)
+                .unwrap_err(),
             verify::TxErr::ScriptRetFalse
         );
 
@@ -46,7 +50,9 @@ fn mint_tx_verification() {
         tx.signature_pairs.clear();
         assert!(check_sigs(&tx));
         assert_eq!(
-            chain.verify_tx(&tx.precompute(), &[], config).unwrap_err(),
+            chain
+                .verify_tx(&tx.precompute(), &[], skip_flags)
+                .unwrap_err(),
             verify::TxErr::ScriptRetFalse
         );
 
@@ -58,7 +64,9 @@ fn mint_tx_verification() {
         });
         assert!(!check_sigs(&tx));
         assert_eq!(
-            chain.verify_tx(&tx.precompute(), &[], config).unwrap_err(),
+            chain
+                .verify_tx(&tx.precompute(), &[], skip_flags)
+                .unwrap_err(),
             verify::TxErr::ScriptRetFalse
         );
 

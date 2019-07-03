@@ -11,7 +11,7 @@ pub use self::{
     block::*,
     index::{IndexStatus, Indexer, WriteBatch},
     store::{BlockStore, ReindexOpts},
-    verify::TxErr,
+    verify::*,
 };
 
 use crate::{asset::Asset, constants::*, crypto::*, script::*, tx::*};
@@ -246,10 +246,8 @@ impl Blockchain {
     }
 
     pub fn insert_block(&self, block: SignedBlock) -> Result<(), verify::BlockErr> {
-        static CONFIG: verify::Config = verify::Config {
-            reject_reward: false,
-        };
-        self.verify_block(&block, &self.get_chain_head(), CONFIG)?;
+        static SKIP_FLAGS: SkipFlags = SKIP_NONE | SKIP_REWARD_TX;
+        self.verify_block(&block, &self.get_chain_head(), SKIP_FLAGS)?;
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
         for tx in &block.transactions {
             Self::index_tx(&mut batch, tx);
@@ -264,7 +262,7 @@ impl Blockchain {
         &self,
         block: &SignedBlock,
         prev_block: &SignedBlock,
-        config: verify::Config,
+        skip_flags: SkipFlags,
     ) -> Result<(), verify::BlockErr> {
         if prev_block.height + 1 != block.height {
             return Err(verify::BlockErr::InvalidBlockHeight);
@@ -285,7 +283,7 @@ impl Blockchain {
         for i in 0..len {
             let tx = &block.transactions[i];
             let txs = &block.transactions[0..i];
-            if let Err(e) = self.verify_tx(&TxPrecompData::from_tx(tx), txs, config) {
+            if let Err(e) = self.verify_tx(&TxPrecompData::from_tx(tx), txs, skip_flags) {
                 return Err(verify::BlockErr::Tx(e));
             }
         }
@@ -297,7 +295,7 @@ impl Blockchain {
         &self,
         data: &TxPrecompData,
         additional_txs: &[TxVariant],
-        config: verify::Config,
+        skip_flags: SkipFlags,
     ) -> Result<(), TxErr> {
         macro_rules! check_zero_fee {
             ($asset:expr) => {
@@ -367,7 +365,7 @@ impl Blockchain {
                     .ok_or(TxErr::Arithmetic)?;
             }
             TxVariant::RewardTx(tx) => {
-                if config.reject_reward {
+                if skip_flags & SKIP_REWARD_TX == 0 {
                     return Err(TxErr::TxProhibited);
                 }
                 // Reward transactions are internally generated, thus should panic on failure
