@@ -35,7 +35,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_single_arg() {
+    fn parse_single_arg() {
         let args = parse_line("abc");
         assert_eq!(args.len(), 1);
         assert_eq!(args[0], "abc");
@@ -50,7 +50,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_two_args() {
+    fn parse_two_args() {
         let args = parse_line("abc 123");
         assert_eq!(args.len(), 2);
         assert_eq!(args[0], "abc");
@@ -63,7 +63,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_multiargs() {
+    fn parse_multiargs() {
         let args = parse_line("abc  123    def");
         assert_eq!(args.len(), 3);
         assert_eq!(args[0], "abc");
@@ -79,7 +79,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_quotes() {
+    fn parse_quotes() {
         let args = parse_line("\"abc  123\"    def");
         assert_eq!(args.len(), 2);
         assert_eq!(args[0], "abc  123");

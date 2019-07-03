@@ -203,7 +203,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_create_and_recover_keys() {
+    fn create_and_recover_keys() {
         let kp = KeyPair::gen();
 
         let pk = &*kp.0.to_wif();
@@ -214,7 +214,7 @@ mod tests {
     }
 
     #[test]
-    fn test_import_keys_from_wif() {
+    fn import_keys_from_wif() {
         let kp =
             PrivateKey::from_wif("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").unwrap();
         assert_eq!(
@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_prefix() {
+    fn invalid_prefix() {
         let mut bytes = bs58::decode("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM")
             .into_vec()
             .unwrap();
@@ -252,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_checksum() {
+    fn invalid_checksum() {
         let mut bytes = bs58::decode("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM")
             .into_vec()
             .unwrap();
@@ -282,7 +282,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sign_message() {
+    fn sign_message() {
         let msg = "Hello world!".as_bytes();
         let kp = KeyPair::gen();
 

@@ -20,7 +20,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_constants() {
+    fn constants() {
         assert_eq!(GRAEL_FEE_MIN.to_string(), "0.00025 GRAEL");
         assert_eq!(GRAEL_FEE_MULT.to_string(), "2.00000 GRAEL");
         assert_eq!(GRAEL_FEE_NET_MULT.to_string(), "1.01500 GRAEL");

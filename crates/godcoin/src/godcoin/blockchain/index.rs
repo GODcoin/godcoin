@@ -287,7 +287,7 @@ mod tests {
     use std::{env, fs, panic};
 
     #[test]
-    fn test_get_block_pos() {
+    fn get_block_pos() {
         run_test(|indexer| {
             let mut batch = WriteBatch::new(Arc::clone(&indexer));
             batch.set_block_byte_pos(1, 327);
@@ -298,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_chain_height() {
+    fn get_chain_height() {
         run_test(|indexer| {
             assert_eq!(indexer.get_chain_height(), 0);
             let mut batch = WriteBatch::new(Arc::clone(&indexer));
@@ -309,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tx_manager() {
+    fn tx_manager() {
         run_test(|indexer| {
             let id = TxId::from_digest(Digest::from_slice(&[0u8; 32]).unwrap());
             let ts = util::get_epoch_ms();

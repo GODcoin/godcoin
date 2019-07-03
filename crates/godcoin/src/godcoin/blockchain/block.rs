@@ -141,7 +141,7 @@ mod tests {
     use crate::{asset::Asset, crypto::KeyPair};
 
     #[test]
-    fn test_serialize_block() {
+    fn serialize_block() {
         let keys = KeyPair::gen();
         let transactions = {
             let mut vec = Vec::new();

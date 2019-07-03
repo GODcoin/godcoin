@@ -427,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_tx_with_sigs() {
+    fn serialize_tx_with_sigs() {
         let to = crypto::KeyPair::gen();
         let reward_tx = TxVariant::RewardTx(RewardTx {
             base: Tx {
@@ -448,7 +448,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_owner() {
+    fn serialize_owner() {
         let minter = crypto::KeyPair::gen();
         let wallet = crypto::KeyPair::gen();
         let owner_tx = OwnerTx {
@@ -476,7 +476,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_mint() {
+    fn serialize_mint() {
         let wallet = crypto::KeyPair::gen();
         let mint_tx = MintTx {
             base: Tx {
@@ -506,7 +506,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_reward() {
+    fn serialize_reward() {
         let to = crypto::KeyPair::gen();
         let reward_tx = RewardTx {
             base: Tx {
@@ -532,7 +532,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_transfer() {
+    fn serialize_transfer() {
         let from = crypto::KeyPair::gen();
         let to = crypto::KeyPair::gen();
         let transfer_tx = TransferTx {
@@ -565,7 +565,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tx_eq() {
+    fn tx_eq() {
         let tx_a = Tx {
             tx_type: TxType::MINT,
             timestamp: 1000,
@@ -602,7 +602,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transfer_tx_eq() {
+    fn transfer_tx_eq() {
         let tx_a = TransferTx {
             base: Tx {
                 tx_type: TxType::TRANSFER,
@@ -650,7 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn test_precomp_data_sig_split() {
+    fn precomp_data_sig_split() {
         let tx = TxVariant::TransferTx(TransferTx {
             base: Tx {
                 tx_type: TxType::TRANSFER,

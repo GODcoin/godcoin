@@ -193,7 +193,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_valid_input() {
+    fn parse_valid_input() {
         let c = |asset: Asset, amount: &str| {
             assert_eq!(asset.amount.to_string(), amount);
         };
@@ -208,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn test_asset_to_str() {
+    fn asset_to_str() {
         let c = |asset: Asset, s: &str| {
             assert_eq!(asset.to_string(), s);
         };
@@ -222,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fail_parsing_invalid_input() {
+    fn fail_parsing_invalid_input() {
         let c = |asset: &str, err: AssetErrorKind| {
             let e = Asset::from_str(asset).err().unwrap();
             assert_eq!(e.kind, err);
@@ -251,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn test_perform_arithmetic() {
+    fn perform_arithmetic() {
         let c = |asset: Asset, amount: &str| {
             assert_eq!(asset.to_string(), amount);
         };
@@ -312,7 +312,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_arithmetic() {
+    fn invalid_arithmetic() {
         let a = get_asset("10.00000 GRAEL");
         let b = get_asset("92233720368547.75807 GRAEL");
 

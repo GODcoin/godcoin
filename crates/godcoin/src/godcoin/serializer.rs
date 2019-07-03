@@ -182,7 +182,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_u32_serialization() {
+    fn u32_serialization() {
         let num: u32 = 0x0A0B0C0D;
         let mut v = Vec::with_capacity(4);
         v.push_u32(num);
@@ -190,7 +190,7 @@ mod tests {
     }
 
     #[test]
-    fn test_u64_serialization() {
+    fn u64_serialization() {
         let num: u64 = 0x0A0B0C0D_0A0B0C0D;
         let mut v = Vec::with_capacity(8);
         v.push_u64(num);
@@ -201,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn test_asset_serialization() {
+    fn asset_serialization() {
         let a = "12.34567 GRAEL".parse().unwrap();
         let mut v = vec![];
         v.push_asset(a);
