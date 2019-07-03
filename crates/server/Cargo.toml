@@ -11,6 +11,7 @@ env_logger = "0.6.2"
 futures = "0.1.28"
 godcoin = { path = "../godcoin" }
 log = "0.4.6"
+toml = "0.5.1"
 
 [dependencies.actix]
 version = "0.8.3"
@@ -23,6 +24,11 @@ default-features = false
 [dependencies.clap]
 version = "2.33.0"
 default-features = false
+
+[dependencies.serde]
+version = "1.0.94"
+default-features = false
+features = ["derive"]
 
 [dev-dependencies]
 sodiumoxide = { version = "0.2.2", default-features = false, features = ["std"] }
