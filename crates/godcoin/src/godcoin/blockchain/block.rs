@@ -63,11 +63,7 @@ impl Block {
     }
 
     pub fn verify_tx_merkle_root(&self) -> bool {
-        let mut buf = Vec::with_capacity(4096 * self.transactions.len());
-        for tx in &self.transactions {
-            tx.serialize(&mut buf)
-        }
-        let digest = double_sha256(&buf);
+        let digest = Self::calc_tx_merkle_root(&self.transactions);
         self.tx_merkle_root == digest
     }
 
@@ -79,6 +75,14 @@ impl Block {
 
     pub fn verify_previous_hash(&self, prev_block: &Block) -> bool {
         self.previous_hash == prev_block.calc_hash()
+    }
+
+    pub fn calc_tx_merkle_root(txs: &[TxVariant]) -> Digest {
+        let mut buf = Vec::with_capacity(4096 * txs.len());
+        for tx in txs {
+            tx.serialize(&mut buf)
+        }
+        double_sha256(&buf)
     }
 }
 
@@ -95,17 +99,12 @@ impl SignedBlock {
             self.base.serialize_header(&mut buf);
             double_sha256(&buf)
         };
-        let tx_merkle_root = {
-            let mut buf = Vec::with_capacity(4096 * txs.len());
-            for tx in &txs {
-                tx.serialize(&mut buf)
-            }
-            double_sha256(&buf)
-        };
+        let height = self.height + 1;
+        let tx_merkle_root = Block::calc_tx_merkle_root(&txs);
         let timestamp = crate::util::get_epoch_ms();
         Block {
             previous_hash,
-            height: self.height + 1,
+            height,
             timestamp,
             tx_merkle_root,
             transactions: txs,
@@ -187,5 +186,20 @@ mod tests {
         assert_eq!(block.sig_pair, dec.sig_pair);
 
         assert_eq!(block, dec);
+    }
+
+    #[test]
+    fn merkle_root() {
+        let mut block = Block {
+            previous_hash: Digest::from_slice(&[0; 32]).unwrap(),
+            height: 0,
+            timestamp: 0,
+            tx_merkle_root: double_sha256(&[0; 0]),
+            transactions: vec![],
+        };
+        assert!(block.verify_tx_merkle_root());
+
+        block.tx_merkle_root = Digest::from_slice(&[0; 32]).unwrap();
+        assert!(!block.verify_tx_merkle_root());
     }
 }
