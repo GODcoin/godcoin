@@ -289,6 +289,11 @@ mod tests {
         buf.push_var_i64(-300);
         buf.push_var_i64(i64::max_value());
         buf.push_var_i64(i64::min_value());
+        // Outputs 0 as only the first bit is checked on the final byte with a shift of 63
+        buf.extend(vec![
+            0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x7E,
+        ]);
+        // Outputs 1 << 62 as bit 62 is set
         buf.extend(vec![
             0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01,
         ]);
@@ -299,6 +304,7 @@ mod tests {
         assert_eq!(c.take_var_i64().unwrap(), -300);
         assert_eq!(c.take_var_i64().unwrap(), i64::max_value());
         assert_eq!(c.take_var_i64().unwrap(), i64::min_value());
+        assert_eq!(c.take_var_i64().unwrap(), 0);
         assert_eq!(c.take_var_i64().unwrap(), 1 << 62);
     }
 
