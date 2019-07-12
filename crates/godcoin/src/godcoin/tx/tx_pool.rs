@@ -1,7 +1,7 @@
 use crate::{
     blockchain::index::TxManager,
     constants::TX_EXPIRY_TIME,
-    prelude::{util, verify::*, AddressInfo, Blockchain, ScriptHash, TxPrecompData, TxVariant},
+    prelude::{verify::*, AddressInfo, Blockchain, ScriptHash, TxPrecompData, TxVariant},
 };
 use std::{mem, sync::Arc};
 
@@ -29,7 +29,7 @@ impl TxPool {
     }
 
     pub fn push(&mut self, data: TxPrecompData, skip_flags: SkipFlags) -> Result<(), TxErr> {
-        let current_time = util::get_epoch_ms();
+        let current_time = crate::get_epoch_ms();
 
         let ts = data.tx().timestamp;
         if (ts < current_time - TX_EXPIRY_TIME) || (ts > current_time + 3000) {

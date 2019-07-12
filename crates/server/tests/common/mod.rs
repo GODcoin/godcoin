@@ -8,7 +8,7 @@ pub fn get_asset(grael: &str) -> Asset {
 }
 
 pub fn create_tx_header(tx_type: TxType, fee: &str) -> Tx {
-    let timestamp = util::get_epoch_ms();
+    let timestamp = godcoin::get_epoch_ms();
     Tx {
         tx_type,
         timestamp,

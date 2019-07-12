@@ -101,7 +101,7 @@ impl SignedBlock {
         };
         let height = self.height + 1;
         let tx_merkle_root = Block::calc_tx_merkle_root(&txs);
-        let timestamp = crate::util::get_epoch_ms();
+        let timestamp = crate::get_epoch_ms();
         Block {
             previous_hash,
             height,

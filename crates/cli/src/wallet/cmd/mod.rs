@@ -181,7 +181,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
         let ts: u64 = args[1]
             .parse()
             .map_err(|_| "Failed to parse timestamp offset".to_owned())?;
-        ts + godcoin::util::get_epoch_ms()
+        ts + godcoin::get_epoch_ms()
     };
 
     let amount = args[2].parse().map_err(|_| "Failed to parse grael asset")?;

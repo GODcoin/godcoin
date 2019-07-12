@@ -7,7 +7,6 @@ use crate::{
     crypto::ScriptHash,
     serializer::*,
     tx::{OwnerTx, TxId, TxVariant},
-    util,
 };
 
 const CF_BLOCK_BYTE_POS: &str = "block_byte_pos";
@@ -258,7 +257,7 @@ impl TxManager {
     pub fn purge_expired(&self) {
         let db = &self.indexer.db;
         let cf = db.cf_handle(CF_TX_EXPIRY).unwrap();
-        let current_time = util::get_epoch_ms();
+        let current_time = crate::get_epoch_ms();
 
         let mut batch = rocksdb::WriteBatch::default();
         for (key, value) in db.iterator_cf(cf, IteratorMode::Start).unwrap() {
@@ -312,7 +311,7 @@ mod tests {
     fn tx_manager() {
         run_test(|indexer| {
             let id = TxId::from_digest(Digest::from_slice(&[0u8; 32]).unwrap());
-            let ts = util::get_epoch_ms();
+            let ts = crate::get_epoch_ms();
             let manager = TxManager::new(Arc::clone(&indexer));
             assert!(!manager.has(&id));
             manager.insert(&id, ts);

@@ -84,7 +84,7 @@ impl Blockchain {
         info!("Rebuilding tx expiry index");
         let manager = index::TxManager::new(self.indexer());
         for height in (0..=self.get_chain_height()).rev() {
-            let sys_time = crate::util::get_epoch_ms();
+            let sys_time = crate::get_epoch_ms();
             let block = store.get(height).unwrap();
             // Test a huge timestamp gap to ensure all active txs are indexed
             if block.timestamp > sys_time - (TX_EXPIRY_TIME * 2) {
@@ -431,7 +431,7 @@ impl Blockchain {
 
     pub fn create_genesis_block(&self, minter_key: KeyPair) -> GenesisBlockInfo {
         let info = GenesisBlockInfo::new(minter_key);
-        let timestamp = crate::util::get_epoch_ms();
+        let timestamp = crate::get_epoch_ms();
 
         let owner_tx = OwnerTx {
             base: Tx {

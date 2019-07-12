@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 #[macro_use]
 pub mod util;
 
@@ -15,6 +17,13 @@ pub fn init() -> Result<(), ()> {
     sodiumoxide::init()
 }
 
+pub fn get_epoch_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
+
 pub mod prelude {
     pub use super::asset::{self, Asset, AssetError, AssetErrorKind};
     pub use super::blockchain::{
@@ -29,5 +38,4 @@ pub mod prelude {
         MintTx, OwnerTx, RewardTx, SignTx, TransferTx, Tx, TxId, TxPool, TxPrecompData, TxType,
         TxVariant,
     };
-    pub use super::util;
 }
