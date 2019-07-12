@@ -42,27 +42,19 @@ pub trait BufWrite {
 }
 
 impl BufWrite for Vec<u8> {
+    #[inline]
     fn push_u16(&mut self, num: u16) {
-        self.push((num >> 8) as u8);
-        self.push(num as u8);
+        self.extend(&num.to_be_bytes());
     }
 
+    #[inline]
     fn push_u32(&mut self, num: u32) {
-        self.push((num >> 24) as u8);
-        self.push((num >> 16) as u8);
-        self.push((num >> 8) as u8);
-        self.push(num as u8);
+        self.extend(&num.to_be_bytes());
     }
 
+    #[inline]
     fn push_i64(&mut self, num: i64) {
-        self.push((num >> 56) as u8);
-        self.push((num >> 48) as u8);
-        self.push((num >> 40) as u8);
-        self.push((num >> 32) as u8);
-        self.push((num >> 24) as u8);
-        self.push((num >> 16) as u8);
-        self.push((num >> 8) as u8);
-        self.push(num as u8);
+        self.extend(&num.to_be_bytes());
     }
 
     fn push_var_i64(&mut self, num: i64) {
@@ -83,15 +75,9 @@ impl BufWrite for Vec<u8> {
         }
     }
 
+    #[inline]
     fn push_u64(&mut self, num: u64) {
-        self.push((num >> 56) as u8);
-        self.push((num >> 48) as u8);
-        self.push((num >> 40) as u8);
-        self.push((num >> 32) as u8);
-        self.push((num >> 24) as u8);
-        self.push((num >> 16) as u8);
-        self.push((num >> 8) as u8);
-        self.push(num as u8);
+        self.extend(&num.to_be_bytes());
     }
 
     fn push_bytes(&mut self, other: &[u8]) {
@@ -145,26 +131,19 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     fn take_u16(&mut self) -> Result<u16, Error> {
         let mut buf = [0u8; 2];
         self.read_exact(&mut buf)?;
-        Ok((u16::from(buf[0]) << 8) | u16::from(buf[1]))
+        Ok(u16::from_be_bytes(buf))
     }
 
     fn take_u32(&mut self) -> Result<u32, Error> {
         let mut buf = [0u8; 4];
         self.read_exact(&mut buf)?;
-        Ok(u32_from_buf!(buf))
+        Ok(u32::from_be_bytes(buf))
     }
 
     fn take_i64(&mut self) -> Result<i64, Error> {
         let mut buf = [0u8; 8];
         self.read_exact(&mut buf)?;
-        Ok((i64::from(buf[0]) << 56)
-            | (i64::from(buf[1]) << 48)
-            | (i64::from(buf[2]) << 40)
-            | (i64::from(buf[3]) << 32)
-            | (i64::from(buf[4]) << 24)
-            | (i64::from(buf[5]) << 16)
-            | (i64::from(buf[6]) << 8)
-            | i64::from(buf[7]))
+        Ok(i64::from_be_bytes(buf))
     }
 
     fn take_var_i64(&mut self) -> Result<i64, Error> {
@@ -193,7 +172,7 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     fn take_u64(&mut self) -> Result<u64, Error> {
         let mut buf = [0u8; 8];
         self.read_exact(&mut buf)?;
-        Ok(u64_from_buf!(buf))
+        Ok(u64::from_be_bytes(buf))
     }
 
     fn take_bytes(&mut self) -> Result<Vec<u8>, Error> {

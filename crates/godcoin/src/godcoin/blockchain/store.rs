@@ -3,6 +3,7 @@ use log::{debug, error, warn};
 use std::{
     cell::RefCell,
     collections::HashMap,
+    convert::TryInto,
     fs::{File, OpenOptions},
     io::{Cursor, Read, Seek, SeekFrom, Write},
     path::Path,
@@ -186,8 +187,9 @@ impl BlockStore {
         let (block_len, crc) = {
             let mut meta = [0u8; 8];
             f.read_exact(&mut meta).map_err(|_| ReadError::Eof)?;
-            let len = u32_from_buf!(meta, 0) as usize;
-            let crc = u32_from_buf!(meta, 4);
+            let (len_buf, crc_buf) = meta.split_at(4);
+            let len = u32::from_be_bytes(len_buf.try_into().unwrap()) as usize;
+            let crc = u32::from_be_bytes(crc_buf.try_into().unwrap());
             (len, crc)
         };
 

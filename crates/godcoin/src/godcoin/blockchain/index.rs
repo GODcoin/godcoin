@@ -67,12 +67,12 @@ impl Indexer {
         let cf = self.db.cf_handle(CF_BLOCK_BYTE_POS).unwrap();
         let buf = self.db.get_pinned_cf(cf, height.to_be_bytes()).unwrap()?;
 
-        Some(u64_from_buf!(buf))
+        Some(u64::from_be_bytes(buf.as_ref().try_into().unwrap()))
     }
 
     pub fn get_chain_height(&self) -> u64 {
         match self.db.get_pinned(KEY_CHAIN_HEIGHT).unwrap() {
-            Some(val) => u64_from_buf!(val),
+            Some(buf) => u64::from_be_bytes(buf.as_ref().try_into().unwrap()),
             None => 0,
         }
     }
