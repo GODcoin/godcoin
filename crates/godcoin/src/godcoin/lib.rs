@@ -1,8 +1,5 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[macro_use]
-pub mod util;
-
 pub mod asset;
 pub mod crypto;
 pub mod tx;
