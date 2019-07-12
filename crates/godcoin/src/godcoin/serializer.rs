@@ -117,7 +117,7 @@ impl BufWrite for Vec<u8> {
     }
 
     fn push_asset(&mut self, asset: Asset) {
-        self.push_i64(asset.amount);
+        self.push_var_i64(asset.amount);
     }
 }
 
@@ -225,7 +225,7 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     }
 
     fn take_asset(&mut self) -> Result<Asset, Error> {
-        let amount = self.take_i64()?;
+        let amount = self.take_var_i64()?;
         Ok(Asset::new(amount))
     }
 }
