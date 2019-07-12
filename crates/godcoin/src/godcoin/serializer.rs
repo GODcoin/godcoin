@@ -18,10 +18,21 @@ macro_rules! read_exact_bytes {
     }};
 }
 
+#[inline]
+fn zigzag_encode(from: i64) -> u64 {
+    ((from << 1) ^ (from >> 63)) as u64
+}
+
+#[inline]
+fn zigzag_decode(from: u64) -> i64 {
+    ((from >> 1) ^ (-((from & 1) as i64)) as u64) as i64
+}
+
 pub trait BufWrite {
     fn push_u16(&mut self, num: u16);
     fn push_u32(&mut self, num: u32);
     fn push_i64(&mut self, num: i64);
+    fn push_var_i64(&mut self, num: i64);
     fn push_u64(&mut self, num: u64);
     fn push_bytes(&mut self, slice: &[u8]);
     fn push_pub_key(&mut self, key: &PublicKey);
@@ -52,6 +63,24 @@ impl BufWrite for Vec<u8> {
         self.push((num >> 16) as u8);
         self.push((num >> 8) as u8);
         self.push(num as u8);
+    }
+
+    fn push_var_i64(&mut self, num: i64) {
+        let mut more = true;
+        let mut num = zigzag_encode(num);
+
+        while more {
+            let mut byte: u8 = (num & 0x7F) as u8;
+            num >>= 7;
+
+            if num == 0 {
+                more = false;
+            } else {
+                byte |= 0x80;
+            }
+
+            self.push(byte);
+        }
     }
 
     fn push_u64(&mut self, num: u64) {
@@ -97,6 +126,7 @@ pub trait BufRead {
     fn take_u16(&mut self) -> Result<u16, Error>;
     fn take_u32(&mut self) -> Result<u32, Error>;
     fn take_i64(&mut self) -> Result<i64, Error>;
+    fn take_var_i64(&mut self) -> Result<i64, Error>;
     fn take_u64(&mut self) -> Result<u64, Error>;
     fn take_bytes(&mut self) -> Result<Vec<u8>, Error>;
     fn take_pub_key(&mut self) -> Result<PublicKey, Error>;
@@ -135,6 +165,29 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
             | (i64::from(buf[5]) << 16)
             | (i64::from(buf[6]) << 8)
             | i64::from(buf[7]))
+    }
+
+    fn take_var_i64(&mut self) -> Result<i64, Error> {
+        let mut result: u64 = 0;
+        let mut shift = 0;
+        let mut buf = [0u8; 1];
+        loop {
+            if shift > 63 {
+                return Err(Error::new(ErrorKind::Other, "overflow taking varint"));
+            }
+
+            self.read_exact(&mut buf)?;
+            let byte = buf[0];
+
+            result |= ((byte & 0x7F) as u64) << shift;
+            if byte & 0x80 == 0 {
+                break;
+            }
+
+            shift += 7;
+        }
+
+        Ok(zigzag_decode(result))
     }
 
     fn take_u64(&mut self) -> Result<u64, Error> {
@@ -209,5 +262,67 @@ mod tests {
         let mut c = Cursor::<&[u8]>::new(&v);
         let b = c.take_asset().unwrap();
         assert_eq!(a.to_string(), b.to_string());
+    }
+
+    #[test]
+    fn zigzag() {
+        fn cmp(decoded: i64, encoded: u64) {
+            assert_eq!(decoded, zigzag_decode(encoded));
+            assert_eq!(encoded, zigzag_encode(decoded));
+        }
+
+        cmp(0, 0);
+        cmp(-1, 1);
+        cmp(1, 2);
+        cmp(-2, 3);
+        cmp(2147483647, 4294967294);
+        cmp(-2147483648, 4294967295);
+        cmp(9223372036854775807, 18446744073709551614);
+        cmp(-9223372036854775808, 18446744073709551615);
+    }
+
+    #[test]
+    fn var_i64_serialization() {
+        let mut buf = vec![];
+        buf.push_var_i64(0);
+        buf.push_var_i64(300);
+        buf.push_var_i64(-300);
+        buf.push_var_i64(i64::max_value());
+        buf.push_var_i64(i64::min_value());
+        buf.extend(vec![
+            0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01,
+        ]);
+
+        let mut c = Cursor::<&[u8]>::new(&buf);
+        assert_eq!(c.take_var_i64().unwrap(), 0);
+        assert_eq!(c.take_var_i64().unwrap(), 300);
+        assert_eq!(c.take_var_i64().unwrap(), -300);
+        assert_eq!(c.take_var_i64().unwrap(), i64::max_value());
+        assert_eq!(c.take_var_i64().unwrap(), i64::min_value());
+        assert_eq!(c.take_var_i64().unwrap(), 1 << 62);
+    }
+
+    #[test]
+    fn var_i64_serialization_overflow() {
+        use std::error;
+
+        let buf = vec![
+            0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0,
+        ];
+        let mut c = Cursor::<&[u8]>::new(&buf);
+        assert_eq!(
+            error::Error::description(&c.take_var_i64().unwrap_err()),
+            "overflow taking varint"
+        );
+    }
+
+    #[test]
+    fn var_i64_serialization_eof() {
+        let buf = vec![0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80];
+        let mut c = Cursor::<&[u8]>::new(&buf);
+        assert_eq!(
+            c.take_var_i64().unwrap_err().kind(),
+            ErrorKind::UnexpectedEof
+        );
     }
 }
