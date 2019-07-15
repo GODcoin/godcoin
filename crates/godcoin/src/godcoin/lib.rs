@@ -32,7 +32,6 @@ pub mod prelude {
     pub use super::net::{self, MsgRequest, MsgResponse};
     pub use super::script::{self, OpFrame, Script, ScriptEngine};
     pub use super::tx::{
-        MintTx, OwnerTx, RewardTx, SignTx, TransferTx, Tx, TxId, TxPool, TxPrecompData, TxType,
-        TxVariant,
+        MintTx, OwnerTx, RewardTx, SignTx, TransferTx, Tx, TxId, TxPool, TxPrecompData, TxVariant,
     };
 }

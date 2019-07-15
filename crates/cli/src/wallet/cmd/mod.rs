@@ -212,7 +212,6 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
 
     let mint_tx = TxVariant::MintTx(MintTx {
         base: Tx {
-            tx_type: TxType::MINT,
             timestamp,
             signature_pairs: vec![],
             fee: Asset::new(0),

@@ -44,7 +44,7 @@ impl TestMinter {
                 let mut txs = Vec::with_capacity(1);
 
                 let mut tx = MintTx {
-                    base: create_tx_header(TxType::MINT, "0.00000 GRAEL"),
+                    base: create_tx_header("0.00000 GRAEL"),
                     to: (&info.script).into(),
                     amount: "1000.00000 GRAEL".parse().unwrap(),
                     attachment: vec![1, 2, 3],
@@ -60,7 +60,6 @@ impl TestMinter {
 
                 txs.push(TxVariant::RewardTx(RewardTx {
                     base: Tx {
-                        tx_type: TxType::REWARD,
                         fee: "0.00000 GRAEL".parse().unwrap(),
                         timestamp: 0,
                         signature_pairs: Vec::new(),

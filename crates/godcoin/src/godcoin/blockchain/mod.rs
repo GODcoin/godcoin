@@ -435,7 +435,6 @@ impl Blockchain {
 
         let owner_tx = OwnerTx {
             base: Tx {
-                tx_type: TxType::OWNER,
                 fee: Asset::default(),
                 timestamp,
                 signature_pairs: Vec::new(),

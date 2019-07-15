@@ -272,7 +272,7 @@ impl<'a> ScriptEngine<'a> {
 mod tests {
     use super::*;
     use crate::crypto::{KeyPair, SigPair, Signature};
-    use crate::tx::{SignTx, TransferTx, Tx, TxType, TxVariant};
+    use crate::tx::{SignTx, TransferTx, Tx, TxVariant};
 
     #[test]
     fn true_only_script() {
@@ -578,7 +578,6 @@ mod tests {
 
             let mut tx = TransferTx {
                 base: Tx {
-                    tx_type: TxType::TRANSFER,
                     timestamp: 1500000000,
                     fee: "1.00000 GRAEL".parse().unwrap(),
                     signature_pairs: vec![SigPair {
@@ -827,7 +826,6 @@ mod tests {
         let to = KeyPair::gen();
         let mut tx = TransferTx {
             base: Tx {
-                tx_type: TxType::TRANSFER,
                 timestamp: 1500000000,
                 fee: "1.00000 GRAEL".parse().unwrap(),
                 signature_pairs: vec![],

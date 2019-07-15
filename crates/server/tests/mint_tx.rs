@@ -13,7 +13,7 @@ fn mint_tx_verification() {
 
         let create_tx = |fee: &str| {
             let mut tx = MintTx {
-                base: create_tx_header(TxType::MINT, fee),
+                base: create_tx_header(fee),
                 to: (&minter.genesis_info().script).into(),
                 amount: Asset::default(),
                 attachment: vec![],
@@ -81,7 +81,7 @@ fn mint_tx_updates_balances() {
         let minter = TestMinter::new();
 
         let mut tx = MintTx {
-            base: create_tx_header(TxType::MINT, "0.00000 GRAEL"),
+            base: create_tx_header("0.00000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],

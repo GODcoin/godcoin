@@ -51,7 +51,6 @@ impl Minter {
                 let wallet_addr = self.chain.get_owner().wallet;
                 transactions.push(TxVariant::RewardTx(RewardTx {
                     base: Tx {
-                        tx_type: TxType::REWARD,
                         fee: Asset::default(),
                         timestamp: 0,
                         signature_pairs: Vec::new(),

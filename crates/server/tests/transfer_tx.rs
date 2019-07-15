@@ -21,7 +21,7 @@ fn transfer_from_minter() {
 
         let tx = {
             let mut tx = TransferTx {
-                base: create_tx_header(TxType::TRANSFER, "1.00000 GRAEL"),
+                base: create_tx_header("1.00000 GRAEL"),
                 from: from_addr.clone(),
                 to: (&to_addr.0).into(),
                 amount,
@@ -67,7 +67,7 @@ fn transfer_from_user() {
         let fut = {
             let tx = {
                 let mut tx = TransferTx {
-                    base: create_tx_header(TxType::TRANSFER, "1.00000 GRAEL"),
+                    base: create_tx_header("1.00000 GRAEL"),
                     from: ScriptHash::from(&minter.genesis_info().script),
                     to: (&user_1_addr.0).into(),
                     amount: get_asset("100.00000 GRAEL"),
@@ -89,7 +89,7 @@ fn transfer_from_user() {
                     assert_eq!(res, MsgResponse::Broadcast);
                     let tx = {
                         let mut tx = TransferTx {
-                            base: create_tx_header(TxType::TRANSFER, "1.00000 GRAEL"),
+                            base: create_tx_header("1.00000 GRAEL"),
                             from: (&user_1_addr.0).into(),
                             to: (&user_2_addr.0).into(),
                             amount: get_asset("99.00000 GRAEL"),
@@ -138,7 +138,7 @@ fn insufficient_balance_caused_by_fee() {
         let to_addr = KeyPair::gen();
         let tx = {
             let mut tx = TransferTx {
-                base: create_tx_header(TxType::TRANSFER, "1001.00000 GRAEL"),
+                base: create_tx_header("1001.00000 GRAEL"),
                 from: from_addr.clone(),
                 to: (&to_addr.0).into(),
                 amount: get_asset("0.00000 GRAEL"),
@@ -190,7 +190,7 @@ fn insufficient_fee() {
             .unwrap();
         let tx = {
             let mut tx = TransferTx {
-                base: create_tx_header(TxType::TRANSFER, &bad_fee.to_string()),
+                base: create_tx_header(&bad_fee.to_string()),
                 from: from_addr.clone(),
                 to: KeyPair::gen().0.into(),
                 amount: get_asset("0.00000 GRAEL"),
@@ -225,7 +225,7 @@ fn insufficient_balance_caused_by_amt() {
         let to_addr = KeyPair::gen();
         let tx = {
             let mut tx = TransferTx {
-                base: create_tx_header(TxType::TRANSFER, "1.00000 GRAEL"),
+                base: create_tx_header("1.00000 GRAEL"),
                 from: from_addr.clone(),
                 to: (&to_addr.0).into(),
                 amount: get_asset("500000.00000 GRAEL"),
@@ -272,7 +272,7 @@ fn memo_too_large() {
         let to_addr = KeyPair::gen();
         let tx = {
             let mut tx = TransferTx {
-                base: create_tx_header(TxType::TRANSFER, "1.00000 GRAEL"),
+                base: create_tx_header("1.00000 GRAEL"),
                 from: from_addr.clone(),
                 to: (&to_addr.0).into(),
                 amount: get_asset("1.00000 GRAEL"),
@@ -324,7 +324,7 @@ fn script_too_large() {
         let to_addr = KeyPair::gen();
         let tx = {
             let mut tx = TransferTx {
-                base: create_tx_header(TxType::TRANSFER, "1.00000 GRAEL"),
+                base: create_tx_header("1.00000 GRAEL"),
                 from: from_addr,
                 to: (&to_addr.0).into(),
                 amount: get_asset("1.00000 GRAEL"),
@@ -374,10 +374,7 @@ fn tx_addr_dynamic_fee_increase_in_pool() {
 
                     let tx = {
                         let mut tx = TransferTx {
-                            base: create_tx_header(
-                                TxType::TRANSFER,
-                                &addr_info.total_fee().unwrap().to_string(),
-                            ),
+                            base: create_tx_header(&addr_info.total_fee().unwrap().to_string()),
                             from: from_addr.clone(),
                             to: KeyPair::gen().0.into(),
                             amount: Asset::new(0),
@@ -465,7 +462,6 @@ fn tx_addr_dynamic_fee_increase() {
                                 let tx = {
                                     let mut tx = TransferTx {
                                         base: create_tx_header(
-                                            TxType::TRANSFER,
                                             &addr_info.total_fee().unwrap().to_string(),
                                         ),
                                         from: from_addr.clone(),
@@ -535,7 +531,7 @@ fn net_fee_dynamic_increase() {
                 let minter = Arc::clone(&minter);
                 let tx = {
                     let mut tx = TransferTx {
-                        base: create_tx_header(TxType::TRANSFER, "1.00000 GRAEL"),
+                        base: create_tx_header("1.00000 GRAEL"),
                         from: from_addr.clone(),
                         to: (&addrs[addr_index].0).into(),
                         amount: Asset::new(100000),
@@ -580,7 +576,7 @@ fn net_fee_dynamic_increase() {
 
                     let tx = {
                         let mut tx = TransferTx {
-                            base: create_tx_header(TxType::TRANSFER, "1.00000 GRAEL"),
+                            base: create_tx_header("1.00000 GRAEL"),
                             from: (&addr.0).into(),
                             to: from_addr.clone(),
                             amount: Asset::new(0),

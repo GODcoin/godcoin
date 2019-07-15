@@ -146,7 +146,6 @@ mod tests {
             let mut vec = Vec::new();
             vec.push(TxVariant::RewardTx(RewardTx {
                 base: Tx {
-                    tx_type: TxType::REWARD,
                     fee: Asset::default(),
                     timestamp: 1234567890,
                     signature_pairs: Vec::new(),

@@ -7,19 +7,17 @@ pub fn get_asset(grael: &str) -> Asset {
     grael.parse().unwrap()
 }
 
-pub fn create_tx_header(tx_type: TxType, fee: &str) -> Tx {
+pub fn create_tx_header(fee: &str) -> Tx {
     let timestamp = godcoin::get_epoch_ms();
     Tx {
-        tx_type,
         timestamp,
         fee: fee.parse().unwrap(),
         signature_pairs: Vec::with_capacity(MAX_TX_SIGNATURES),
     }
 }
 
-pub fn create_tx_header_with_ts(tx_type: TxType, fee: &str, timestamp: u64) -> Tx {
+pub fn create_tx_header_with_ts(fee: &str, timestamp: u64) -> Tx {
     Tx {
-        tx_type,
         timestamp,
         fee: fee.parse().unwrap(),
         signature_pairs: Vec::with_capacity(MAX_TX_SIGNATURES),

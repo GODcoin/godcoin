@@ -44,7 +44,7 @@ fn reindexed_blockchain() {
 
         let tx = {
             let mut tx = TransferTx {
-                base: create_tx_header(TxType::TRANSFER, "1.00000 GRAEL"),
+                base: create_tx_header("1.00000 GRAEL"),
                 from: from_addr.clone(),
                 to: (&to_addr.0).into(),
                 amount,
@@ -124,7 +124,7 @@ fn tx_dupe() {
         let minter = TestMinter::new();
 
         let mut tx = MintTx {
-            base: create_tx_header(TxType::MINT, "0.00000 GRAEL"),
+            base: create_tx_header("0.00000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
@@ -167,7 +167,7 @@ fn tx_expired() {
         let time = godcoin::get_epoch_ms();
 
         let tx = MintTx {
-            base: create_tx_header_with_ts(TxType::MINT, "0.00000 GRAEL", time + TX_EXPIRY_TIME),
+            base: create_tx_header_with_ts("0.00000 GRAEL", time + TX_EXPIRY_TIME),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
@@ -199,7 +199,7 @@ fn tx_far_in_the_future() {
         let time = godcoin::get_epoch_ms();
 
         let tx = MintTx {
-            base: create_tx_header_with_ts(TxType::MINT, "0.00000 GRAEL", time + 4000),
+            base: create_tx_header_with_ts("0.00000 GRAEL", time + 4000),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
@@ -230,7 +230,7 @@ fn tx_script_too_large_err() {
         let minter = TestMinter::new();
 
         let tx = MintTx {
-            base: create_tx_header(TxType::MINT, "0.00000 GRAEL"),
+            base: create_tx_header("0.00000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
@@ -260,7 +260,7 @@ fn tx_too_many_signatures_err() {
         let minter = TestMinter::new();
 
         let mut tx = MintTx {
-            base: create_tx_header(TxType::MINT, "0.00000 GRAEL"),
+            base: create_tx_header("0.00000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],

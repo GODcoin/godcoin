@@ -14,7 +14,7 @@ fn successful_broadcast() {
         let minter = TestMinter::new();
 
         let mut tx = MintTx {
-            base: create_tx_header(TxType::MINT, "0.00000 GRAEL"),
+            base: create_tx_header("0.00000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
