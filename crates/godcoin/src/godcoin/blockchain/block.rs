@@ -63,7 +63,7 @@ impl Block {
     }
 
     pub fn verify_tx_merkle_root(&self) -> bool {
-        let digest = Self::calc_tx_merkle_root(&self.transactions);
+        let digest = calc_tx_merkle_root(&self.transactions);
         self.tx_merkle_root == digest
     }
 
@@ -75,14 +75,6 @@ impl Block {
 
     pub fn verify_previous_hash(&self, prev_block: &Block) -> bool {
         self.previous_hash == prev_block.calc_hash()
-    }
-
-    pub fn calc_tx_merkle_root(txs: &[TxVariant]) -> Digest {
-        let mut buf = Vec::with_capacity(4096 * txs.len());
-        for tx in txs {
-            tx.serialize(&mut buf)
-        }
-        double_sha256(&buf)
     }
 }
 
@@ -100,7 +92,7 @@ impl SignedBlock {
             double_sha256(&buf)
         };
         let height = self.height + 1;
-        let tx_merkle_root = Block::calc_tx_merkle_root(&txs);
+        let tx_merkle_root = calc_tx_merkle_root(&txs);
         let timestamp = crate::get_epoch_ms();
         Block {
             previous_hash,
@@ -132,6 +124,14 @@ impl Deref for SignedBlock {
     fn deref(&self) -> &Self::Target {
         &self.base
     }
+}
+
+pub fn calc_tx_merkle_root(txs: &[TxVariant]) -> Digest {
+    let mut buf = Vec::with_capacity(4096 * txs.len());
+    for tx in txs {
+        tx.serialize(&mut buf)
+    }
+    double_sha256(&buf)
 }
 
 #[cfg(test)]
