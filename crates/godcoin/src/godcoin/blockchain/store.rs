@@ -78,6 +78,11 @@ impl BlockStore {
         }
     }
 
+    pub fn is_empty(&mut self) -> bool {
+        let meta = self.file.borrow_mut().metadata().unwrap();
+        meta.len() == 0
+    }
+
     pub fn insert(&mut self, batch: &mut WriteBatch, block: SignedBlock) {
         assert_eq!(self.height + 1, block.height, "invalid block height");
         let byte_pos = self.byte_pos_tail;
@@ -104,6 +109,7 @@ impl BlockStore {
             self.genesis_block.is_none(),
             "expected genesis block to not exist"
         );
+        assert!(self.is_empty(), "block log must be empty");
         self.write_to_disk(&block);
         self.genesis_block = Some(Arc::new(block));
         batch.set_block_byte_pos(0, 0);
