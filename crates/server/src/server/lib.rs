@@ -35,7 +35,8 @@ pub struct ServerData {
 pub fn start(opts: ServerOpts) {
     let blockchain = Arc::new(Blockchain::new(&opts.blocklog_loc, &opts.index_loc));
 
-    if blockchain.index_status() != IndexStatus::Complete {
+    let is_empty = blockchain.is_empty();
+    if !is_empty && blockchain.index_status() != IndexStatus::Complete {
         warn!(
             "Indexing not complete (status = {:?})",
             blockchain.index_status()
@@ -46,7 +47,7 @@ pub fn start(opts: ServerOpts) {
         }
     }
 
-    if blockchain.get_block(0).is_none() {
+    if is_empty {
         let info = blockchain.create_genesis_block(opts.minter_key.clone());
         info!("=> Generated new block chain");
         info!("=> {:?}", info.script);

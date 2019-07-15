@@ -56,6 +56,10 @@ impl Blockchain {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.store.lock().is_empty()
+    }
+
     pub fn indexer(&self) -> Arc<Indexer> {
         Arc::clone(&self.indexer)
     }
