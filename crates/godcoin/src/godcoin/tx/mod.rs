@@ -154,7 +154,7 @@ impl TxVariant {
     }
 
     pub fn serialize(&self, v: &mut Vec<u8>) {
-        macro_rules! serialize_sigs {
+        macro_rules! serialize_with_sigs {
             ($name:expr, $vec:expr) => {{
                 $vec.push($name.signature_pairs.len() as u8);
                 for sig in &$name.signature_pairs {
@@ -165,10 +165,10 @@ impl TxVariant {
         }
 
         match self {
-            TxVariant::OwnerTx(tx) => serialize_sigs!(tx, v),
-            TxVariant::MintTx(tx) => serialize_sigs!(tx, v),
-            TxVariant::RewardTx(tx) => serialize_sigs!(tx, v),
-            TxVariant::TransferTx(tx) => serialize_sigs!(tx, v),
+            TxVariant::OwnerTx(tx) => serialize_with_sigs!(tx, v),
+            TxVariant::MintTx(tx) => serialize_with_sigs!(tx, v),
+            TxVariant::RewardTx(tx) => serialize_with_sigs!(tx, v),
+            TxVariant::TransferTx(tx) => serialize_with_sigs!(tx, v),
         };
     }
 
