@@ -77,11 +77,11 @@ impl Blockchain {
         }
         let mut store = self.store.lock();
         store.reindex_blocks(opts, |batch, block| {
-            for tx in &block.transactions {
+            for tx in block.txs() {
                 Blockchain::index_tx(batch, &tx);
             }
-            if block.height % 1000 == 0 {
-                info!("Indexed block {}", block.height);
+            if block.height() % 1000 == 0 {
+                info!("Indexed block {}", block.height());
             }
         });
 
@@ -91,8 +91,8 @@ impl Blockchain {
             let sys_time = crate::get_epoch_ms();
             let block = store.get(height).unwrap();
             // Test a huge timestamp gap to ensure all active txs are indexed
-            if block.timestamp > sys_time - (TX_EXPIRY_TIME * 2) {
-                for tx in &block.transactions {
+            if block.timestamp() > sys_time - (TX_EXPIRY_TIME * 2) {
+                for tx in block.txs() {
                     let data = TxPrecompData::from_tx(tx);
                     manager.insert(data.txid(), data.tx().timestamp);
                 }
@@ -184,7 +184,7 @@ impl Blockchain {
         for i in (0..=self.get_chain_height()).rev() {
             delta += 1;
             let block = self.get_block(i).unwrap();
-            for tx in &block.transactions {
+            for tx in block.txs() {
                 // Delta gets reset if a match is found
                 handle_tx_match!(tx);
             }
@@ -210,7 +210,7 @@ impl Blockchain {
 
         let mut tx_count: u64 = 1;
         for i in min_height..=max_height {
-            tx_count += self.get_block(i).unwrap().transactions.len() as u64;
+            tx_count += self.get_block(i).unwrap().txs().len() as u64;
         }
         tx_count /= NETWORK_FEE_AVG_WINDOW;
         if tx_count > u64::from(u16::max_value()) {
@@ -253,7 +253,7 @@ impl Blockchain {
         static SKIP_FLAGS: SkipFlags = SKIP_NONE | SKIP_REWARD_TX;
         self.verify_block(&block, &self.get_chain_head(), SKIP_FLAGS)?;
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
-        for tx in &block.transactions {
+        for tx in block.txs() {
             Self::index_tx(&mut batch, tx);
         }
         self.store.lock().insert(&mut batch, block);
@@ -268,7 +268,7 @@ impl Blockchain {
         prev_block: &SignedBlock,
         skip_flags: SkipFlags,
     ) -> Result<(), verify::BlockErr> {
-        if prev_block.height + 1 != block.height {
+        if prev_block.height() + 1 != block.height() {
             return Err(verify::BlockErr::InvalidBlockHeight);
         } else if !block.verify_tx_merkle_root() {
             return Err(verify::BlockErr::InvalidMerkleRoot);
@@ -277,16 +277,18 @@ impl Blockchain {
         }
 
         let owner = self.get_owner();
-        if !block.sig_pair.verify(block.calc_hash().as_ref()) {
+        let block_signer = block.signer();
+        if !block_signer.verify(block.calc_hash().as_ref()) {
             return Err(verify::BlockErr::InvalidHash);
-        } else if block.sig_pair.pub_key != owner.minter {
+        } else if block_signer.pub_key != owner.minter {
             return Err(verify::BlockErr::InvalidSignature);
         }
 
-        let len = block.transactions.len();
+        let block_txs = block.as_ref().txs();
+        let len = block_txs.len();
         for i in 0..len {
-            let tx = &block.transactions[i];
-            let txs = &block.transactions[0..i];
+            let tx = &block_txs[i];
+            let txs = &block_txs[0..i];
             if let Err(e) = self.verify_tx(&TxPrecompData::from_tx(tx), txs, skip_flags) {
                 return Err(verify::BlockErr::Tx(e));
             }
@@ -448,7 +450,7 @@ impl Blockchain {
             script: Builder::new().push(OpFrame::False).build(),
         };
 
-        let block = (Block {
+        let block = Block::V0(BlockV0 {
             height: 0,
             previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
             tx_merkle_root: Digest::from_slice(&[0u8; 32]).unwrap(),

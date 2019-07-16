@@ -622,7 +622,7 @@ fn net_fee_dynamic_increase() {
 
                     let tx_count = (min_height..=max_height).fold(1u64, |tx_count, height| {
                         let block = chain.get_block(height).unwrap();
-                        tx_count + block.transactions.len() as u64
+                        tx_count + block.txs().len() as u64
                     });
                     let tx_count = (tx_count / NETWORK_FEE_AVG_WINDOW) as u16;
                     assert!(tx_count > 10);

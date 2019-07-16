@@ -1,22 +1,37 @@
-use std::io::Cursor;
-use std::ops::Deref;
-
 use crate::{
-    crypto::{self, double_sha256, Digest, KeyPair},
+    crypto::{double_sha256, Digest, KeyPair, SigPair},
     serializer::*,
     tx::*,
 };
+use std::{io::Cursor, ops::Deref};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Block {
-    pub previous_hash: Digest,
-    pub height: u64,
-    pub timestamp: u64,
-    pub tx_merkle_root: Digest,
-    pub transactions: Vec<TxVariant>,
+pub enum Block {
+    V0(BlockV0),
 }
 
 impl Block {
+    #[inline]
+    pub fn height(&self) -> u64 {
+        match self {
+            Block::V0(block) => block.height,
+        }
+    }
+
+    #[inline]
+    pub fn timestamp(&self) -> u64 {
+        match self {
+            Block::V0(block) => block.timestamp,
+        }
+    }
+
+    #[inline]
+    pub fn txs(&self) -> &[TxVariant] {
+        match self {
+            Block::V0(block) => &block.transactions,
+        }
+    }
+
     pub fn sign(self, key_pair: &KeyPair) -> SignedBlock {
         let buf = self.calc_hash();
         SignedBlock {
@@ -25,46 +40,20 @@ impl Block {
         }
     }
 
-    pub fn serialize_with_tx(&self, buf: &mut Vec<u8>) {
-        self.serialize_header(buf);
-
-        buf.push_u32(self.transactions.len() as u32);
-        for tx in &self.transactions {
-            tx.serialize(buf)
-        }
-    }
-
-    pub fn deserialize_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
-        let previous_hash = Digest::from_slice(&cur.take_bytes().ok()?)?;
-        let height = cur.take_u64().ok()?;
-        let timestamp = cur.take_u64().ok()?;
-        let tx_merkle_root = Digest::from_slice(&cur.take_bytes().ok()?)?;
-
-        let len = cur.take_u32().ok()?;
-        let mut transactions = Vec::<TxVariant>::with_capacity(len as usize);
-        for _ in 0..len {
-            transactions.push(TxVariant::deserialize(cur)?);
-        }
-
-        Some(Self {
-            previous_hash,
-            height,
-            timestamp,
-            tx_merkle_root,
-            transactions,
-        })
-    }
-
-    fn serialize_header(&self, vec: &mut Vec<u8>) {
-        vec.push_bytes(self.previous_hash.as_ref());
-        vec.push_u64(self.height);
-        vec.push_u64(self.timestamp);
-        vec.push_bytes(self.tx_merkle_root.as_ref());
+    pub fn verify_previous_hash(&self, prev_block: &Self) -> bool {
+        let cur_prev_hash = match self {
+            Block::V0(block) => &block.previous_hash,
+        };
+        cur_prev_hash == &prev_block.calc_hash()
     }
 
     pub fn verify_tx_merkle_root(&self) -> bool {
-        let digest = calc_tx_merkle_root(&self.transactions);
-        self.tx_merkle_root == digest
+        match self {
+            Block::V0(block) => {
+                let digest = calc_tx_merkle_root(&block.transactions);
+                block.tx_merkle_root == digest
+            }
+        }
     }
 
     pub fn calc_hash(&self) -> Digest {
@@ -73,15 +62,73 @@ impl Block {
         double_sha256(&buf)
     }
 
-    pub fn verify_previous_hash(&self, prev_block: &Block) -> bool {
-        self.previous_hash == prev_block.calc_hash()
+    pub fn deserialize_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
+        let block_ver = cur.take_u16().ok()?;
+        match block_ver {
+            0 => {
+                let previous_hash = Digest::from_slice(&cur.take_bytes().ok()?)?;
+                let height = cur.take_u64().ok()?;
+                let timestamp = cur.take_u64().ok()?;
+                let tx_merkle_root = Digest::from_slice(&cur.take_bytes().ok()?)?;
+
+                let len = cur.take_u32().ok()?;
+                let mut transactions = Vec::<TxVariant>::with_capacity(len as usize);
+                for _ in 0..len {
+                    transactions.push(TxVariant::deserialize(cur)?);
+                }
+
+                Some(Block::V0(BlockV0 {
+                    previous_hash,
+                    height,
+                    timestamp,
+                    tx_merkle_root,
+                    transactions,
+                }))
+            }
+            _ => None,
+        }
+    }
+
+    pub fn serialize_with_tx(&self, buf: &mut Vec<u8>) {
+        match self {
+            Block::V0(block) => {
+                self.serialize_header(buf);
+                buf.push_u32(block.transactions.len() as u32);
+                for tx in &block.transactions {
+                    tx.serialize(buf)
+                }
+            }
+        }
+    }
+
+    fn serialize_header(&self, buf: &mut Vec<u8>) {
+        match self {
+            Block::V0(block) => {
+                // Block version (2 bytes)
+                buf.push_u16(0);
+
+                buf.push_bytes(block.previous_hash.as_ref());
+                buf.push_u64(block.height);
+                buf.push_u64(block.timestamp);
+                buf.push_bytes(block.tx_merkle_root.as_ref());
+            }
+        }
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct BlockV0 {
+    pub previous_hash: Digest,
+    pub height: u64,
+    pub timestamp: u64,
+    pub tx_merkle_root: Digest,
+    pub transactions: Vec<TxVariant>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct SignedBlock {
-    pub base: Block,
-    pub sig_pair: crypto::SigPair,
+    base: Block,
+    sig_pair: SigPair,
 }
 
 impl SignedBlock {
@@ -91,21 +138,28 @@ impl SignedBlock {
             self.base.serialize_header(&mut buf);
             double_sha256(&buf)
         };
-        let height = self.height + 1;
+        let height = (match &self.base {
+            Block::V0(block) => block.height,
+        }) + 1;
         let tx_merkle_root = calc_tx_merkle_root(&txs);
         let timestamp = crate::get_epoch_ms();
-        Block {
+        Block::V0(BlockV0 {
             previous_hash,
             height,
             timestamp,
             tx_merkle_root,
             transactions: txs,
-        }
+        })
     }
 
-    pub fn serialize_with_tx(&self, vec: &mut Vec<u8>) {
-        self.base.serialize_with_tx(vec);
-        vec.push_sig_pair(&self.sig_pair);
+    #[inline]
+    pub fn signer(&self) -> &SigPair {
+        &self.sig_pair
+    }
+
+    pub fn serialize_with_tx(&self, buf: &mut Vec<u8>) {
+        self.base.serialize_with_tx(buf);
+        buf.push_sig_pair(&self.sig_pair);
     }
 
     pub fn deserialize_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
@@ -121,7 +175,15 @@ impl SignedBlock {
 impl Deref for SignedBlock {
     type Target = Block;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
+        &self.base
+    }
+}
+
+impl AsRef<Block> for SignedBlock {
+    #[inline]
+    fn as_ref(&self) -> &Block {
         &self.base
     }
 }
@@ -140,7 +202,7 @@ mod tests {
     use crate::{asset::Asset, crypto::KeyPair};
 
     #[test]
-    fn serialize_block() {
+    fn serialize_block_v0() {
         let keys = KeyPair::gen();
         let transactions = {
             let mut vec = Vec::new();
@@ -162,7 +224,7 @@ mod tests {
             }
             double_sha256(&buf)
         };
-        let block = (Block {
+        let block = Block::V0(BlockV0 {
             previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
             height: 123,
             timestamp: 1532992800,
@@ -177,28 +239,26 @@ mod tests {
         let mut cur = Cursor::<&[u8]>::new(&buf);
         let dec = SignedBlock::deserialize_with_tx(&mut cur).unwrap();
 
-        assert_eq!(block.previous_hash, dec.previous_hash);
-        assert_eq!(block.height, dec.height);
-        assert_eq!(block.timestamp, dec.timestamp);
-        assert_eq!(block.tx_merkle_root, dec.tx_merkle_root);
-        assert_eq!(block.transactions.len(), dec.transactions.len());
-        assert_eq!(block.sig_pair, dec.sig_pair);
-
         assert_eq!(block, dec);
     }
 
     #[test]
     fn merkle_root() {
-        let mut block = Block {
+        let mut block = Block::V0(BlockV0 {
             previous_hash: Digest::from_slice(&[0; 32]).unwrap(),
             height: 0,
             timestamp: 0,
             tx_merkle_root: double_sha256(&[0; 0]),
             transactions: vec![],
-        };
+        });
         assert!(block.verify_tx_merkle_root());
 
-        block.tx_merkle_root = Digest::from_slice(&[0; 32]).unwrap();
+        match &mut block {
+            Block::V0(block) => {
+                block.tx_merkle_root = Digest::from_slice(&[0; 32]).unwrap();
+            }
+        }
+
         assert!(!block.verify_tx_merkle_root());
     }
 }

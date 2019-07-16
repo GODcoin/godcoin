@@ -64,8 +64,8 @@ impl Minter {
         let head = self.chain.get_chain_head();
         let block = head.new_child(transactions).sign(&self.minter_key);
 
-        let height = block.height;
-        let tx_len = block.transactions.len();
+        let height = block.height();
+        let tx_len = block.txs().len();
 
         self.chain.insert_block(block)?;
         let txs = if tx_len == 1 { "tx" } else { "txs" };

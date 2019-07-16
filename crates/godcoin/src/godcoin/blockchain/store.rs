@@ -84,12 +84,12 @@ impl BlockStore {
     }
 
     pub fn insert(&mut self, batch: &mut WriteBatch, block: SignedBlock) {
-        assert_eq!(self.height + 1, block.height, "invalid block height");
+        assert_eq!(self.height + 1, block.height(), "invalid block height");
         let byte_pos = self.byte_pos_tail;
         self.write_to_disk(&block);
 
         // Update internal cache
-        let height = block.height;
+        let height = block.height();
         self.height = height;
         batch.set_block_byte_pos(height, byte_pos);
         batch.set_chain_height(height);
@@ -104,7 +104,7 @@ impl BlockStore {
     }
 
     pub fn insert_genesis(&mut self, batch: &mut WriteBatch, block: SignedBlock) {
-        assert_eq!(block.height, 0, "expected to be 0");
+        assert_eq!(block.height(), 0, "expected to be 0");
         assert!(
             self.genesis_block.is_none(),
             "expected genesis block to not exist"
@@ -125,7 +125,7 @@ impl BlockStore {
         loop {
             match self.raw_read_from_disk(pos) {
                 Ok(block) => {
-                    let height = block.height;
+                    let height = block.height();
                     let new_pos = {
                         let mut f = self.file.borrow_mut();
                         f.seek(SeekFrom::Current(0)).unwrap()
