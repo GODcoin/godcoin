@@ -34,9 +34,11 @@ impl Block {
 
     pub fn sign(self, key_pair: &KeyPair) -> SignedBlock {
         let buf = self.calc_hash();
-        SignedBlock {
-            base: self,
-            sig_pair: key_pair.sign(buf.as_ref()),
+        match self {
+            Block::V0(_) => SignedBlock::V0(SignedBlockV0 {
+                base: self,
+                sig_pair: key_pair.sign(buf.as_ref()),
+            }),
         }
     }
 
@@ -126,18 +128,70 @@ pub struct BlockV0 {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct SignedBlock {
+pub enum SignedBlock {
+    V0(SignedBlockV0),
+}
+
+impl SignedBlock {
+    #[inline]
+    pub fn signer(&self) -> &SigPair {
+        match self {
+            SignedBlock::V0(block) => &block.sig_pair,
+        }
+    }
+
+    pub fn serialize_with_tx(&self, buf: &mut Vec<u8>) {
+        match self {
+            SignedBlock::V0(block) => {
+                block.base.serialize_with_tx(buf);
+                buf.push_sig_pair(&block.sig_pair);
+            }
+        }
+    }
+
+    pub fn deserialize_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
+        let block = Block::deserialize_with_tx(cur)?;
+        match block {
+            Block::V0(_) => {
+                let sig_pair = cur.take_sig_pair().ok()?;
+                Some(SignedBlock::V0(SignedBlockV0 {
+                    base: block,
+                    sig_pair,
+                }))
+            }
+        }
+    }
+}
+
+impl Deref for SignedBlock {
+    type Target = Block;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        match self {
+            SignedBlock::V0(block) => &block.base,
+        }
+    }
+}
+
+impl AsRef<Block> for SignedBlock {
+    #[inline]
+    fn as_ref(&self) -> &Block {
+        match self {
+            SignedBlock::V0(block) => &block.base,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SignedBlockV0 {
     base: Block,
     sig_pair: SigPair,
 }
 
-impl SignedBlock {
+impl SignedBlockV0 {
     pub fn new_child(&self, txs: Vec<TxVariant>) -> Block {
-        let previous_hash = {
-            let mut buf = Vec::with_capacity(1024);
-            self.base.serialize_header(&mut buf);
-            double_sha256(&buf)
-        };
+        let previous_hash = self.base.calc_hash();
         let height = (match &self.base {
             Block::V0(block) => block.height,
         }) + 1;
@@ -150,41 +204,6 @@ impl SignedBlock {
             tx_merkle_root,
             transactions: txs,
         })
-    }
-
-    #[inline]
-    pub fn signer(&self) -> &SigPair {
-        &self.sig_pair
-    }
-
-    pub fn serialize_with_tx(&self, buf: &mut Vec<u8>) {
-        self.base.serialize_with_tx(buf);
-        buf.push_sig_pair(&self.sig_pair);
-    }
-
-    pub fn deserialize_with_tx(cur: &mut Cursor<&[u8]>) -> Option<Self> {
-        let block = Block::deserialize_with_tx(cur)?;
-        let sig_pair = cur.take_sig_pair().ok()?;
-        Some(Self {
-            base: block,
-            sig_pair,
-        })
-    }
-}
-
-impl Deref for SignedBlock {
-    type Target = Block;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.base
-    }
-}
-
-impl AsRef<Block> for SignedBlock {
-    #[inline]
-    fn as_ref(&self) -> &Block {
-        &self.base
     }
 }
 
