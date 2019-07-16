@@ -245,21 +245,16 @@ impl BlockStore {
     fn init_state(&mut self) {
         self.height = self.indexer.get_chain_height();
         self.genesis_block = self.get(0);
-        {
+        if !self.is_empty() {
             // Init block cache
             self.blocks.clear();
-            let min = if self.height < MAX_CACHE_SIZE {
-                self.height
-            } else {
-                self.height - 100
-            };
-            let max = min + MAX_CACHE_SIZE;
+            let max = self.height;
+            let min = max.saturating_sub(MAX_CACHE_SIZE);
             for height in min..=max {
-                if let Some(block) = self.read_from_disk(height) {
-                    self.blocks.insert(height, Arc::new(block));
-                } else {
-                    break;
-                }
+                let block = self
+                    .read_from_disk(height)
+                    .unwrap_or_else(|| panic!("Failed to read block {} from disk", height));
+                self.blocks.insert(height, Arc::new(block));
             }
         }
     }
