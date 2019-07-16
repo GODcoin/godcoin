@@ -261,4 +261,34 @@ mod tests {
 
         assert!(!block.verify_tx_merkle_root());
     }
+
+    #[test]
+    fn previous_hash() {
+        let block_0 = Block::V0(BlockV0 {
+            previous_hash: Digest::from_slice(&[0; 32]).unwrap(),
+            height: 0,
+            timestamp: 0,
+            tx_merkle_root: double_sha256(&[0; 0]),
+            transactions: vec![],
+        });
+
+        let block_1 = Block::V0(BlockV0 {
+            previous_hash: block_0.calc_hash(),
+            height: 1,
+            timestamp: 0,
+            tx_merkle_root: double_sha256(&[0; 0]),
+            transactions: vec![],
+        });
+
+        let block_1_invalid = Block::V0(BlockV0 {
+            previous_hash: Digest::from_slice(&[0; 32]).unwrap(),
+            height: 1,
+            timestamp: 0,
+            tx_merkle_root: double_sha256(&[0; 0]),
+            transactions: vec![],
+        });
+
+        assert!(block_1.verify_previous_hash(&block_0));
+        assert!(!block_1_invalid.verify_previous_hash(&block_0));
+    }
 }
