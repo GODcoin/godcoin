@@ -245,7 +245,7 @@ impl BlockStore {
     fn init_state(&mut self) {
         self.height = self.indexer.get_chain_height();
         self.genesis_block = self.get(0);
-        if !self.is_empty() {
+        if !self.is_empty() && self.indexer.index_status() == IndexStatus::Complete {
             // Init block cache
             self.blocks.clear();
             let max = self.height;
