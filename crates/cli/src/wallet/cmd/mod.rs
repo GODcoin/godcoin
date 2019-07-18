@@ -124,12 +124,13 @@ pub fn sign_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, Stri
             .db
             .get_account(account)
             .ok_or("Account does not exist")?;
-        match &mut tx {
-            TxVariant::OwnerTx(tx) => tx.append_sign(&account),
-            TxVariant::MintTx(tx) => tx.append_sign(&account),
-            TxVariant::RewardTx(_) => return Err("Cannot sign reward tx".to_owned()),
-            TxVariant::TransferTx(tx) => tx.append_sign(&account),
+        match &tx {
+            TxVariant::V0(var) => match var {
+                TxVariantV0::RewardTx(_) => return Err("Cannot sign reward tx".to_owned()),
+                _ => {}
+            },
         }
+        tx.append_sign(&account);
     }
 
     tx_bytes.clear();
@@ -152,8 +153,8 @@ pub fn unsign_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, S
         TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?
     };
 
-    if sig_pos < tx.signature_pairs.len() {
-        tx.signature_pairs.remove(sig_pos);
+    if sig_pos < tx.sigs().len() {
+        tx.sigs_mut().remove(sig_pos);
     }
 
     tx_bytes.clear();
@@ -193,6 +194,12 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
         _ => return Err("wallet not unlocked".to_owned()),
     }
     .owner;
+    let owner_wallet = match owner.as_ref() {
+        TxVariant::V0(owner) => match owner {
+            TxVariantV0::OwnerTx(owner) => &owner.wallet,
+            _ => unreachable!(),
+        },
+    };
 
     let (attachment, attachment_name) = if !args[4].is_empty() {
         let path = Path::new(&args[4]);
@@ -210,18 +217,18 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
         (vec![], "".to_owned())
     };
 
-    let mint_tx = TxVariant::MintTx(MintTx {
+    let mint_tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: Tx {
             timestamp,
             signature_pairs: vec![],
             fee: Asset::new(0),
         },
-        to: owner.wallet,
+        to: owner_wallet.clone(),
         amount,
         attachment,
         attachment_name,
         script,
-    });
+    }));
     let mut buf = Vec::with_capacity(4096);
     mint_tx.serialize(&mut buf);
     println!("{}", faster_hex::hex_string(&buf).unwrap());

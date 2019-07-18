@@ -17,7 +17,13 @@ fn fresh_blockchain() {
         assert!(chain.get_block(1).is_some());
         assert_eq!(chain.get_chain_height(), 1);
 
-        let owner = chain.get_owner();
+        let owner = match chain.get_owner() {
+            TxVariant::V0(tx) => match tx {
+                TxVariantV0::OwnerTx(tx) => tx,
+                _ => unreachable!(),
+            },
+        };
+
         assert_eq!(owner.minter, minter.genesis_info().minter_key.0);
         assert_eq!(
             owner.script,
@@ -43,17 +49,17 @@ fn reindexed_blockchain() {
         let amount = get_asset("1.00000 GRAEL");
 
         let tx = {
-            let mut tx = TransferTx {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 GRAEL"),
                 from: from_addr.clone(),
                 to: (&to_addr.0).into(),
                 amount,
                 memo: vec![],
                 script: minter.genesis_info().script.clone(),
-            };
+            }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-            TxVariant::TransferTx(tx)
+            tx
         };
         let tx_data = TxPrecompData::from_tx(tx.clone());
         let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
@@ -85,7 +91,12 @@ fn reindexed_blockchain() {
                 assert_eq!(chain.get_chain_height(), 2);
                 assert!(manager.has(tx_data.txid()));
 
-                let owner = chain.get_owner();
+                let owner = match chain.get_owner() {
+                    TxVariant::V0(tx) => match tx {
+                        TxVariantV0::OwnerTx(tx) => tx,
+                        _ => unreachable!(),
+                    },
+                };
                 assert_eq!(owner.minter, minter.genesis_info().minter_key.0);
                 assert_eq!(
                     owner.script,
@@ -123,19 +134,18 @@ fn tx_dupe() {
     System::run(|| {
         let minter = TestMinter::new();
 
-        let mut tx = MintTx {
+        let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
             base: create_tx_header("0.00000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
             attachment_name: "".to_owned(),
             script: minter.genesis_info().script.clone(),
-        };
+        }));
 
         tx.append_sign(&minter.genesis_info().wallet_keys[1]);
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-        let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
         Arbiter::spawn(
             fut.and_then(move |res| {
@@ -166,16 +176,15 @@ fn tx_expired() {
         let minter = TestMinter::new();
         let time = godcoin::get_epoch_ms();
 
-        let tx = MintTx {
+        let tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
             base: create_tx_header_with_ts("0.00000 GRAEL", time + TX_EXPIRY_TIME),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
             attachment_name: "".to_owned(),
             script: minter.genesis_info().script.clone(),
-        };
+        }));
 
-        let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(fut.then(move |res| {
             let res = res.unwrap();
@@ -198,16 +207,15 @@ fn tx_far_in_the_future() {
         let minter = TestMinter::new();
         let time = godcoin::get_epoch_ms();
 
-        let tx = MintTx {
+        let tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
             base: create_tx_header_with_ts("0.00000 GRAEL", time + 4000),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
             attachment_name: "".to_owned(),
             script: minter.genesis_info().script.clone(),
-        };
+        }));
 
-        let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(fut.then(move |res| {
             let res = res.unwrap();
@@ -229,16 +237,15 @@ fn tx_script_too_large_err() {
     System::run(|| {
         let minter = TestMinter::new();
 
-        let tx = MintTx {
+        let tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
             base: create_tx_header("0.00000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
             attachment_name: "".to_owned(),
             script: Script::new((0..=constants::MAX_SCRIPT_BYTE_SIZE).map(|_| 0).collect()),
-        };
+        }));
 
-        let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(fut.and_then(move |res| {
             assert!(res.is_err());
@@ -259,17 +266,16 @@ fn tx_too_many_signatures_err() {
     System::run(|| {
         let minter = TestMinter::new();
 
-        let mut tx = MintTx {
+        let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
             base: create_tx_header("0.00000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
             attachment_name: "".to_owned(),
             script: Script::new(vec![]),
-        };
+        }));
         (0..=constants::MAX_TX_SIGNATURES).for_each(|_| tx.append_sign(&KeyPair::gen()));
 
-        let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(fut.and_then(move |res| {
             assert!(res.is_err());

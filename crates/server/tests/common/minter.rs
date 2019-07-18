@@ -43,22 +43,20 @@ impl TestMinter {
             let txs = {
                 let mut txs = Vec::with_capacity(1);
 
-                let mut tx = MintTx {
+                let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
                     base: create_tx_header("0.00000 GRAEL"),
                     to: (&info.script).into(),
                     amount: "1000.00000 GRAEL".parse().unwrap(),
                     attachment: vec![1, 2, 3],
                     attachment_name: "".to_owned(),
                     script: info.script.clone(),
-                };
+                }));
 
                 tx.append_sign(&info.wallet_keys[1]);
                 tx.append_sign(&info.wallet_keys[0]);
-
-                let tx = TxVariant::MintTx(tx);
                 txs.push(tx);
 
-                txs.push(TxVariant::RewardTx(RewardTx {
+                txs.push(TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
                     base: Tx {
                         fee: "0.00000 GRAEL".parse().unwrap(),
                         timestamp: 0,
@@ -66,7 +64,7 @@ impl TestMinter {
                     },
                     to: (&info.script).into(),
                     rewards: Asset::default(),
-                }));
+                })));
                 txs
             };
 

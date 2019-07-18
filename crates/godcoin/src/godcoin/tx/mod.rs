@@ -36,11 +36,6 @@ pub trait DeserializeTx<T> {
     fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<T>;
 }
 
-pub trait SignTx {
-    fn sign(&self, key_pair: &KeyPair) -> SigPair;
-    fn append_sign(&mut self, key_pair: &KeyPair);
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct TxId(Digest);
 
@@ -61,7 +56,7 @@ pub struct TxPrecompData<'a> {
     tx: Cow<'a, TxVariant>,
     txid: TxId,
     bytes: Vec<u8>,
-    sig_tx_prefix: usize,
+    sig_tx_suffix: usize,
 }
 
 impl<'a> TxPrecompData<'a> {
@@ -72,14 +67,15 @@ impl<'a> TxPrecompData<'a> {
         let tx = tx.into();
         let mut bytes = Vec::with_capacity(4096);
         tx.serialize(&mut bytes);
-        let sig_tx_prefix = 1 + (tx.signature_pairs.len() * (PUBLICKEYBYTES + SIGNATUREBYTES));
+        let sigs_len = 1 + (tx.sigs().len() * (PUBLICKEYBYTES + SIGNATUREBYTES));
+        let sig_tx_suffix = bytes.len() - sigs_len;
 
         let txid = TxId(double_sha256(&bytes));
         Self {
             tx,
             txid,
             bytes,
-            sig_tx_prefix,
+            sig_tx_suffix,
         }
     }
 
@@ -105,7 +101,7 @@ impl<'a> TxPrecompData<'a> {
 
     #[inline]
     pub fn bytes_without_sigs(&self) -> &[u8] {
-        &self.bytes[self.sig_tx_prefix..]
+        &self.bytes[..self.sig_tx_suffix]
     }
 }
 
@@ -123,10 +119,7 @@ impl<'a> Into<Cow<'a, TxPrecompData<'a>>> for &'a TxPrecompData<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum TxVariant {
-    OwnerTx(OwnerTx),
-    MintTx(MintTx),
-    RewardTx(RewardTx),
-    TransferTx(TransferTx),
+    V0(TxVariantV0),
 }
 
 impl TxVariant {
@@ -135,83 +128,114 @@ impl TxVariant {
         TxPrecompData::from_tx(Cow::Owned(self))
     }
 
+    #[inline]
+    pub fn timestamp(&self) -> u64 {
+        match self {
+            TxVariant::V0(tx) => tx.timestamp,
+        }
+    }
+
+    #[inline]
+    pub fn sigs(&self) -> &[SigPair] {
+        match self {
+            TxVariant::V0(tx) => &tx.signature_pairs,
+        }
+    }
+
+    #[inline]
+    pub fn sigs_mut(&mut self) -> &mut Vec<SigPair> {
+        match self {
+            TxVariant::V0(tx) => &mut tx.signature_pairs,
+        }
+    }
+
     pub fn script(&self) -> Option<&Script> {
         match self {
-            TxVariant::OwnerTx(tx) => Some(&tx.script),
-            TxVariant::MintTx(tx) => Some(&tx.script),
-            TxVariant::RewardTx(_) => None,
-            TxVariant::TransferTx(tx) => Some(&tx.script),
+            TxVariant::V0(var) => match var {
+                TxVariantV0::OwnerTx(tx) => Some(&tx.script),
+                TxVariantV0::MintTx(tx) => Some(&tx.script),
+                TxVariantV0::RewardTx(_) => None,
+                TxVariantV0::TransferTx(tx) => Some(&tx.script),
+            },
         }
+    }
+
+    #[inline]
+    pub fn sign(&self, key_pair: &KeyPair) -> SigPair {
+        let mut buf = Vec::with_capacity(4096);
+        self.serialize_without_sigs(&mut buf);
+        key_pair.sign(&buf)
+    }
+
+    #[inline]
+    pub fn append_sign(&mut self, key_pair: &KeyPair) {
+        let pair = self.sign(key_pair);
+        self.sigs_mut().push(pair);
+    }
+
+    pub fn serialize(&self, buf: &mut Vec<u8>) {
+        self.serialize_without_sigs(buf);
+        match self {
+            TxVariant::V0(var) => {
+                macro_rules! serialize_sigs {
+                    ($name:expr) => {{
+                        buf.push($name.signature_pairs.len() as u8);
+                        for sig in &$name.signature_pairs {
+                            buf.push_sig_pair(sig)
+                        }
+                    }};
+                }
+
+                match var {
+                    TxVariantV0::OwnerTx(tx) => serialize_sigs!(tx),
+                    TxVariantV0::MintTx(tx) => serialize_sigs!(tx),
+                    TxVariantV0::RewardTx(tx) => serialize_sigs!(tx),
+                    TxVariantV0::TransferTx(tx) => serialize_sigs!(tx),
+                }
+            }
+        };
     }
 
     pub fn serialize_without_sigs(&self, buf: &mut Vec<u8>) {
         match self {
-            TxVariant::OwnerTx(tx) => tx.serialize(buf),
-            TxVariant::MintTx(tx) => tx.serialize(buf),
-            TxVariant::RewardTx(tx) => tx.serialize(buf),
-            TxVariant::TransferTx(tx) => tx.serialize(buf),
-        };
-    }
+            TxVariant::V0(var) => {
+                // Tx version (2 bytes)
+                buf.push_u16(0);
 
-    pub fn serialize(&self, v: &mut Vec<u8>) {
-        macro_rules! serialize_with_sigs {
-            ($name:expr, $vec:expr) => {{
-                $vec.push($name.signature_pairs.len() as u8);
-                for sig in &$name.signature_pairs {
-                    $vec.push_sig_pair(sig)
+                match var {
+                    TxVariantV0::OwnerTx(tx) => tx.serialize(buf),
+                    TxVariantV0::MintTx(tx) => tx.serialize(buf),
+                    TxVariantV0::RewardTx(tx) => tx.serialize(buf),
+                    TxVariantV0::TransferTx(tx) => tx.serialize(buf),
                 }
-                $name.serialize($vec);
-            }};
-        }
-
-        match self {
-            TxVariant::OwnerTx(tx) => serialize_with_sigs!(tx, v),
-            TxVariant::MintTx(tx) => serialize_with_sigs!(tx, v),
-            TxVariant::RewardTx(tx) => serialize_with_sigs!(tx, v),
-            TxVariant::TransferTx(tx) => serialize_with_sigs!(tx, v),
+            }
         };
     }
 
     pub fn deserialize(cur: &mut Cursor<&[u8]>) -> Option<TxVariant> {
-        let sigs = {
-            let len = cur.take_u8().ok()?;
-            let mut vec = Vec::with_capacity(len as usize);
-            for _ in 0..len {
-                vec.push(cur.take_sig_pair().ok()?)
+        let tx_ver = cur.take_u16().ok()?;
+        match tx_ver {
+            0 => {
+                let (base, tx_type) = Tx::deserialize_header(cur)?;
+                let mut tx = match tx_type {
+                    TxType::OWNER => TxVariantV0::OwnerTx(OwnerTx::deserialize(cur, base)?),
+                    TxType::MINT => TxVariantV0::MintTx(MintTx::deserialize(cur, base)?),
+                    TxType::REWARD => TxVariantV0::RewardTx(RewardTx::deserialize(cur, base)?),
+                    TxType::TRANSFER => {
+                        TxVariantV0::TransferTx(TransferTx::deserialize(cur, base)?)
+                    }
+                };
+                tx.signature_pairs = {
+                    let len = cur.take_u8().ok()?;
+                    let mut sigs = Vec::with_capacity(len as usize);
+                    for _ in 0..len {
+                        sigs.push(cur.take_sig_pair().ok()?)
+                    }
+                    sigs
+                };
+                Some(TxVariant::V0(tx))
             }
-            vec
-        };
-        let (mut base, tx_type) = Tx::deserialize_header(cur)?;
-        base.signature_pairs = sigs;
-        match tx_type {
-            TxType::OWNER => Some(TxVariant::OwnerTx(OwnerTx::deserialize(cur, base)?)),
-            TxType::MINT => Some(TxVariant::MintTx(MintTx::deserialize(cur, base)?)),
-            TxType::REWARD => Some(TxVariant::RewardTx(RewardTx::deserialize(cur, base)?)),
-            TxType::TRANSFER => Some(TxVariant::TransferTx(TransferTx::deserialize(cur, base)?)),
-        }
-    }
-}
-
-impl Deref for TxVariant {
-    type Target = Tx;
-
-    fn deref(&self) -> &Self::Target {
-        match self {
-            TxVariant::OwnerTx(tx) => &tx.base,
-            TxVariant::MintTx(tx) => &tx.base,
-            TxVariant::RewardTx(tx) => &tx.base,
-            TxVariant::TransferTx(tx) => &tx.base,
-        }
-    }
-}
-
-impl DerefMut for TxVariant {
-    fn deref_mut(&mut self) -> &mut Tx {
-        match self {
-            TxVariant::OwnerTx(tx) => &mut tx.base,
-            TxVariant::MintTx(tx) => &mut tx.base,
-            TxVariant::RewardTx(tx) => &mut tx.base,
-            TxVariant::TransferTx(tx) => &mut tx.base,
+            _ => None,
         }
     }
 }
@@ -225,6 +249,38 @@ impl<'a> Into<Cow<'a, TxVariant>> for TxVariant {
 impl<'a> Into<Cow<'a, TxVariant>> for &'a TxVariant {
     fn into(self) -> Cow<'a, TxVariant> {
         Cow::Borrowed(self)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TxVariantV0 {
+    OwnerTx(OwnerTx),
+    MintTx(MintTx),
+    RewardTx(RewardTx),
+    TransferTx(TransferTx),
+}
+
+impl Deref for TxVariantV0 {
+    type Target = Tx;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            TxVariantV0::OwnerTx(tx) => &tx.base,
+            TxVariantV0::MintTx(tx) => &tx.base,
+            TxVariantV0::RewardTx(tx) => &tx.base,
+            TxVariantV0::TransferTx(tx) => &tx.base,
+        }
+    }
+}
+
+impl DerefMut for TxVariantV0 {
+    fn deref_mut(&mut self) -> &mut Tx {
+        match self {
+            TxVariantV0::OwnerTx(tx) => &mut tx.base,
+            TxVariantV0::MintTx(tx) => &mut tx.base,
+            TxVariantV0::RewardTx(tx) => &mut tx.base,
+            TxVariantV0::TransferTx(tx) => &mut tx.base,
+        }
     }
 }
 
@@ -412,10 +468,6 @@ tx_deref!(MintTx);
 tx_deref!(RewardTx);
 tx_deref!(TransferTx);
 
-tx_sign!(OwnerTx);
-tx_sign!(MintTx);
-tx_sign!(TransferTx);
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -434,7 +486,7 @@ mod tests {
     #[test]
     fn serialize_tx_with_sigs() {
         let to = crypto::KeyPair::gen();
-        let reward_tx = TxVariant::RewardTx(RewardTx {
+        let reward_tx = TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
             base: Tx {
                 timestamp: 123,
                 fee: get_asset("123.00000 GRAEL"),
@@ -442,7 +494,7 @@ mod tests {
             },
             to: to.0.into(),
             rewards: get_asset("1.50000 GRAEL"),
-        });
+        }));
 
         let mut v = vec![];
         reward_tx.serialize(&mut v);
@@ -649,7 +701,7 @@ mod tests {
 
     #[test]
     fn precomp_data_sig_split() {
-        let tx = TxVariant::TransferTx(TransferTx {
+        let tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: Tx {
                 timestamp: 1000,
                 fee: get_asset("10.00000 GRAEL"),
@@ -660,7 +712,7 @@ mod tests {
             script: Builder::new().push(OpFrame::True).build(),
             amount: get_asset("1.00000 GRAEL"),
             memo: vec![1, 2, 3],
-        });
+        }));
 
         let mut buf = Vec::with_capacity(4096);
         tx.serialize_without_sigs(&mut buf);

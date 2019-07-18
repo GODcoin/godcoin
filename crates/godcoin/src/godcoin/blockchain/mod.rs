@@ -19,7 +19,7 @@ use crate::{asset::Asset, constants::*, crypto::*, script::*, tx::*};
 #[derive(Clone, Debug, PartialEq)]
 pub struct Properties {
     pub height: u64,
-    pub owner: Box<OwnerTx>,
+    pub owner: Box<TxVariant>,
     pub token_supply: Asset,
     pub network_fee: Asset,
 }
@@ -94,7 +94,7 @@ impl Blockchain {
             if block.timestamp() > sys_time - (TX_EXPIRY_TIME * 2) {
                 for tx in block.txs() {
                     let data = TxPrecompData::from_tx(tx);
-                    manager.insert(data.txid(), data.tx().timestamp);
+                    manager.insert(data.txid(), data.tx().timestamp());
                 }
             } else {
                 break;
@@ -116,7 +116,7 @@ impl Blockchain {
     }
 
     #[inline]
-    pub fn get_owner(&self) -> OwnerTx {
+    pub fn get_owner(&self) -> TxVariant {
         self.indexer
             .get_owner()
             .expect("Failed to retrieve owner from index")
@@ -164,10 +164,12 @@ impl Blockchain {
         macro_rules! handle_tx_match {
             ($tx:expr) => {
                 let has_match = match $tx {
-                    TxVariant::OwnerTx(_) => false,
-                    TxVariant::MintTx(_) => false,
-                    TxVariant::RewardTx(_) => false,
-                    TxVariant::TransferTx(tx) => &tx.from == addr,
+                    TxVariant::V0(tx) => match tx {
+                        TxVariantV0::OwnerTx(_) => false,
+                        TxVariantV0::MintTx(_) => false,
+                        TxVariantV0::RewardTx(_) => false,
+                        TxVariantV0::TransferTx(tx) => &tx.from == addr,
+                    },
                 };
                 if has_match {
                     tx_count += 1;
@@ -224,25 +226,27 @@ impl Blockchain {
         let mut bal = self.indexer.get_balance(addr).unwrap_or_default();
         for tx in additional_txs {
             match tx {
-                TxVariant::OwnerTx(_) => {}
-                TxVariant::MintTx(tx) => {
-                    if &tx.to == addr {
-                        bal = bal.add(tx.amount)?;
+                TxVariant::V0(tx) => match tx {
+                    TxVariantV0::OwnerTx(_) => {}
+                    TxVariantV0::MintTx(tx) => {
+                        if &tx.to == addr {
+                            bal = bal.add(tx.amount)?;
+                        }
                     }
-                }
-                TxVariant::RewardTx(tx) => {
-                    if &tx.to == addr {
-                        bal = bal.add(tx.rewards)?;
+                    TxVariantV0::RewardTx(tx) => {
+                        if &tx.to == addr {
+                            bal = bal.add(tx.rewards)?;
+                        }
                     }
-                }
-                TxVariant::TransferTx(tx) => {
-                    if &tx.from == addr {
-                        bal = bal.sub(tx.fee)?;
-                        bal = bal.sub(tx.amount)?;
-                    } else if &tx.to == addr {
-                        bal = bal.add(tx.amount)?;
+                    TxVariantV0::TransferTx(tx) => {
+                        if &tx.from == addr {
+                            bal = bal.sub(tx.fee)?;
+                            bal = bal.sub(tx.amount)?;
+                        } else if &tx.to == addr {
+                            bal = bal.add(tx.amount)?;
+                        }
                     }
-                }
+                },
             }
         }
 
@@ -276,12 +280,20 @@ impl Blockchain {
             return Err(verify::BlockErr::InvalidPrevHash);
         }
 
-        let owner = self.get_owner();
         let block_signer = block.signer();
+        match self.get_owner() {
+            TxVariant::V0(tx) => match tx {
+                TxVariantV0::OwnerTx(owner) => {
+                    if block_signer.pub_key != owner.minter {
+                        return Err(verify::BlockErr::InvalidSignature);
+                    }
+                }
+                _ => unreachable!(),
+            },
+        }
+
         if !block_signer.verify(block.calc_hash().as_ref()) {
             return Err(verify::BlockErr::InvalidHash);
-        } else if block_signer.pub_key != owner.minter {
-            return Err(verify::BlockErr::InvalidSignature);
         }
 
         let block_txs = block.as_ref().txs();
@@ -321,7 +333,7 @@ impl Blockchain {
 
         let tx = data.tx();
 
-        if tx.signature_pairs.len() > MAX_TX_SIGNATURES {
+        if tx.sigs().len() > MAX_TX_SIGNATURES {
             return Err(TxErr::TooManySignatures);
         } else if let Some(script) = tx.script() {
             if script.len() > MAX_SCRIPT_BYTE_SIZE {
@@ -330,108 +342,125 @@ impl Blockchain {
         }
 
         match tx {
-            TxVariant::OwnerTx(new_owner) => {
-                check_zero_fee!(tx.fee);
+            TxVariant::V0(tx) => match tx {
+                TxVariantV0::OwnerTx(new_owner) => {
+                    check_zero_fee!(tx.fee);
 
-                let owner = self.get_owner();
-                if owner.wallet != (&new_owner.script).into() {
-                    return Err(TxErr::ScriptHashMismatch);
-                }
+                    match self.get_owner() {
+                        TxVariant::V0(tx) => match tx {
+                            TxVariantV0::OwnerTx(owner) => {
+                                if owner.wallet != (&new_owner.script).into() {
+                                    return Err(TxErr::ScriptHashMismatch);
+                                }
+                            }
+                            _ => unreachable!(),
+                        },
+                    }
 
-                let success = ScriptEngine::new(data, &new_owner.script)
-                    .eval()
-                    .map_err(TxErr::ScriptEval)?;
-                if !success {
-                    return Err(TxErr::ScriptRetFalse);
+                    let success = ScriptEngine::new(data, &new_owner.script)
+                        .eval()
+                        .map_err(TxErr::ScriptEval)?;
+                    if !success {
+                        return Err(TxErr::ScriptRetFalse);
+                    }
                 }
-            }
-            TxVariant::MintTx(mint_tx) => {
-                check_zero_fee!(tx.fee);
+                TxVariantV0::MintTx(mint_tx) => {
+                    check_zero_fee!(tx.fee);
 
-                let owner = self.get_owner();
-                if owner.wallet != (&mint_tx.script).into() {
-                    return Err(TxErr::ScriptHashMismatch);
-                }
-                let success = ScriptEngine::new(data, &mint_tx.script)
-                    .eval()
-                    .map_err(TxErr::ScriptEval)?;
-                if !success {
-                    return Err(TxErr::ScriptRetFalse);
-                }
+                    match self.get_owner() {
+                        TxVariant::V0(tx) => match tx {
+                            TxVariantV0::OwnerTx(owner) => {
+                                if owner.wallet != (&mint_tx.script).into() {
+                                    return Err(TxErr::ScriptHashMismatch);
+                                }
+                            }
+                            _ => unreachable!(),
+                        },
+                    }
 
-                // Sanity check to ensure too many new coins can't be minted
-                self.get_balance(&mint_tx.to, additional_txs)
-                    .ok_or(TxErr::Arithmetic)?
-                    .add(mint_tx.amount)
-                    .ok_or(TxErr::Arithmetic)?;
+                    let success = ScriptEngine::new(data, &mint_tx.script)
+                        .eval()
+                        .map_err(TxErr::ScriptEval)?;
+                    if !success {
+                        return Err(TxErr::ScriptRetFalse);
+                    }
 
-                self.indexer
-                    .get_token_supply()
-                    .add(mint_tx.amount)
-                    .ok_or(TxErr::Arithmetic)?;
-            }
-            TxVariant::RewardTx(tx) => {
-                if skip_flags & SKIP_REWARD_TX == 0 {
-                    return Err(TxErr::TxProhibited);
-                }
-                // Reward transactions are internally generated, thus should panic on failure
-                if tx.fee.amount != 0 {
-                    panic!("reward tx must have no fee");
-                } else if !tx.signature_pairs.is_empty() {
-                    panic!("reward tx must not be signed");
-                } else if tx.timestamp != 0 {
-                    panic!("reward tx must have a timestamp of 0");
-                }
-            }
-            TxVariant::TransferTx(transfer) => {
-                if transfer.memo.len() > MAX_MEMO_BYTE_SIZE {
-                    return Err(TxErr::TxTooLarge);
-                }
-                let info = self
-                    .get_address_info(&transfer.from, additional_txs)
-                    .ok_or(TxErr::Arithmetic)?;
-                let total_fee = info.total_fee().ok_or(TxErr::Arithmetic)?;
-                if tx.fee < total_fee {
-                    return Err(TxErr::InvalidFeeAmount);
-                } else if transfer.from != (&transfer.script).into() {
-                    return Err(TxErr::ScriptHashMismatch);
-                }
+                    // Sanity check to ensure too many new coins can't be minted
+                    self.get_balance(&mint_tx.to, additional_txs)
+                        .ok_or(TxErr::Arithmetic)?
+                        .add(mint_tx.amount)
+                        .ok_or(TxErr::Arithmetic)?;
 
-                let success = ScriptEngine::new(data, &transfer.script)
-                    .eval()
-                    .map_err(TxErr::ScriptEval)?;
-                if !success {
-                    return Err(TxErr::ScriptRetFalse);
+                    self.indexer
+                        .get_token_supply()
+                        .add(mint_tx.amount)
+                        .ok_or(TxErr::Arithmetic)?;
                 }
+                TxVariantV0::RewardTx(tx) => {
+                    if skip_flags & SKIP_REWARD_TX == 0 {
+                        return Err(TxErr::TxProhibited);
+                    }
+                    // Reward transactions are internally generated, thus should panic on failure
+                    if tx.fee.amount != 0 {
+                        panic!("reward tx must have no fee");
+                    } else if !tx.signature_pairs.is_empty() {
+                        panic!("reward tx must not be signed");
+                    } else if tx.timestamp != 0 {
+                        panic!("reward tx must have a timestamp of 0");
+                    }
+                }
+                TxVariantV0::TransferTx(transfer) => {
+                    if transfer.memo.len() > MAX_MEMO_BYTE_SIZE {
+                        return Err(TxErr::TxTooLarge);
+                    }
+                    let info = self
+                        .get_address_info(&transfer.from, additional_txs)
+                        .ok_or(TxErr::Arithmetic)?;
+                    let total_fee = info.total_fee().ok_or(TxErr::Arithmetic)?;
+                    if tx.fee < total_fee {
+                        return Err(TxErr::InvalidFeeAmount);
+                    } else if transfer.from != (&transfer.script).into() {
+                        return Err(TxErr::ScriptHashMismatch);
+                    }
 
-                let bal = info
-                    .balance
-                    .sub(transfer.fee)
-                    .ok_or(TxErr::Arithmetic)?
-                    .sub(transfer.amount)
-                    .ok_or(TxErr::Arithmetic)?;
-                check_suf_bal!(bal);
-            }
+                    let success = ScriptEngine::new(data, &transfer.script)
+                        .eval()
+                        .map_err(TxErr::ScriptEval)?;
+                    if !success {
+                        return Err(TxErr::ScriptRetFalse);
+                    }
+
+                    let bal = info
+                        .balance
+                        .sub(transfer.fee)
+                        .ok_or(TxErr::Arithmetic)?
+                        .sub(transfer.amount)
+                        .ok_or(TxErr::Arithmetic)?;
+                    check_suf_bal!(bal);
+                }
+            },
         }
         Ok(())
     }
 
     fn index_tx(batch: &mut WriteBatch, tx: &TxVariant) {
         match tx {
-            TxVariant::OwnerTx(tx) => {
-                batch.set_owner(tx.clone());
-            }
-            TxVariant::MintTx(tx) => {
-                batch.add_token_supply(tx.amount);
-                batch.add_bal(&tx.to, tx.amount);
-            }
-            TxVariant::RewardTx(tx) => {
-                batch.add_bal(&tx.to, tx.rewards);
-            }
-            TxVariant::TransferTx(tx) => {
-                batch.sub_bal(&tx.from, tx.fee.add(tx.amount).unwrap());
-                batch.add_bal(&tx.to, tx.amount);
-            }
+            TxVariant::V0(var) => match var {
+                TxVariantV0::OwnerTx(_) => {
+                    batch.set_owner(tx.clone());
+                }
+                TxVariantV0::MintTx(tx) => {
+                    batch.add_token_supply(tx.amount);
+                    batch.add_bal(&tx.to, tx.amount);
+                }
+                TxVariantV0::RewardTx(tx) => {
+                    batch.add_bal(&tx.to, tx.rewards);
+                }
+                TxVariantV0::TransferTx(tx) => {
+                    batch.sub_bal(&tx.from, tx.fee.add(tx.amount).unwrap());
+                    batch.add_bal(&tx.to, tx.amount);
+                }
+            },
         }
     }
 
@@ -439,7 +468,7 @@ impl Blockchain {
         let info = GenesisBlockInfo::new(minter_key);
         let timestamp = crate::get_epoch_ms();
 
-        let owner_tx = OwnerTx {
+        let owner_tx = TxVariant::V0(TxVariantV0::OwnerTx(OwnerTx {
             base: Tx {
                 fee: Asset::default(),
                 timestamp,
@@ -448,14 +477,14 @@ impl Blockchain {
             minter: info.minter_key.0.clone(),
             wallet: (&info.script).into(),
             script: Builder::new().push(OpFrame::False).build(),
-        };
+        }));
 
         let block = Block::V0(BlockV0 {
             height: 0,
             previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
             tx_merkle_root: Digest::from_slice(&[0u8; 32]).unwrap(),
             timestamp,
-            transactions: vec![TxVariant::OwnerTx(owner_tx.clone())],
+            transactions: vec![owner_tx.clone()],
         })
         .sign(&info.minter_key);
 

@@ -243,7 +243,7 @@ impl MsgResponse {
                 buf.push_u64(props.height);
                 {
                     let mut tx_buf = Vec::with_capacity(4096);
-                    TxVariant::OwnerTx(props.owner.as_ref().clone()).serialize(&mut tx_buf);
+                    props.owner.serialize(&mut tx_buf);
                     buf.extend_from_slice(&tx_buf);
                 }
                 buf.push_asset(props.network_fee);
@@ -275,14 +275,19 @@ impl MsgResponse {
             t if t == MsgType::GetProperties as u8 => {
                 let height = cursor.take_u64()?;
                 let owner = {
-                    let var = TxVariant::deserialize(cursor).ok_or_else(|| {
+                    let tx = TxVariant::deserialize(cursor).ok_or_else(|| {
                         Error::new(io::ErrorKind::InvalidData, "failed to deserialize owner tx")
                     })?;
-                    match var {
-                        TxVariant::OwnerTx(tx) => Box::new(tx),
-                        _ => {
-                            return Err(Error::new(io::ErrorKind::InvalidData, "expected owner tx"))
-                        }
+                    match tx {
+                        TxVariant::V0(ref var) => match var {
+                            TxVariantV0::OwnerTx(_) => Box::new(tx),
+                            _ => {
+                                return Err(Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    "expected owner tx",
+                                ))
+                            }
+                        },
                     }
                 };
                 let network_fee = cursor.take_asset()?;

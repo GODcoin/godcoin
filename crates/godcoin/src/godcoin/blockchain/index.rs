@@ -6,7 +6,7 @@ use crate::{
     constants::TX_EXPIRY_TIME,
     crypto::ScriptHash,
     serializer::*,
-    tx::{OwnerTx, TxId, TxVariant},
+    tx::{TxId, TxVariant, TxVariantV0},
 };
 
 const CF_BLOCK_BYTE_POS: &str = "block_byte_pos";
@@ -76,13 +76,15 @@ impl Indexer {
         }
     }
 
-    pub fn get_owner(&self) -> Option<OwnerTx> {
+    pub fn get_owner(&self) -> Option<TxVariant> {
         let tx_buf = self.db.get_pinned(KEY_NET_OWNER).unwrap()?;
         let cur = &mut Cursor::<&[u8]>::new(&tx_buf);
-        let tx = TxVariant::deserialize(cur).unwrap();
+        let tx = TxVariant::deserialize(cur).expect("Failed to deserialize owner tx");
         match tx {
-            TxVariant::OwnerTx(owner) => Some(owner),
-            _ => panic!("expected owner transaction"),
+            TxVariant::V0(ref var) => match var {
+                TxVariantV0::OwnerTx(_) => Some(tx),
+                _ => panic!("expected owner transaction"),
+            },
         }
     }
 
@@ -110,7 +112,7 @@ pub struct WriteBatch {
     indexer: Arc<Indexer>,
     block_byte_pos: HashMap<u64, u64>,
     chain_height: Option<u64>,
-    owner: Option<OwnerTx>,
+    owner: Option<TxVariant>,
     balances: HashMap<ScriptHash, Asset>,
     token_supply: Option<Asset>,
 }
@@ -145,9 +147,9 @@ impl WriteBatch {
 
         if let Some(owner) = self.owner {
             let val = {
-                let mut vec = Vec::with_capacity(4096);
-                TxVariant::OwnerTx(owner).serialize(&mut vec);
-                vec
+                let mut buf = Vec::with_capacity(4096);
+                owner.serialize(&mut buf);
+                buf
             };
             batch.put(KEY_NET_OWNER, &val).unwrap();
         }
@@ -182,7 +184,16 @@ impl WriteBatch {
         self.chain_height = Some(height);
     }
 
-    pub fn set_owner(&mut self, owner: OwnerTx) {
+    pub fn set_owner(&mut self, owner: TxVariant) {
+        match owner {
+            TxVariant::V0(ref tx) => match tx {
+                TxVariantV0::OwnerTx(_) => {}
+                _ => panic!(
+                    "expected owner tx for set_owner operation, got: {:?}",
+                    owner
+                ),
+            },
+        }
         self.owner = Some(owner);
     }
 

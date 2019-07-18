@@ -31,7 +31,7 @@ impl TxPool {
     pub fn push(&mut self, data: TxPrecompData, skip_flags: SkipFlags) -> Result<(), TxErr> {
         let current_time = crate::get_epoch_ms();
 
-        let ts = data.tx().timestamp;
+        let ts = data.tx().timestamp();
         if (ts < current_time - TX_EXPIRY_TIME) || (ts > current_time + 3000) {
             return Err(TxErr::TxExpired);
         } else if self.manager.has(data.txid()) {

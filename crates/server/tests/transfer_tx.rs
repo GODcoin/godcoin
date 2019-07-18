@@ -20,17 +20,17 @@ fn transfer_from_minter() {
         let amount = get_asset("1.00000 GRAEL");
 
         let tx = {
-            let mut tx = TransferTx {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 GRAEL"),
                 from: from_addr.clone(),
                 to: (&to_addr.0).into(),
                 amount,
                 memo: vec![],
                 script: minter.genesis_info().script.clone(),
-            };
+            }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-            TxVariant::TransferTx(tx)
+            tx
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(
@@ -66,17 +66,17 @@ fn transfer_from_user() {
 
         let fut = {
             let tx = {
-                let mut tx = TransferTx {
+                let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                     base: create_tx_header("1.00000 GRAEL"),
                     from: ScriptHash::from(&minter.genesis_info().script),
                     to: (&user_1_addr.0).into(),
                     amount: get_asset("100.00000 GRAEL"),
                     memo: vec![],
                     script: minter.genesis_info().script.clone(),
-                };
+                }));
                 tx.append_sign(&minter.genesis_info().wallet_keys[3]);
                 tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-                TxVariant::TransferTx(tx)
+                tx
             };
             minter.request(MsgRequest::Broadcast(tx))
         };
@@ -88,16 +88,16 @@ fn transfer_from_user() {
                 move |res| {
                     assert_eq!(res, MsgResponse::Broadcast);
                     let tx = {
-                        let mut tx = TransferTx {
+                        let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                             base: create_tx_header("1.00000 GRAEL"),
                             from: (&user_1_addr.0).into(),
                             to: (&user_2_addr.0).into(),
                             amount: get_asset("99.00000 GRAEL"),
                             memo: vec![],
                             script: user_1_addr.0.clone().into(),
-                        };
+                        }));
                         tx.append_sign(&user_1_addr);
-                        TxVariant::TransferTx(tx)
+                        tx
                     };
                     minter
                         .request(MsgRequest::Broadcast(tx))
@@ -137,17 +137,17 @@ fn insufficient_balance_caused_by_fee() {
         let from_addr = ScriptHash::from(&minter.genesis_info().script);
         let to_addr = KeyPair::gen();
         let tx = {
-            let mut tx = TransferTx {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1001.00000 GRAEL"),
                 from: from_addr.clone(),
                 to: (&to_addr.0).into(),
                 amount: get_asset("0.00000 GRAEL"),
                 memo: vec![],
                 script: minter.genesis_info().script.clone(),
-            };
+            }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-            TxVariant::TransferTx(tx)
+            tx
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(
@@ -189,17 +189,17 @@ fn insufficient_fee() {
             .sub(get_asset("0.00001 GRAEL"))
             .unwrap();
         let tx = {
-            let mut tx = TransferTx {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header(&bad_fee.to_string()),
                 from: from_addr.clone(),
                 to: KeyPair::gen().0.into(),
                 amount: get_asset("0.00000 GRAEL"),
                 memo: vec![],
                 script: minter.genesis_info().script.clone(),
-            };
+            }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-            TxVariant::TransferTx(tx)
+            tx
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(fut.and_then(move |res| {
@@ -224,17 +224,17 @@ fn insufficient_balance_caused_by_amt() {
         let from_addr = ScriptHash::from(&minter.genesis_info().script);
         let to_addr = KeyPair::gen();
         let tx = {
-            let mut tx = TransferTx {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 GRAEL"),
                 from: from_addr.clone(),
                 to: (&to_addr.0).into(),
                 amount: get_asset("500000.00000 GRAEL"),
                 memo: vec![],
                 script: minter.genesis_info().script.clone(),
-            };
+            }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-            TxVariant::TransferTx(tx)
+            tx
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(
@@ -271,7 +271,7 @@ fn memo_too_large() {
         let from_addr = ScriptHash::from(&minter.genesis_info().script);
         let to_addr = KeyPair::gen();
         let tx = {
-            let mut tx = TransferTx {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 GRAEL"),
                 from: from_addr.clone(),
                 to: (&to_addr.0).into(),
@@ -280,10 +280,10 @@ fn memo_too_large() {
                     .map(|_| 0)
                     .collect(),
                 script: minter.genesis_info().script.clone(),
-            };
+            }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-            TxVariant::TransferTx(tx)
+            tx
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(
@@ -323,17 +323,17 @@ fn script_too_large() {
         let from_addr = ScriptHash::from(&from_script);
         let to_addr = KeyPair::gen();
         let tx = {
-            let mut tx = TransferTx {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 GRAEL"),
                 from: from_addr,
                 to: (&to_addr.0).into(),
                 amount: get_asset("1.00000 GRAEL"),
                 memo: vec![],
                 script: from_script,
-            };
+            }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-            TxVariant::TransferTx(tx)
+            tx
         };
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(fut.and_then(move |res| {
@@ -373,17 +373,17 @@ fn tx_addr_dynamic_fee_increase_in_pool() {
                     };
 
                     let tx = {
-                        let mut tx = TransferTx {
+                        let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                             base: create_tx_header(&addr_info.total_fee().unwrap().to_string()),
                             from: from_addr.clone(),
                             to: KeyPair::gen().0.into(),
                             amount: Asset::new(0),
                             memo: vec![],
                             script: minter.genesis_info().script.clone(),
-                        };
+                        }));
                         tx.append_sign(&minter.genesis_info().wallet_keys[3]);
                         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-                        TxVariant::TransferTx(tx)
+                        tx
                     };
                     minter
                         .request(MsgRequest::Broadcast(tx))
@@ -460,19 +460,20 @@ fn tx_addr_dynamic_fee_increase() {
                                 assert_eq!(addr_info.addr_fee, expected_fee);
 
                                 let tx = {
-                                    let mut tx = TransferTx {
-                                        base: create_tx_header(
-                                            &addr_info.total_fee().unwrap().to_string(),
-                                        ),
-                                        from: from_addr.clone(),
-                                        to: KeyPair::gen().0.into(),
-                                        amount: Asset::new(0),
-                                        memo: vec![],
-                                        script: minter.genesis_info().script.clone(),
-                                    };
+                                    let mut tx =
+                                        TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+                                            base: create_tx_header(
+                                                &addr_info.total_fee().unwrap().to_string(),
+                                            ),
+                                            from: from_addr.clone(),
+                                            to: KeyPair::gen().0.into(),
+                                            amount: Asset::new(0),
+                                            memo: vec![],
+                                            script: minter.genesis_info().script.clone(),
+                                        }));
                                     tx.append_sign(&minter.genesis_info().wallet_keys[3]);
                                     tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-                                    TxVariant::TransferTx(tx)
+                                    tx
                                 };
                                 minter
                                     .request(MsgRequest::Broadcast(tx))
@@ -530,17 +531,17 @@ fn net_fee_dynamic_increase() {
             move |addr_index| {
                 let minter = Arc::clone(&minter);
                 let tx = {
-                    let mut tx = TransferTx {
+                    let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                         base: create_tx_header("1.00000 GRAEL"),
                         from: from_addr.clone(),
                         to: (&addrs[addr_index].0).into(),
                         amount: Asset::new(100000),
                         memo: vec![],
                         script: minter.genesis_info().script.clone(),
-                    };
+                    }));
                     tx.append_sign(&minter.genesis_info().wallet_keys[3]);
                     tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-                    TxVariant::TransferTx(tx)
+                    tx
                 };
 
                 let req = MsgRequest::Broadcast(tx);
@@ -575,16 +576,16 @@ fn net_fee_dynamic_increase() {
                     let addr = &addrs[addr_index];
 
                     let tx = {
-                        let mut tx = TransferTx {
+                        let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                             base: create_tx_header("1.00000 GRAEL"),
                             from: (&addr.0).into(),
                             to: from_addr.clone(),
                             amount: Asset::new(0),
                             memo: vec![],
                             script: addr.0.clone().into(),
-                        };
+                        }));
                         tx.append_sign(&addr);
-                        TxVariant::TransferTx(tx)
+                        tx
                     };
 
                     minter

@@ -13,19 +13,18 @@ fn successful_broadcast() {
     System::run(|| {
         let minter = TestMinter::new();
 
-        let mut tx = MintTx {
+        let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
             base: create_tx_header("0.00000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
             attachment_name: "".to_owned(),
             script: minter.genesis_info().script.clone(),
-        };
+        }));
 
         tx.append_sign(&minter.genesis_info().wallet_keys[1]);
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-        let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(fut.and_then(move |res| {
             assert_eq!(res, MsgResponse::Broadcast);

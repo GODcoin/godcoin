@@ -30,7 +30,12 @@ impl Actor for Minter {
 
 impl Minter {
     pub fn new(chain: Arc<Blockchain>, minter_key: KeyPair) -> Self {
-        assert_eq!(chain.get_owner().minter, minter_key.0);
+        match chain.get_owner() {
+            TxVariant::V0(tx) => match tx {
+                TxVariantV0::OwnerTx(tx) => assert_eq!(tx.minter, minter_key.0),
+                _ => unreachable!(),
+            },
+        }
         Self {
             chain: Arc::clone(&chain),
             minter_key,
@@ -44,12 +49,19 @@ impl Minter {
         {
             let rewards = transactions
                 .iter()
-                .fold(Asset::default(), |acc, tx| acc.add(tx.fee).unwrap());
+                .fold(Asset::default(), |acc, tx| match tx {
+                    TxVariant::V0(tx) => acc.add(tx.fee).unwrap(),
+                });
             if rewards.amount > 0 {
                 // Retrieve the owner wallet here in case the owner changes, ensuring that the
                 // reward distribution always points to the correct address.
-                let wallet_addr = self.chain.get_owner().wallet;
-                transactions.push(TxVariant::RewardTx(RewardTx {
+                let wallet_addr = match self.chain.get_owner() {
+                    TxVariant::V0(tx) => match tx {
+                        TxVariantV0::OwnerTx(owner) => owner.wallet,
+                        _ => unreachable!(),
+                    },
+                };
+                transactions.push(TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
                     base: Tx {
                         fee: Asset::default(),
                         timestamp: 0,
@@ -57,7 +69,7 @@ impl Minter {
                     },
                     to: wallet_addr,
                     rewards,
-                }));
+                })));
             }
         }
 

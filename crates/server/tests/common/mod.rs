@@ -27,7 +27,7 @@ pub fn create_tx_header_with_ts(fee: &str, timestamp: u64) -> Tx {
 pub fn check_sigs(tx: &TxVariant) -> bool {
     let mut buf = Vec::with_capacity(4096);
     tx.serialize_without_sigs(&mut buf);
-    for sig_pair in &tx.signature_pairs {
+    for sig_pair in tx.sigs() {
         if !sig_pair.verify(&buf) {
             return false;
         }

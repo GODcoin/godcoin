@@ -231,17 +231,17 @@ impl<'a> ScriptEngine<'a> {
     fn check_sigs(&mut self, threshold: usize, keys: &[PublicKey]) -> bool {
         if threshold == 0 {
             return true;
-        } else if threshold > keys.len()
-            || self.sig_pair_pos >= self.data.tx().signature_pairs.len()
-        {
+        } else if threshold > keys.len() || self.sig_pair_pos >= self.data.tx().sigs().len() {
             return false;
         }
 
         let buf = self.data.bytes_without_sigs();
+        let tx = &self.data.tx();
+        let sigs = tx.sigs();
 
         let mut valid_threshold = 0;
         let mut key_iter = keys.iter();
-        'pair_loop: for pair in &self.data.tx().signature_pairs[self.sig_pair_pos..] {
+        'pair_loop: for pair in &sigs[self.sig_pair_pos..] {
             loop {
                 match key_iter.next() {
                     Some(key) => {
@@ -272,7 +272,7 @@ impl<'a> ScriptEngine<'a> {
 mod tests {
     use super::*;
     use crate::crypto::{KeyPair, SigPair, Signature};
-    use crate::tx::{SignTx, TransferTx, Tx, TxVariant};
+    use crate::tx::{TransferTx, Tx, TxVariant, TxVariantV0};
 
     #[test]
     fn true_only_script() {
@@ -454,7 +454,7 @@ mod tests {
 
         let mut engine = {
             let tx = new_transfer_tx(script.clone(), &[key]);
-            ScriptEngine::new(TxVariant::TransferTx(tx).precompute(), script)
+            ScriptEngine::new(tx.precompute(), script)
         };
 
         assert!(engine.eval().unwrap());
@@ -576,7 +576,7 @@ mod tests {
             let to = KeyPair::gen();
             let script = builder.build();
 
-            let mut tx = TransferTx {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: Tx {
                     timestamp: 1500000000,
                     fee: "1.00000 GRAEL".parse().unwrap(),
@@ -591,11 +591,11 @@ mod tests {
                 amount: "10.00000 GRAEL".parse().unwrap(),
                 script: script.clone(),
                 memo: vec![],
-            };
+            }));
             tx.append_sign(&key_2);
             tx.append_sign(&key_1);
 
-            ScriptEngine::new(TxVariant::TransferTx(tx).precompute(), script)
+            ScriptEngine::new(tx.precompute(), script)
         };
         assert!(!engine.eval().unwrap());
     }
@@ -819,12 +819,12 @@ mod tests {
     fn new_engine_with_signers<'a>(keys: &[KeyPair], b: Builder) -> ScriptEngine<'a> {
         let script = b.build();
         let tx = new_transfer_tx(script.clone(), keys);
-        ScriptEngine::new(TxVariant::TransferTx(tx).precompute(), script)
+        ScriptEngine::new(tx.precompute(), script)
     }
 
-    fn new_transfer_tx(script: Script, keys: &[KeyPair]) -> TransferTx {
+    fn new_transfer_tx(script: Script, keys: &[KeyPair]) -> TxVariant {
         let to = KeyPair::gen();
-        let mut tx = TransferTx {
+        let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: Tx {
                 timestamp: 1500000000,
                 fee: "1.00000 GRAEL".parse().unwrap(),
@@ -835,7 +835,7 @@ mod tests {
             amount: "10.00000 GRAEL".parse().unwrap(),
             script: script.clone(),
             memo: vec![],
-        };
+        }));
         keys.iter().for_each(|key| tx.append_sign(key));
         tx
     }

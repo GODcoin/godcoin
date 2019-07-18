@@ -12,17 +12,17 @@ fn mint_tx_verification() {
         let skip_flags = verify::SKIP_NONE;
 
         let create_tx = |fee: &str| {
-            let mut tx = MintTx {
+            let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
                 base: create_tx_header(fee),
                 to: (&minter.genesis_info().script).into(),
                 amount: Asset::default(),
                 attachment: vec![],
                 attachment_name: "".to_owned(),
                 script: minter.genesis_info().script.clone(),
-            };
+            }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
-            TxVariant::MintTx(tx)
+            tx
         };
 
         let tx = create_tx("0.00000 GRAEL");
@@ -37,7 +37,7 @@ fn mint_tx_verification() {
         );
 
         let mut tx = create_tx("0.00000 GRAEL");
-        tx.signature_pairs.remove(1);
+        tx.sigs_mut().remove(1);
         assert!(check_sigs(&tx));
         assert_eq!(
             chain
@@ -47,7 +47,7 @@ fn mint_tx_verification() {
         );
 
         let mut tx = create_tx("0.00000 GRAEL");
-        tx.signature_pairs.clear();
+        tx.sigs_mut().clear();
         assert!(check_sigs(&tx));
         assert_eq!(
             chain
@@ -57,8 +57,8 @@ fn mint_tx_verification() {
         );
 
         let mut tx = create_tx("0.00000 GRAEL");
-        tx.signature_pairs.clear();
-        tx.signature_pairs.push(SigPair {
+        tx.sigs_mut().clear();
+        tx.sigs_mut().push(SigPair {
             pub_key: minter.genesis_info().wallet_keys[0].0.clone(),
             signature: Signature::from_slice(&[0; 64]).unwrap(),
         });
@@ -80,19 +80,18 @@ fn mint_tx_updates_balances() {
     System::run(|| {
         let minter = TestMinter::new();
 
-        let mut tx = MintTx {
+        let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
             base: create_tx_header("0.00000 GRAEL"),
             to: (&minter.genesis_info().script).into(),
             amount: get_asset("10.00000 GRAEL"),
             attachment: vec![],
             attachment_name: "".to_owned(),
             script: minter.genesis_info().script.clone(),
-        };
+        }));
 
         tx.append_sign(&minter.genesis_info().wallet_keys[1]);
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-        let tx = TxVariant::MintTx(tx);
         let fut = minter.request(MsgRequest::Broadcast(tx));
         Arbiter::spawn(
             fut.and_then(move |res| {

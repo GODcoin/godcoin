@@ -223,19 +223,15 @@ mod tests {
     #[test]
     fn serialize_block_v0() {
         let keys = KeyPair::gen();
-        let transactions = {
-            let mut vec = Vec::new();
-            vec.push(TxVariant::RewardTx(RewardTx {
-                base: Tx {
-                    fee: Asset::default(),
-                    timestamp: 1234567890,
-                    signature_pairs: Vec::new(),
-                },
-                to: keys.0.clone().into(),
-                rewards: Asset::default(),
-            }));
-            vec
-        };
+        let transactions = vec![TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
+            base: Tx {
+                fee: Asset::default(),
+                timestamp: 1234567890,
+                signature_pairs: Vec::new(),
+            },
+            to: keys.0.clone().into(),
+            rewards: Asset::default(),
+        }))];
         let tx_merkle_root = {
             let mut buf = Vec::new();
             for tx in &transactions {

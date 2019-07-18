@@ -10,22 +10,3 @@ macro_rules! tx_deref {
         }
     };
 }
-
-macro_rules! tx_sign {
-    ($ty:ty) => {
-        impl SignTx for $ty {
-            #[inline]
-            fn sign(&self, key_pair: &KeyPair) -> SigPair {
-                let mut buf = Vec::with_capacity(4096);
-                self.serialize(&mut buf);
-                key_pair.sign(&buf)
-            }
-
-            #[inline]
-            fn append_sign(&mut self, key_pair: &KeyPair) {
-                let pair = self.sign(key_pair);
-                self.base.signature_pairs.push(pair);
-            }
-        }
-    };
-}
