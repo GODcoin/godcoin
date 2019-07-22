@@ -1,4 +1,4 @@
-use actix::prelude::*;
+use actix_rt::Arbiter;
 use godcoin::prelude::*;
 use log::{info, warn};
 use parking_lot::Mutex;
@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::timer::Delay;
+use tokio::{prelude::*, timer::Delay};
 
 #[derive(Clone)]
 pub struct Minter {

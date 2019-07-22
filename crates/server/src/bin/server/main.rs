@@ -88,7 +88,7 @@ fn main() {
         None
     };
 
-    let sys = actix::System::new("godcoin-server");
+    let sys = actix_rt::System::new("godcoin-server");
     godcoin_server::start(godcoin_server::ServerOpts {
         blocklog_loc,
         index_loc,

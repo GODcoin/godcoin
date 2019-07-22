@@ -1,4 +1,4 @@
-use actix::prelude::*;
+use actix_rt::System;
 use godcoin::{crypto::Signature, prelude::*};
 
 mod common;
