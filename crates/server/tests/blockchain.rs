@@ -41,13 +41,14 @@ fn fresh_blockchain() {
 #[test]
 fn reindexed_blockchain() {
     System::run(|| {
-        let minter = TestMinter::new();
+        let mut minter = TestMinter::new();
 
         let from_addr = ScriptHash::from(&minter.genesis_info().script);
         let from_bal = minter.chain().get_balance(&from_addr, &[]).unwrap();
         let to_addr = KeyPair::gen();
         let amount = get_asset("1.00000 GRAEL");
 
+        // Create a tx we expect to be reindexed
         let tx = {
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 GRAEL"),
@@ -62,69 +63,68 @@ fn reindexed_blockchain() {
             tx
         };
         let tx_data = TxPrecompData::from_tx(tx.clone());
-        let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
-        Arbiter::spawn(
-            fut.and_then(move |res| {
-                assert_eq!(res, MsgResponse::Broadcast);
-                minter.produce_block().map(|_| minter)
-            })
-            .and_then(move |mut minter| {
-                {
-                    minter.unindexed();
-                    let chain = minter.chain();
-                    let manager = TxManager::new(chain.indexer());
 
-                    assert_eq!(chain.index_status(), IndexStatus::None);
-                    assert!(chain.get_block(0).is_none());
-                    assert!(!manager.has(tx_data.txid()));
-                }
+        {
+            // Broadcast the tx
+            let res = minter.request(MsgRequest::Broadcast(tx.clone()));
+            assert_eq!(res, MsgResponse::Broadcast);
+            minter.produce_block().unwrap();
+        }
 
-                minter.reindex();
-                let chain = minter.chain();
-                let manager = TxManager::new(chain.indexer());
+        {
+            // Unindex the blockchain
+            minter.unindexed();
+            let chain = minter.chain();
+            let manager = TxManager::new(chain.indexer());
 
-                assert_eq!(chain.index_status(), IndexStatus::Complete);
-                assert!(chain.get_block(0).is_some());
-                assert!(chain.get_block(1).is_some());
-                assert!(chain.get_block(2).is_some());
-                assert!(chain.get_block(3).is_none());
-                assert_eq!(chain.get_chain_height(), 2);
-                assert!(manager.has(tx_data.txid()));
+            assert_eq!(chain.index_status(), IndexStatus::None);
+            assert!(chain.get_block(0).is_none());
+            assert!(!manager.has(tx_data.txid()));
+        }
 
-                let owner = match chain.get_owner() {
-                    TxVariant::V0(tx) => match tx {
-                        TxVariantV0::OwnerTx(tx) => tx,
-                        _ => unreachable!(),
-                    },
-                };
-                assert_eq!(owner.minter, minter.genesis_info().minter_key.0);
-                assert_eq!(
-                    owner.script,
-                    script::Builder::new().push(OpFrame::False).build()
-                );
-                assert_eq!(owner.wallet, (&minter.genesis_info().script).into());
+        // Test the reindexed status from here
+        minter.reindex();
+        let chain = minter.chain();
+        let manager = TxManager::new(chain.indexer());
 
-                let cur_bal = chain.get_balance(&to_addr.0.into(), &[]);
-                assert_eq!(cur_bal, Some(amount));
+        assert_eq!(chain.index_status(), IndexStatus::Complete);
+        assert!(chain.get_block(0).is_some());
+        assert!(chain.get_block(1).is_some());
+        assert!(chain.get_block(2).is_some());
+        assert!(chain.get_block(3).is_none());
+        assert_eq!(chain.get_chain_height(), 2);
+        assert!(manager.has(tx_data.txid()));
 
-                // The fee transfers back to the minter wallet in the form of a reward tx so it
-                // must not be subtracted during the assertion
-                let cur_bal = chain.get_balance(&from_addr, &[]);
-                assert_eq!(cur_bal, from_bal.sub(amount));
-
-                // Test to ensure that after a reindex the tx cannot be rebroadcasted
-                minter.request(MsgRequest::Broadcast(tx.clone()))
-            })
-            .and_then(|res| {
-                assert_eq!(
-                    res,
-                    MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxDupe))
-                );
-
-                System::current().stop();
-                Ok(())
-            }),
+        let owner = match chain.get_owner() {
+            TxVariant::V0(tx) => match tx {
+                TxVariantV0::OwnerTx(tx) => tx,
+                _ => unreachable!(),
+            },
+        };
+        assert_eq!(owner.minter, minter.genesis_info().minter_key.0);
+        assert_eq!(
+            owner.script,
+            script::Builder::new().push(OpFrame::False).build()
         );
+        assert_eq!(owner.wallet, (&minter.genesis_info().script).into());
+
+        let cur_bal = chain.get_balance(&to_addr.0.into(), &[]);
+        assert_eq!(cur_bal, Some(amount));
+
+        // The fee transfers back to the minter wallet in the form of a reward tx so it
+        // must not be subtracted during the assertion
+        let cur_bal = chain.get_balance(&from_addr, &[]);
+        assert_eq!(cur_bal, from_bal.sub(amount));
+
+        // Test to ensure that after a reindex the tx cannot be rebroadcasted
+        let res = minter.request(MsgRequest::Broadcast(tx.clone()));
+
+        assert_eq!(
+            res,
+            MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxDupe))
+        );
+
+        System::current().stop();
     })
     .unwrap();
 }
@@ -146,24 +146,17 @@ fn tx_dupe() {
         tx.append_sign(&minter.genesis_info().wallet_keys[1]);
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-        let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
-        Arbiter::spawn(
-            fut.and_then(move |res| {
-                assert!(!res.is_err(), format!("{:?}", res));
+        let res = minter.request(MsgRequest::Broadcast(tx.clone()));
+        assert!(!res.is_err(), format!("{:?}", res));
 
-                minter.request(MsgRequest::Broadcast(tx))
-            })
-            .and_then(|res| {
-                assert!(res.is_err());
-                assert_eq!(
-                    res,
-                    MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxDupe))
-                );
-
-                System::current().stop();
-                Ok(())
-            }),
+        let res = minter.request(MsgRequest::Broadcast(tx));
+        assert!(res.is_err());
+        assert_eq!(
+            res,
+            MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxDupe))
         );
+
+        System::current().stop();
     })
     .unwrap();
 }
@@ -185,18 +178,14 @@ fn tx_expired() {
             script: minter.genesis_info().script.clone(),
         }));
 
-        let fut = minter.request(MsgRequest::Broadcast(tx));
-        Arbiter::spawn(fut.then(move |res| {
-            let res = res.unwrap();
-            assert!(res.is_err());
-            assert_eq!(
-                res,
-                MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxExpired))
-            );
+        let res = minter.request(MsgRequest::Broadcast(tx));
+        assert!(res.is_err());
+        assert_eq!(
+            res,
+            MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxExpired))
+        );
 
-            System::current().stop();
-            Ok(())
-        }));
+        System::current().stop();
     })
     .unwrap();
 }
@@ -216,18 +205,14 @@ fn tx_far_in_the_future() {
             script: minter.genesis_info().script.clone(),
         }));
 
-        let fut = minter.request(MsgRequest::Broadcast(tx));
-        Arbiter::spawn(fut.then(move |res| {
-            let res = res.unwrap();
-            assert!(res.is_err());
-            assert_eq!(
-                res,
-                MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxExpired))
-            );
+        let res = minter.request(MsgRequest::Broadcast(tx));
+        assert!(res.is_err());
+        assert_eq!(
+            res,
+            MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxExpired))
+        );
 
-            System::current().stop();
-            Ok(())
-        }));
+        System::current().stop();
     })
     .unwrap();
 }
@@ -246,17 +231,14 @@ fn tx_script_too_large_err() {
             script: Script::new((0..=constants::MAX_SCRIPT_BYTE_SIZE).map(|_| 0).collect()),
         }));
 
-        let fut = minter.request(MsgRequest::Broadcast(tx));
-        Arbiter::spawn(fut.and_then(move |res| {
-            assert!(res.is_err());
-            assert_eq!(
-                res,
-                MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxTooLarge))
-            );
+        let res = minter.request(MsgRequest::Broadcast(tx));
+        assert!(res.is_err());
+        assert_eq!(
+            res,
+            MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxTooLarge))
+        );
 
-            System::current().stop();
-            Ok(())
-        }));
+        System::current().stop();
     })
     .unwrap();
 }
@@ -276,17 +258,14 @@ fn tx_too_many_signatures_err() {
         }));
         (0..=constants::MAX_TX_SIGNATURES).for_each(|_| tx.append_sign(&KeyPair::gen()));
 
-        let fut = minter.request(MsgRequest::Broadcast(tx));
-        Arbiter::spawn(fut.and_then(move |res| {
-            assert!(res.is_err());
-            assert_eq!(
-                res,
-                MsgResponse::Error(ErrorKind::TxValidation(TxErr::TooManySignatures))
-            );
+        let res = minter.request(MsgRequest::Broadcast(tx));
+        assert!(res.is_err());
+        assert_eq!(
+            res,
+            MsgResponse::Error(ErrorKind::TxValidation(TxErr::TooManySignatures))
+        );
 
-            System::current().stop();
-            Ok(())
-        }));
+        System::current().stop();
     })
     .unwrap();
 }

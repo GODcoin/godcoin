@@ -15,17 +15,14 @@ fn deny_broadcasted_reward_tx() {
             rewards: get_asset("1.00000 GRAEL"),
         }));
 
-        let fut = minter.request(MsgRequest::Broadcast(tx));
-        Arbiter::spawn(fut.and_then(move |res| {
-            assert!(res.is_err(), format!("{:?}", res));
-            assert_eq!(
-                res,
-                MsgResponse::Error(net::ErrorKind::TxValidation(verify::TxErr::TxProhibited))
-            );
+        let res = minter.request(MsgRequest::Broadcast(tx));
+        assert!(res.is_err(), format!("{:?}", res));
+        assert_eq!(
+            res,
+            MsgResponse::Error(net::ErrorKind::TxValidation(verify::TxErr::TxProhibited))
+        );
 
-            System::current().stop();
-            Ok(())
-        }));
+        System::current().stop();
     })
     .unwrap();
 }

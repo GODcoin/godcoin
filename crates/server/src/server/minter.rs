@@ -1,31 +1,18 @@
 use actix::prelude::*;
 use godcoin::prelude::*;
 use log::{info, warn};
-use std::{sync::Arc, time::Duration};
+use parking_lot::Mutex;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::timer::Delay;
 
-#[derive(Message)]
-pub struct StartProductionLoop;
-
-#[derive(Message)]
-#[rtype(result = "Result<(), verify::TxErr>")]
-pub struct PushTx(pub TxVariant);
-
-#[derive(Message)]
-#[rtype(result = "Result<(), verify::BlockErr>")]
-pub struct ForceProduceBlock;
-
-#[derive(Message)]
-#[rtype(result = "Result<AddressInfo, verify::TxErr>")]
-pub struct GetAddrInfo(pub ScriptHash);
-
+#[derive(Clone)]
 pub struct Minter {
     chain: Arc<Blockchain>,
     minter_key: KeyPair,
-    tx_pool: TxPool,
-}
-
-impl Actor for Minter {
-    type Context = Context<Self>;
+    tx_pool: Arc<Mutex<TxPool>>,
 }
 
 impl Minter {
@@ -39,12 +26,32 @@ impl Minter {
         Self {
             chain: Arc::clone(&chain),
             minter_key,
-            tx_pool: TxPool::new(chain),
+            tx_pool: Arc::new(Mutex::new(TxPool::new(chain))),
         }
     }
 
-    fn produce(&mut self) -> Result<(), verify::BlockErr> {
-        let mut transactions = self.tx_pool.flush();
+    pub fn start_production_loop(self) {
+        let dur = Duration::from_secs(3);
+        Arbiter::spawn(
+            Delay::new(Instant::now() + dur)
+                .and_then(move |_| {
+                    self.produce().unwrap();
+                    self.start_production_loop();
+                    Ok(())
+                })
+                .map_err(|e| {
+                    panic!("Minter production timer error: {:?}", e);
+                }),
+        );
+    }
+
+    pub fn force_produce_block(&self) -> Result<(), verify::BlockErr> {
+        warn!("Forcing produced block...");
+        self.produce()
+    }
+
+    fn produce(&self) -> Result<(), verify::BlockErr> {
+        let mut transactions = self.tx_pool.lock().flush();
 
         {
             let rewards = transactions
@@ -89,44 +96,15 @@ impl Minter {
         );
         Ok(())
     }
-}
 
-impl Handler<StartProductionLoop> for Minter {
-    type Result = ();
-
-    fn handle(&mut self, _: StartProductionLoop, ctx: &mut Self::Context) -> Self::Result {
-        let dur = Duration::from_secs(3);
-        ctx.run_later(dur, |minter, ctx| {
-            minter.produce().unwrap();
-            ctx.notify(StartProductionLoop);
-        });
+    pub fn push_tx(&self, tx: TxVariant) -> Result<(), verify::TxErr> {
+        self.tx_pool.lock().push(tx.precompute(), verify::SKIP_NONE)
     }
-}
 
-impl Handler<ForceProduceBlock> for Minter {
-    type Result = Result<(), verify::BlockErr>;
-
-    fn handle(&mut self, _: ForceProduceBlock, _: &mut Self::Context) -> Self::Result {
-        warn!("Forcing produced block...");
-        self.produce()
-    }
-}
-
-impl Handler<PushTx> for Minter {
-    type Result = Result<(), verify::TxErr>;
-
-    fn handle(&mut self, msg: PushTx, _: &mut Self::Context) -> Self::Result {
-        self.tx_pool.push(msg.0.precompute(), verify::SKIP_NONE)
-    }
-}
-
-impl Handler<GetAddrInfo> for Minter {
-    type Result = Result<AddressInfo, verify::TxErr>;
-
-    fn handle(&mut self, msg: GetAddrInfo, _: &mut Self::Context) -> Self::Result {
-        Ok(self
-            .tx_pool
-            .get_address_info(&msg.0)
-            .ok_or(verify::TxErr::Arithmetic)?)
+    pub fn get_addr_info(&self, addr: &ScriptHash) -> Result<AddressInfo, verify::TxErr> {
+        self.tx_pool
+            .lock()
+            .get_address_info(addr)
+            .ok_or(verify::TxErr::Arithmetic)
     }
 }

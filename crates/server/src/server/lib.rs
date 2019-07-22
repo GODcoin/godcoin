@@ -1,9 +1,4 @@
-use actix::prelude::*;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
-use futures::{
-    future::{join_all, ok},
-    Future,
-};
 use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
 use log::{error, info, warn};
 use std::{io::Cursor, path::PathBuf, sync::Arc};
@@ -29,7 +24,7 @@ pub struct ServerOpts {
 #[derive(Clone)]
 pub struct ServerData {
     pub chain: Arc<Blockchain>,
-    pub minter: Addr<Minter>,
+    pub minter: Minter,
 }
 
 pub fn start(opts: ServerOpts) {
@@ -61,8 +56,8 @@ pub fn start(opts: ServerOpts) {
         blockchain.get_chain_height()
     );
 
-    let minter = Minter::new(Arc::clone(&blockchain), opts.minter_key).start();
-    minter.do_send(minter::StartProductionLoop);
+    let minter = Minter::new(Arc::clone(&blockchain), opts.minter_key);
+    minter.clone().start_production_loop();
 
     HttpServer::new(move || {
         App::new()
@@ -77,7 +72,7 @@ pub fn start(opts: ServerOpts) {
                         // Limit 64 KiB
                         web::PayloadConfig::default().limit(65536)
                     })
-                    .route(web::post().to_async(index)),
+                    .route(web::post().to(index)),
             )
     })
     .bind(opts.bind_addr)
@@ -85,79 +80,60 @@ pub fn start(opts: ServerOpts) {
     .start();
 }
 
-pub fn index(
-    data: web::Data<ServerData>,
-    body: bytes::Bytes,
-) -> Box<Future<Item = HttpResponse, Error = ()>> {
+pub fn index(data: web::Data<ServerData>, body: bytes::Bytes) -> HttpResponse {
     let mut cur = Cursor::<&[u8]>::new(&body);
     match RequestType::deserialize(&mut cur) {
         Ok(req_type) => {
             if cur.position() != body.len() as u64 {
-                return Box::new(ok(ResponseType::Single(MsgResponse::Error(
-                    ErrorKind::BytesRemaining,
-                ))
-                .into_res()));
+                return ResponseType::Single(MsgResponse::Error(ErrorKind::BytesRemaining))
+                    .into_res();
             }
-            Box::new(handle_request_type(&data, req_type).map(IntoHttpResponse::into_res))
+            handle_request_type(&data, req_type).into_res()
         }
         Err(e) => {
             error!("Unknown error occurred during deserialization: {:?}", e);
-            Box::new(ok(
-                ResponseType::Single(MsgResponse::Error(ErrorKind::Io)).into_res()
-            ))
+            ResponseType::Single(MsgResponse::Error(ErrorKind::Io)).into_res()
         }
     }
 }
 
-fn handle_request_type(
-    data: &ServerData,
-    req_type: RequestType,
-) -> Box<Future<Item = ResponseType, Error = ()> + Send> {
+fn handle_request_type(data: &ServerData, req_type: RequestType) -> ResponseType {
     match req_type {
         RequestType::Batch(mut reqs) => {
-            let mut futs = Vec::with_capacity(reqs.len());
+            let mut responses = Vec::with_capacity(reqs.len());
             for req in reqs.drain(..) {
-                futs.push(handle_direct_request(&data, req));
+                responses.push(handle_direct_request(&data, req));
             }
 
-            Box::new(join_all(futs).map(|responses| ResponseType::Batch(responses)))
+            ResponseType::Batch(responses)
         }
-        RequestType::Single(req) => {
-            Box::new(handle_direct_request(&data, req).map(ResponseType::Single))
-        }
+        RequestType::Single(req) => ResponseType::Single(handle_direct_request(&data, req)),
     }
 }
 
-fn handle_direct_request(
-    data: &ServerData,
-    req: MsgRequest,
-) -> Box<Future<Item = MsgResponse, Error = ()> + Send> {
+fn handle_direct_request(data: &ServerData, req: MsgRequest) -> MsgResponse {
     match req {
         MsgRequest::Broadcast(tx) => {
-            let fut = data.minter.send(minter::PushTx(tx)).then(|res| {
-                Ok(match res.unwrap() {
-                    Ok(_) => MsgResponse::Broadcast,
-                    Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e)),
-                })
-            });
-            Box::new(fut)
+            let res = data.minter.push_tx(tx);
+            match res {
+                Ok(_) => MsgResponse::Broadcast,
+                Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e)),
+            }
         }
         MsgRequest::GetProperties => {
             let props = data.chain.get_properties();
-            Box::new(ok(MsgResponse::GetProperties(props)))
+            MsgResponse::GetProperties(props)
         }
         MsgRequest::GetBlock(height) => match data.chain.get_block(height) {
-            Some(block) => Box::new(ok(MsgResponse::GetBlock(block.as_ref().clone()))),
-            None => Box::new(ok(MsgResponse::Error(ErrorKind::InvalidHeight))),
+            Some(block) => MsgResponse::GetBlock(block.as_ref().clone()),
+            None => MsgResponse::Error(ErrorKind::InvalidHeight),
         },
         MsgRequest::GetAddressInfo(addr) => {
-            let fut = data.minter.send(minter::GetAddrInfo(addr)).then(|res| {
-                Ok(match res.unwrap() {
-                    Ok(info) => MsgResponse::GetAddressInfo(info),
-                    Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e)),
-                })
-            });
-            Box::new(fut)
+            let res = data.minter.get_addr_info(&addr);
+            match res {
+                Ok(info) => MsgResponse::GetAddressInfo(info),
+                Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e)),
+            }
         }
     }
 }

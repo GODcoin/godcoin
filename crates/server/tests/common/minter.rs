@@ -1,5 +1,4 @@
 use super::create_tx_header;
-use actix::prelude::*;
 use actix_web::{
     dev::{Body, ResponseBody},
     web,
@@ -75,7 +74,7 @@ impl TestMinter {
             chain.insert_block(child).unwrap();
         }
 
-        let minter = Minter::new(Arc::clone(&chain), minter_key).start();
+        let minter = Minter::new(Arc::clone(&chain), minter_key);
         let data = ServerData { chain, minter };
         Self(data, info, tmp_dir, true)
     }
@@ -103,7 +102,7 @@ impl TestMinter {
         let chain = Arc::clone(&self.0.chain);
         assert_eq!(chain.index_status(), IndexStatus::None);
         chain.reindex(ReindexOpts { auto_trim: true });
-        self.0.minter = Minter::new(chain, self.1.minter_key.clone()).start();
+        self.0.minter = Minter::new(chain, self.1.minter_key.clone());
         self.3 = true;
     }
 
@@ -115,52 +114,42 @@ impl TestMinter {
         &self.1
     }
 
-    pub fn produce_block(&self) -> impl Future<Item = Result<(), verify::BlockErr>, Error = ()> {
-        self.0
-            .minter
-            .send(ForceProduceBlock)
-            .map_err(|e| panic!("{}", e))
+    pub fn produce_block(&self) -> Result<(), verify::BlockErr> {
+        self.0.minter.force_produce_block()
     }
 
-    pub fn request(&self, req: MsgRequest) -> impl Future<Item = MsgResponse, Error = ()> {
+    pub fn request(&self, req: MsgRequest) -> MsgResponse {
         self.send_request(net::RequestType::Single(req))
-            .map(|res| res.unwrap_single())
+            .unwrap_single()
     }
 
-    pub fn batch_request(
-        &self,
-        reqs: Vec<MsgRequest>,
-    ) -> impl Future<Item = Vec<MsgResponse>, Error = ()> {
+    pub fn batch_request(&self, reqs: Vec<MsgRequest>) -> Vec<MsgResponse> {
         self.send_request(net::RequestType::Batch(reqs))
-            .map(|res| res.unwrap_batch())
+            .unwrap_batch()
     }
 
-    pub fn send_request(
-        &self,
-        req: net::RequestType,
-    ) -> impl Future<Item = net::ResponseType, Error = ()> {
+    pub fn send_request(&self, req: net::RequestType) -> net::ResponseType {
         let mut buf = Vec::with_capacity(1_048_576);
         req.serialize(&mut buf);
         self.raw_request(buf)
     }
 
-    pub fn raw_request(&self, bytes: Vec<u8>) -> impl Future<Item = net::ResponseType, Error = ()> {
+    pub fn raw_request(&self, bytes: Vec<u8>) -> net::ResponseType {
         assert!(
             self.3,
             "attempting to send a request to an unindexed minter"
         );
         let buf = bytes::Bytes::from(bytes);
-        index(web::Data::new(self.0.clone()), buf).map(|res| {
-            let body = match res.body() {
-                ResponseBody::Body(body) => body,
-                ResponseBody::Other(body) => body,
-            };
-            let buf = match body {
-                Body::Bytes(bytes) => bytes,
-                _ => panic!("Expected bytes body: {:?}", body),
-            };
-            net::ResponseType::deserialize(&mut Cursor::new(buf)).unwrap()
-        })
+        let res = index(web::Data::new(self.0.clone()), buf);
+        let body = match res.body() {
+            ResponseBody::Body(body) => body,
+            ResponseBody::Other(body) => body,
+        };
+        let buf = match body {
+            Body::Bytes(bytes) => bytes,
+            _ => panic!("Expected bytes body: {:?}", body),
+        };
+        net::ResponseType::deserialize(&mut Cursor::new(buf)).unwrap()
     }
 }
 

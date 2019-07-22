@@ -92,26 +92,20 @@ fn mint_tx_updates_balances() {
         tx.append_sign(&minter.genesis_info().wallet_keys[1]);
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-        let fut = minter.request(MsgRequest::Broadcast(tx));
-        Arbiter::spawn(
-            fut.and_then(move |res| {
-                assert_eq!(res, MsgResponse::Broadcast);
-                minter.produce_block().map(|_| minter)
-            })
-            .and_then(|minter| {
-                let chain = minter.chain();
-                let props = chain.get_properties();
-                // The test blockchain comes preminted with tokens
-                let expected_bal = get_asset("1010.00000 GRAEL");
-                assert_eq!(props.token_supply, expected_bal);
+        let res = minter.request(MsgRequest::Broadcast(tx));
+        assert_eq!(res, MsgResponse::Broadcast);
+        minter.produce_block().unwrap();
 
-                let bal = chain.get_balance(&(&minter.genesis_info().script).into(), &[]);
-                assert_eq!(bal, Some(expected_bal));
+        let chain = minter.chain();
+        let props = chain.get_properties();
+        // The test blockchain comes preminted with tokens
+        let expected_bal = get_asset("1010.00000 GRAEL");
+        assert_eq!(props.token_supply, expected_bal);
 
-                System::current().stop();
-                Ok(())
-            }),
-        );
+        let bal = chain.get_balance(&(&minter.genesis_info().script).into(), &[]);
+        assert_eq!(bal, Some(expected_bal));
+
+        System::current().stop();
     })
     .unwrap();
 }

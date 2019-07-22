@@ -24,28 +24,19 @@ fn owner_tx_minter_key_change() {
             tx
         };
 
-        let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
-        Arbiter::spawn(
-            fut.and_then(move |res| {
-                assert!(!res.is_err(), format!("{:?}", res));
-                assert_eq!(res, MsgResponse::Broadcast);
+        let res = minter.request(MsgRequest::Broadcast(tx.clone()));
+        assert!(!res.is_err(), format!("{:?}", res));
+        assert_eq!(res, MsgResponse::Broadcast);
+        minter.produce_block().unwrap();
 
-                minter.produce_block().map(|_| minter)
-            })
-            .and_then(move |minter| {
-                let owner = minter.chain().get_owner();
-                assert_eq!(tx, owner);
+        let owner = minter.chain().get_owner();
+        assert_eq!(tx, owner);
 
-                minter.produce_block()
-            })
-            .and_then(|res| {
-                // Minter key changed, should fail
-                assert_eq!(res.unwrap_err(), verify::BlockErr::InvalidSignature);
+        // Minter key changed, should fail
+        let res = minter.produce_block();
+        assert_eq!(res.unwrap_err(), verify::BlockErr::InvalidSignature);
 
-                System::current().stop();
-                Ok(())
-            }),
-        );
+        System::current().stop();
     })
     .unwrap();
 }
@@ -69,46 +60,35 @@ fn owner_tx_deny_mint_tokens() {
             tx
         };
 
-        let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
-        Arbiter::spawn(
-            fut.and_then(move |res| {
-                assert!(!res.is_err(), format!("{:?}", res));
-                assert_eq!(res, MsgResponse::Broadcast);
+        let res = minter.request(MsgRequest::Broadcast(tx.clone()));
+        assert!(!res.is_err(), format!("{:?}", res));
+        assert_eq!(res, MsgResponse::Broadcast);
+        minter.produce_block().unwrap();
 
-                minter.produce_block().map(|_| minter)
-            })
-            .and_then(move |minter| {
-                let owner = minter.chain().get_owner();
-                assert_eq!(tx, owner);
+        let owner = minter.chain().get_owner();
+        assert_eq!(tx, owner);
+        minter.produce_block().unwrap();
 
-                minter.produce_block().map(|_| minter)
-            })
-            .and_then(move |minter| {
-                let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-                    base: create_tx_header("0.00000 GRAEL"),
-                    to: (&minter.genesis_info().script).into(),
-                    amount: get_asset("10.00000 GRAEL"),
-                    attachment: vec![],
-                    attachment_name: "".to_owned(),
-                    // This is the old owner script, validation should fail
-                    script: minter.genesis_info().script.clone(),
-                }));
-                tx.append_sign(&wallet_key);
+        let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
+            base: create_tx_header("0.00000 GRAEL"),
+            to: (&minter.genesis_info().script).into(),
+            amount: get_asset("10.00000 GRAEL"),
+            attachment: vec![],
+            attachment_name: "".to_owned(),
+            // This is the old owner script, validation should fail
+            script: minter.genesis_info().script.clone(),
+        }));
+        tx.append_sign(&wallet_key);
 
-                minter.request(MsgRequest::Broadcast(tx))
-            })
-            .and_then(|res| {
-                assert_eq!(
-                    res,
-                    MsgResponse::Error(net::ErrorKind::TxValidation(
-                        verify::TxErr::ScriptHashMismatch
-                    ))
-                );
-
-                System::current().stop();
-                Ok(())
-            }),
+        let res = minter.request(MsgRequest::Broadcast(tx));
+        assert_eq!(
+            res,
+            MsgResponse::Error(net::ErrorKind::TxValidation(
+                verify::TxErr::ScriptHashMismatch
+            ))
         );
+
+        System::current().stop();
     })
     .unwrap();
 }
@@ -132,54 +112,37 @@ fn owner_tx_accept_mint_tokens() {
             tx
         };
 
-        let fut = minter.request(MsgRequest::Broadcast(tx.clone()));
-        Arbiter::spawn(
-            fut.and_then(move |res| {
-                assert!(!res.is_err(), format!("{:?}", res));
-                assert_eq!(res, MsgResponse::Broadcast);
+        let res = minter.request(MsgRequest::Broadcast(tx.clone()));
+        assert!(!res.is_err(), format!("{:?}", res));
+        assert_eq!(res, MsgResponse::Broadcast);
+        minter.produce_block().unwrap();
 
-                minter.produce_block().map(|_| minter)
-            })
-            .and_then(move |minter| {
-                let owner = minter.chain().get_owner();
-                assert_eq!(tx, owner);
+        let owner = minter.chain().get_owner();
+        assert_eq!(tx, owner);
+        minter.produce_block().unwrap();
 
-                minter.produce_block().map(|_| minter)
-            })
-            .and_then({
-                let wallet_key = wallet_key.clone();
-                move |minter| {
-                    let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-                        base: create_tx_header("0.00000 GRAEL"),
-                        to: wallet_key.0.clone().into(),
-                        amount: get_asset("1000.00000 GRAEL"),
-                        attachment: vec![],
-                        attachment_name: "".to_owned(),
-                        script: wallet_key.0.clone().into(),
-                    }));
-                    tx.append_sign(&wallet_key);
-                    minter
-                        .request(MsgRequest::Broadcast(tx))
-                        .map(|res| (res, minter))
-                }
-            })
-            .and_then(|(res, minter)| {
-                assert_eq!(res, MsgResponse::Broadcast);
-                minter.produce_block().map(|_| minter)
-            })
-            .and_then(move |minter| {
-                let chain = minter.chain();
-                let props = chain.get_properties();
-                let expected_bal = get_asset("2000.00000 GRAEL");
-                assert_eq!(props.token_supply, expected_bal);
+        let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
+            base: create_tx_header("0.00000 GRAEL"),
+            to: wallet_key.0.clone().into(),
+            amount: get_asset("1000.00000 GRAEL"),
+            attachment: vec![],
+            attachment_name: "".to_owned(),
+            script: wallet_key.0.clone().into(),
+        }));
+        tx.append_sign(&wallet_key);
+        let res = minter.request(MsgRequest::Broadcast(tx));
+        assert_eq!(res, MsgResponse::Broadcast);
+        minter.produce_block().unwrap();
 
-                let bal = chain.get_balance(&wallet_key.0.clone().into(), &[]);
-                assert_eq!(bal, Some(get_asset("1000.00000 GRAEL")));
+        let chain = minter.chain();
+        let props = chain.get_properties();
+        let expected_bal = get_asset("2000.00000 GRAEL");
+        assert_eq!(props.token_supply, expected_bal);
 
-                System::current().stop();
-                Ok(())
-            }),
-        );
+        let bal = chain.get_balance(&wallet_key.0.clone().into(), &[]);
+        assert_eq!(bal, Some(get_asset("1000.00000 GRAEL")));
+
+        System::current().stop();
     })
     .unwrap();
 }
