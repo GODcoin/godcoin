@@ -1,4 +1,3 @@
-use actix_rt::Arbiter;
 use godcoin::prelude::*;
 use log::{info, warn};
 use parking_lot::Mutex;
@@ -32,7 +31,7 @@ impl Minter {
 
     pub fn start_production_loop(self) {
         let dur = Duration::from_secs(3);
-        Arbiter::spawn(
+        tokio::spawn(
             Delay::new(Instant::now() + dur)
                 .and_then(move |_| {
                     self.produce().unwrap();

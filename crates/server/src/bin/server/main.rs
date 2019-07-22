@@ -15,7 +15,7 @@ struct Config {
 }
 
 fn main() {
-    env_logger::init_from_env(Env::new().filter_or(DEFAULT_FILTER_ENV, "godcoin=info,actix=info"));
+    env_logger::init_from_env(Env::new().filter_or(DEFAULT_FILTER_ENV, "godcoin=info"));
     godcoin::init().unwrap();
 
     let home = {
@@ -88,13 +88,14 @@ fn main() {
         None
     };
 
-    let sys = actix_rt::System::new("godcoin-server");
-    godcoin_server::start(godcoin_server::ServerOpts {
-        blocklog_loc,
-        index_loc,
-        minter_key,
-        bind_addr,
-        reindex,
-    });
-    sys.run().unwrap();
+    tokio::run(futures::lazy(|| {
+        godcoin_server::start(godcoin_server::ServerOpts {
+            blocklog_loc,
+            index_loc,
+            minter_key,
+            bind_addr,
+            reindex,
+        });
+        Ok(())
+    }));
 }

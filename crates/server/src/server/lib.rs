@@ -1,14 +1,14 @@
-use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use bytes::Buf;
+use futures::future::{ok, FutureResult};
 use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
 use log::{error, info, warn};
-use std::{io::Cursor, path::PathBuf, sync::Arc};
+use std::{io::Cursor, path::PathBuf, sync::Arc, net::SocketAddr};
+use warp::{Filter, Rejection, Reply};
 
 pub mod minter;
-pub mod net;
 
 pub mod prelude {
     pub use super::minter::*;
-    pub use super::net::*;
 }
 
 use prelude::*;
@@ -59,42 +59,49 @@ pub fn start(opts: ServerOpts) {
     let minter = Minter::new(Arc::clone(&blockchain), opts.minter_key);
     minter.clone().start_production_loop();
 
-    HttpServer::new(move || {
-        App::new()
-            .data(ServerData {
-                chain: Arc::clone(&blockchain),
-                minter: minter.clone(),
-            })
-            .wrap(middleware::Logger::new(r#"%a "%r" %s %T"#))
-            .service(
-                web::resource("/")
-                    .data({
-                        // Limit 64 KiB
-                        web::PayloadConfig::default().limit(65536)
-                    })
-                    .route(web::post().to(index)),
-            )
-    })
-    .bind(opts.bind_addr)
-    .unwrap()
-    .start();
+    let data = Arc::new(ServerData {
+        chain: Arc::clone(&blockchain),
+        minter,
+    });
+    let data = warp::any().map(move || Arc::clone(&data));
+
+    let index = warp::post2()
+        .and(warp::body::content_length_limit(1024 * 64))
+        .and(warp::body::concat())
+        .and(data)
+        .and_then(index);
+
+    let routes = warp::any()
+        .and(index)
+        .with(warp::log("godcoin"));
+
+    let addr = opts.bind_addr.parse::<SocketAddr>().unwrap();
+    tokio::spawn(warp::serve(routes).bind(addr));
 }
 
-pub fn index(data: web::Data<ServerData>, body: bytes::Bytes) -> HttpResponse {
+pub fn index(
+    body: warp::body::FullBody,
+    data: Arc<ServerData>,
+) -> FutureResult<http::Response<hyper::Body>, Rejection> {
+    let body = body.collect::<Vec<u8>>();
     let mut cur = Cursor::<&[u8]>::new(&body);
-    match RequestType::deserialize(&mut cur) {
+    let res = match RequestType::deserialize(&mut cur) {
         Ok(req_type) => {
             if cur.position() != body.len() as u64 {
-                return ResponseType::Single(MsgResponse::Error(ErrorKind::BytesRemaining))
-                    .into_res();
+                ResponseType::Single(MsgResponse::Error(ErrorKind::BytesRemaining))
+            } else {
+                handle_request_type(&data, req_type)
             }
-            handle_request_type(&data, req_type).into_res()
         }
         Err(e) => {
             error!("Unknown error occurred during deserialization: {:?}", e);
-            ResponseType::Single(MsgResponse::Error(ErrorKind::Io)).into_res()
+            ResponseType::Single(MsgResponse::Error(ErrorKind::Io))
         }
-    }
+    };
+
+    let mut buf = Vec::with_capacity(65536);
+    res.serialize(&mut buf);
+    ok(buf.into_response())
 }
 
 fn handle_request_type(data: &ServerData, req_type: RequestType) -> ResponseType {

@@ -10,20 +10,17 @@ dirs = "2.0.1"
 env_logger = "0.6.2"
 futures = "0.1.28"
 godcoin = { path = "../godcoin" }
+http = "0.1.17"
 log = "0.4.7"
 parking_lot = "0.9.0"
 toml = "0.5.1"
 
-[dependencies.actix-rt]
-version = "0.2.4"
-default-features = false
-
-[dependencies.actix-web]
-version = "1.0.5"
-default-features = false
-
 [dependencies.clap]
 version = "2.33.0"
+default-features = false
+
+[dependencies.hyper]
+version = "0.12.33"
 default-features = false
 
 [dependencies.serde]
@@ -33,6 +30,10 @@ features = ["derive"]
 
 [dependencies.tokio]
 version = "0.1.22"
+default-features = false
+
+[dependencies.warp]
+version = "0.1.17"
 default-features = false
 
 [dev-dependencies]
