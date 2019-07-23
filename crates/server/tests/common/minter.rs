@@ -1,8 +1,4 @@
 use super::create_tx_header;
-use actix_web::{
-    dev::{Body, ResponseBody},
-    web,
-};
 use godcoin::{
     blockchain::{GenesisBlockInfo, ReindexOpts},
     prelude::*,
@@ -15,6 +11,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+use warp::Filter;
 
 type Indexed = bool;
 
@@ -131,25 +128,25 @@ impl TestMinter {
     pub fn send_request(&self, req: net::RequestType) -> net::ResponseType {
         let mut buf = Vec::with_capacity(1_048_576);
         req.serialize(&mut buf);
-        self.raw_request(buf)
+        self.raw_request(&buf)
     }
 
-    pub fn raw_request(&self, bytes: Vec<u8>) -> net::ResponseType {
+    pub fn raw_request(&self, body: &[u8]) -> net::ResponseType {
         assert!(
             self.3,
             "attempting to send a request to an unindexed minter"
         );
-        let buf = bytes::Bytes::from(bytes);
-        let res = index(web::Data::new(self.0.clone()), buf);
-        let body = match res.body() {
-            ResponseBody::Body(body) => body,
-            ResponseBody::Other(body) => body,
-        };
-        let buf = match body {
-            Body::Bytes(bytes) => bytes,
-            _ => panic!("Expected bytes body: {:?}", body),
-        };
-        net::ResponseType::deserialize(&mut Cursor::new(buf)).unwrap()
+
+        let data = Arc::new(self.0.clone());
+        let filter = godcoin_server::app_filter!(data);
+        let res = warp::test::request()
+            .method("POST")
+            .header("content-length", body.len())
+            .body(body)
+            .reply(&filter);
+        let body = res.into_body();
+        let mut cur = Cursor::<&[u8]>::new(&body);
+        net::ResponseType::deserialize(&mut cur).unwrap()
     }
 }
 

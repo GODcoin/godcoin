@@ -89,7 +89,7 @@ fn error_with_bytes_remaining() {
         _ => panic!("Expected batch request type"),
     }
 
-    let res = minter.raw_request(body);
+    let res = minter.raw_request(&body);
     let res = res.unwrap_single();
     assert!(res.is_err());
     assert_eq!(res, MsgResponse::Error(ErrorKind::BytesRemaining));

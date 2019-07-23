@@ -2,7 +2,7 @@ use bytes::Buf;
 use futures::future::{ok, FutureResult};
 use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
 use log::{error, info, warn};
-use std::{io::Cursor, path::PathBuf, sync::Arc, net::SocketAddr};
+use std::{io::Cursor, net::SocketAddr, path::PathBuf, sync::Arc};
 use warp::{Filter, Rejection, Reply};
 
 pub mod minter;
@@ -12,6 +12,19 @@ pub mod prelude {
 }
 
 use prelude::*;
+
+#[macro_export]
+macro_rules! app_filter {
+    ($data:expr) => {{
+        let data = warp::any().map(move || Arc::clone(&$data));
+        let index = warp::post2()
+            .and(warp::body::content_length_limit(1024 * 64))
+            .and(warp::body::concat())
+            .and(data)
+            .and_then(index);
+        index.with(warp::log("godcoin"))
+    }};
+}
 
 pub struct ServerOpts {
     pub blocklog_loc: PathBuf,
@@ -63,18 +76,8 @@ pub fn start(opts: ServerOpts) {
         chain: Arc::clone(&blockchain),
         minter,
     });
-    let data = warp::any().map(move || Arc::clone(&data));
 
-    let index = warp::post2()
-        .and(warp::body::content_length_limit(1024 * 64))
-        .and(warp::body::concat())
-        .and(data)
-        .and_then(index);
-
-    let routes = warp::any()
-        .and(index)
-        .with(warp::log("godcoin"));
-
+    let routes = app_filter!(data);
     let addr = opts.bind_addr.parse::<SocketAddr>().unwrap();
     tokio::spawn(warp::serve(routes).bind(addr));
 }
