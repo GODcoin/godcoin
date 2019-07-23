@@ -7,6 +7,7 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
 };
+use tokio::{prelude::*, runtime::Runtime};
 
 #[derive(Debug, Deserialize)]
 struct Config {
@@ -88,7 +89,8 @@ fn main() {
         None
     };
 
-    tokio::run(futures::lazy(|| {
+    let mut rt = Runtime::new().unwrap();
+    rt.spawn(future::lazy(|| {
         godcoin_server::start(godcoin_server::ServerOpts {
             blocklog_loc,
             index_loc,
@@ -98,4 +100,13 @@ fn main() {
         });
         Ok(())
     }));
+
+    let future = tokio_signal::ctrl_c()
+        .flatten_stream()
+        .into_future()
+        .and_then(|_| {
+            info!("Received ctrl-c, shutting down...");
+            Ok(())
+        });
+    rt.block_on(future).map_err(|(e, _)| e).unwrap();
 }
