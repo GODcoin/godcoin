@@ -239,6 +239,14 @@ impl BlockStore {
         f.write_all(vec).unwrap();
         f.flush().unwrap();
 
+        if log::log_enabled!(log::Level::Debug) {
+            debug!(
+                "[height:{}] Wrote {} bytes to the block log",
+                block.height(),
+                u64::from(len) + 8
+            );
+        }
+
         self.byte_pos_tail += u64::from(len) + 8;
     }
 
