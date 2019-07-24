@@ -36,7 +36,7 @@ impl Minter {
         tokio::spawn(
             Delay::new(Instant::now() + dur)
                 .and_then(move |_| {
-                    self.produce().unwrap();
+                    self.produce(false).unwrap();
                     self.start_production_loop();
                     Ok(())
                 })
@@ -46,14 +46,20 @@ impl Minter {
         );
     }
 
-    pub fn force_produce_block(&self) -> Result<(), verify::BlockErr> {
+    pub fn force_produce_block(
+        &self,
+        enable_stale_production: bool,
+    ) -> Result<(), verify::BlockErr> {
         warn!("Forcing produced block...");
-        self.produce()
+        self.produce(enable_stale_production)
     }
 
-    fn produce(&self) -> Result<(), verify::BlockErr> {
+    fn produce(&self, enable_stale_production: bool) -> Result<(), verify::BlockErr> {
         let mut transactions = self.tx_pool.lock().flush();
-        let should_produce = if self.enable_stale_production || !transactions.is_empty() {
+        let should_produce = if enable_stale_production
+            || self.enable_stale_production
+            || !transactions.is_empty()
+        {
             true
         } else {
             // We don't test the current tx pool for transactions because the tip of the chain
