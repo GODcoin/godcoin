@@ -71,7 +71,7 @@ impl TestMinter {
             chain.insert_block(child).unwrap();
         }
 
-        let minter = Minter::new(Arc::clone(&chain), minter_key);
+        let minter = Minter::new(Arc::clone(&chain), minter_key, true);
         let data = ServerData { chain, minter };
         Self(data, info, tmp_dir, true)
     }
@@ -99,7 +99,7 @@ impl TestMinter {
         let chain = Arc::clone(&self.0.chain);
         assert_eq!(chain.index_status(), IndexStatus::None);
         chain.reindex(ReindexOpts { auto_trim: true });
-        self.0.minter = Minter::new(chain, self.1.minter_key.clone());
+        self.0.minter = Minter::new(chain, self.1.minter_key.clone(), true);
         self.3 = true;
     }
 

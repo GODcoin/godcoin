@@ -12,6 +12,7 @@ use tokio::{prelude::*, runtime::Runtime};
 #[derive(Debug, Deserialize)]
 struct Config {
     minter_key: String,
+    enable_stale_production: bool,
     bind_address: Option<String>,
 }
 
@@ -90,13 +91,16 @@ fn main() {
     };
 
     let mut rt = Runtime::new().unwrap();
-    rt.spawn(future::lazy(|| {
+
+    let enable_stale_production = config.enable_stale_production;
+    rt.spawn(future::lazy(move || {
         godcoin_server::start(godcoin_server::ServerOpts {
             blocklog_loc,
             index_loc,
             minter_key,
             bind_addr,
             reindex,
+            enable_stale_production,
         });
         Ok(())
     }));

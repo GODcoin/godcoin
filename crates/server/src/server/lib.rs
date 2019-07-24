@@ -32,6 +32,7 @@ pub struct ServerOpts {
     pub minter_key: KeyPair,
     pub bind_addr: String,
     pub reindex: Option<ReindexOpts>,
+    pub enable_stale_production: bool,
 }
 
 #[derive(Clone)]
@@ -69,7 +70,11 @@ pub fn start(opts: ServerOpts) {
         blockchain.get_chain_height()
     );
 
-    let minter = Minter::new(Arc::clone(&blockchain), opts.minter_key);
+    let minter = Minter::new(
+        Arc::clone(&blockchain),
+        opts.minter_key,
+        opts.enable_stale_production,
+    );
     minter.clone().start_production_loop();
 
     let data = Arc::new(ServerData {
