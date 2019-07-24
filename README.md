@@ -13,14 +13,15 @@ For more information see the [whitepaper](https://godcoin.gold/whitepaper).
 
 ## Development
 
-This project is intended to replace the Typescript implementation of the core
-blockchain for GODcoin. At the current stage, this software is considered
-experimental and under heavy development. Components are changing on a daily
-basis so documentation will be minimal until the software stabilizes.
+This project is still under heavy development. APIs are currently evolving all
+the time and not to be considered stable. It is possible to run a private test
+net for personal use and development.
 
 ### Prerequisites
 
-- Rust compiler
+Ensure you have the following software installed:
+
+- Rust compiler (1.36+)
 - libsodium
 
 ### Getting started
@@ -28,12 +29,33 @@ basis so documentation will be minimal until the software stabilizes.
 Make sure the source code is locally available by either cloning the repository
 or downloading it.
 
+#### Runtime environment
+
+- `GODCOIN_HOME` - specifies the directory where data and configurations are
+  stored.
+
+#### Running
+
 Run the test suite:
 ```
 $ cargo test
 ```
 
-Launch GODcoin:
+Launch GODcoin CLI:
 ```
-$ cargo run
+$ cargo run --bin godcoin-cli
 ```
+
+Launch GODcoin server:
+```
+$ cargo run --bin godcoin-server
+```
+
+The server requires a configuration file in the home folder called
+`config.toml`
+
+Configuration keys:
+
+- `minter_key` - (required) Minter key to use for block production
+- `bind_address` - (optional - default is 127.0.0.1:7777) The bind address for
+  the server to listen on
