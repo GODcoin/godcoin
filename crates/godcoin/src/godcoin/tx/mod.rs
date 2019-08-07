@@ -484,7 +484,7 @@ mod tests {
     }
 
     #[test]
-    fn serialize_tx_with_sigs() {
+    fn serialize_tx_with_empty_sigs() {
         let to = crypto::KeyPair::gen();
         let reward_tx = TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
             base: Tx {
@@ -501,6 +501,35 @@ mod tests {
 
         let mut c = Cursor::<&[u8]>::new(&v);
         TxVariant::deserialize(&mut c).unwrap();
+    }
+
+    #[test]
+    fn serialize_tx_with_sigs() {
+        let minter = crypto::KeyPair::gen();
+        let wallet = crypto::KeyPair::gen();
+        let mut owner_tx = TxVariant::V0(TxVariantV0::OwnerTx(OwnerTx {
+            base: Tx {
+                timestamp: 1230,
+                fee: get_asset("123.00000 GRAEL"),
+                signature_pairs: vec![],
+            },
+            minter: minter.0.clone(),
+            wallet: wallet.0.clone().into(),
+            script: wallet.0.clone().into(),
+        }));
+
+        owner_tx.append_sign(&minter);
+        owner_tx.append_sign(&wallet);
+
+        let mut v = vec![];
+        owner_tx.serialize(&mut v);
+
+        let mut c = Cursor::<&[u8]>::new(&v);
+        let dec = TxVariant::deserialize(&mut c).unwrap();
+        assert_eq!(owner_tx, dec);
+        assert_eq!(dec.sigs().len(), 2);
+        assert_eq!(owner_tx.sigs()[0], dec.sigs()[0]);
+        assert_eq!(owner_tx.sigs()[1], dec.sigs()[1]);
     }
 
     #[test]
@@ -524,6 +553,7 @@ mod tests {
         let mut c = Cursor::<&[u8]>::new(&v);
         let (base, tx_type) = Tx::deserialize_header(&mut c).unwrap();
         let dec = OwnerTx::deserialize(&mut c, base).unwrap();
+        assert_eq!(owner_tx, dec);
 
         cmp_base_tx!(dec, 1230, "123.00000 GRAEL");
         assert_eq!(tx_type, TxType::OWNER);
