@@ -3,10 +3,7 @@ use crate::{
     serializer::*,
     tx::*,
 };
-use std::{
-    io::Cursor,
-    ops::{Deref, DerefMut},
-};
+use std::{io::Cursor, ops::Deref};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Block {
@@ -202,12 +199,6 @@ impl Deref for BlockV0 {
     }
 }
 
-impl DerefMut for BlockV0 {
-    fn deref_mut(&mut self) -> &mut BlockHeaderV0 {
-        &mut self.header
-    }
-}
-
 pub fn calc_tx_merkle_root(txs: &[TxVariant]) -> Digest {
     let mut buf = Vec::with_capacity(4096 * txs.len());
     for tx in txs {
@@ -277,7 +268,7 @@ mod tests {
 
         match &mut block {
             Block::V0(block) => {
-                block.tx_merkle_root = Digest::from_slice(&[0; 32]).unwrap();
+                block.header.tx_merkle_root = Digest::from_slice(&[0; 32]).unwrap();
             }
         }
 
