@@ -106,7 +106,11 @@ impl Minter {
 
         let head = self.chain.get_chain_head();
         let block = match head.as_ref() {
-            SignedBlock::V0(block) => block.new_child(transactions).sign(&self.minter_key),
+            Block::V0(block) => {
+                let mut b = block.new_child(transactions);
+                b.sign(&self.minter_key);
+                b
+            }
         };
 
         let height = block.height();

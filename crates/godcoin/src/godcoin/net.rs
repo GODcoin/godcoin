@@ -220,7 +220,7 @@ pub enum MsgResponse {
     Error(ErrorKind),
     Broadcast,
     GetProperties(Properties),
-    GetBlock(SignedBlock),
+    GetBlock(Block),
     GetAddressInfo(AddressInfo),
 }
 
@@ -257,7 +257,7 @@ impl MsgResponse {
             MsgResponse::GetBlock(block) => {
                 buf.reserve_exact(1_048_576);
                 buf.push(MsgType::GetBlock as u8);
-                block.serialize_with_tx(buf);
+                block.serialize(buf);
             }
             MsgResponse::GetAddressInfo(info) => {
                 buf.reserve_exact(1 + (mem::size_of::<Asset>() * 3));
@@ -305,7 +305,7 @@ impl MsgResponse {
                 }))
             }
             t if t == MsgType::GetBlock as u8 => {
-                let block = SignedBlock::deserialize_with_tx(cursor)
+                let block = Block::deserialize(cursor)
                     .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
                 Ok(MsgResponse::GetBlock(block))
             }

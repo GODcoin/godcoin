@@ -66,7 +66,11 @@ impl TestMinter {
 
             let head = chain.get_chain_head();
             let child = match head.as_ref() {
-                SignedBlock::V0(block) => block.new_child(txs).sign(&info.minter_key),
+                Block::V0(block) => {
+                    let mut b = block.new_child(txs);
+                    b.sign(&info.minter_key);
+                    b
+                }
             };
             chain.insert_block(child).unwrap();
         }

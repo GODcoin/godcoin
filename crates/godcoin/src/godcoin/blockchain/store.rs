@@ -23,8 +23,8 @@ pub struct BlockStore {
     indexer: Arc<Indexer>,
 
     height: u64,
-    blocks: HashMap<u64, Arc<SignedBlock>>,
-    genesis_block: Option<Arc<SignedBlock>>,
+    blocks: HashMap<u64, Arc<Block>>,
+    genesis_block: Option<Arc<Block>>,
 
     file: RefCell<File>,
     byte_pos_tail: u64,
@@ -63,7 +63,7 @@ impl BlockStore {
         self.height
     }
 
-    pub fn get(&self, height: u64) -> Option<Arc<SignedBlock>> {
+    pub fn get(&self, height: u64) -> Option<Arc<Block>> {
         if height > self.height {
             return None;
         } else if height == 0 {
@@ -83,7 +83,7 @@ impl BlockStore {
         meta.len() == 0
     }
 
-    pub fn insert(&mut self, batch: &mut WriteBatch, block: SignedBlock) {
+    pub fn insert(&mut self, batch: &mut WriteBatch, block: Block) {
         assert_eq!(self.height + 1, block.height(), "invalid block height");
         let byte_pos = self.byte_pos_tail;
         self.write_to_disk(&block);
@@ -103,7 +103,7 @@ impl BlockStore {
         }
     }
 
-    pub fn insert_genesis(&mut self, batch: &mut WriteBatch, block: SignedBlock) {
+    pub fn insert_genesis(&mut self, batch: &mut WriteBatch, block: Block) {
         assert_eq!(block.height(), 0, "expected to be 0");
         assert!(
             self.genesis_block.is_none(),
@@ -117,7 +117,7 @@ impl BlockStore {
 
     pub fn reindex_blocks<F>(&mut self, opts: ReindexOpts, index_fn: F)
     where
-        F: Fn(&mut WriteBatch, &SignedBlock),
+        F: Fn(&mut WriteBatch, &Block),
     {
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
         let mut last_known_good_height = 0;
@@ -177,7 +177,7 @@ impl BlockStore {
         self.init_state();
     }
 
-    fn read_from_disk(&self, height: u64) -> Option<SignedBlock> {
+    fn read_from_disk(&self, height: u64) -> Option<Block> {
         if height > self.height {
             return None;
         }
@@ -186,7 +186,7 @@ impl BlockStore {
         self.raw_read_from_disk(pos).ok()
     }
 
-    fn raw_read_from_disk(&self, pos: u64) -> Result<SignedBlock, ReadError> {
+    fn raw_read_from_disk(&self, pos: u64) -> Result<Block, ReadError> {
         let mut f = self.file.borrow_mut();
         f.seek(SeekFrom::Start(pos)).unwrap();
 
@@ -211,12 +211,12 @@ impl BlockStore {
         };
 
         let mut cursor = Cursor::<&[u8]>::new(&block_vec);
-        SignedBlock::deserialize_with_tx(&mut cursor).ok_or(ReadError::CorruptBlock)
+        Block::deserialize(&mut cursor).ok_or(ReadError::CorruptBlock)
     }
 
-    fn write_to_disk(&mut self, block: &SignedBlock) {
+    fn write_to_disk(&mut self, block: &Block) {
         let vec = &mut Vec::with_capacity(1_048_576);
-        block.serialize_with_tx(vec);
+        block.serialize(vec);
         let len = vec.len() as u32;
         let crc = crc32c(vec);
 

@@ -127,13 +127,13 @@ impl Blockchain {
         self.indexer.get_chain_height()
     }
 
-    pub fn get_chain_head(&self) -> Arc<SignedBlock> {
+    pub fn get_chain_head(&self) -> Arc<Block> {
         let store = self.store.lock();
         let height = store.get_chain_height();
         store.get(height).expect("Failed to get blockchain head")
     }
 
-    pub fn get_block(&self, height: u64) -> Option<Arc<SignedBlock>> {
+    pub fn get_block(&self, height: u64) -> Option<Arc<Block>> {
         let store = self.store.lock();
         store.get(height)
     }
@@ -253,7 +253,7 @@ impl Blockchain {
         Some(bal)
     }
 
-    pub fn insert_block(&self, block: SignedBlock) -> Result<(), verify::BlockErr> {
+    pub fn insert_block(&self, block: Block) -> Result<(), verify::BlockErr> {
         static SKIP_FLAGS: SkipFlags = SKIP_NONE | SKIP_REWARD_TX;
         self.verify_block(&block, &self.get_chain_head(), SKIP_FLAGS)?;
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
@@ -268,8 +268,8 @@ impl Blockchain {
 
     fn verify_block(
         &self,
-        block: &SignedBlock,
-        prev_block: &SignedBlock,
+        block: &Block,
+        prev_block: &Block,
         skip_flags: SkipFlags,
     ) -> Result<(), verify::BlockErr> {
         if prev_block.height() + 1 != block.height() {
@@ -280,7 +280,7 @@ impl Blockchain {
             return Err(verify::BlockErr::InvalidPrevHash);
         }
 
-        let block_signer = block.signer();
+        let block_signer = block.signer().ok_or(verify::BlockErr::InvalidSignature)?;
         match self.get_owner() {
             TxVariant::V0(tx) => match tx {
                 TxVariantV0::OwnerTx(owner) => {
@@ -292,11 +292,11 @@ impl Blockchain {
             },
         }
 
-        if !block_signer.verify(block.calc_hash().as_ref()) {
+        if !block_signer.verify(block.calc_header_hash().as_ref()) {
             return Err(verify::BlockErr::InvalidHash);
         }
 
-        let block_txs = block.as_ref().txs();
+        let block_txs = block.txs();
         let len = block_txs.len();
         for i in 0..len {
             let tx = &block_txs[i];
@@ -479,14 +479,17 @@ impl Blockchain {
             script: Builder::new().push(OpFrame::False).build(),
         }));
 
-        let block = Block::V0(BlockV0 {
-            height: 0,
-            previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
-            tx_merkle_root: Digest::from_slice(&[0u8; 32]).unwrap(),
-            timestamp,
+        let mut block = Block::V0(BlockV0 {
+            header: BlockHeaderV0 {
+                height: 0,
+                previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
+                tx_merkle_root: Digest::from_slice(&[0u8; 32]).unwrap(),
+                timestamp,
+            },
+            sig_pair: None,
             transactions: vec![owner_tx.clone()],
-        })
-        .sign(&info.minter_key);
+        });
+        block.sign(&info.minter_key);
 
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
         self.store.lock().insert_genesis(&mut batch, block);
