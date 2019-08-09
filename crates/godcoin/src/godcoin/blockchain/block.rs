@@ -110,6 +110,7 @@ impl Block {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum BlockHeader {
     V0(BlockHeaderV0),
 }
