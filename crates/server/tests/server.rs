@@ -52,6 +52,20 @@ fn get_block() {
 }
 
 #[test]
+fn get_block_header() {
+    let minter = TestMinter::new();
+    let res = minter.request(MsgRequest::GetBlockHeader(0));
+    assert!(!res.is_err());
+
+    let other = minter.chain().get_block(0).unwrap();
+    assert_eq!(res, MsgResponse::GetBlockHeader(other.header()));
+
+    let res = minter.request(MsgRequest::GetBlockHeader(2));
+    assert!(res.is_err());
+    assert_eq!(res, MsgResponse::Error(ErrorKind::InvalidHeight));
+}
+
+#[test]
 fn get_address_info() {
     let minter = TestMinter::new();
     let addr = (&minter.genesis_info().script).into();

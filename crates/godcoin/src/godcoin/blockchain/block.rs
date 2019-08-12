@@ -12,6 +12,13 @@ pub enum Block {
 
 impl Block {
     #[inline]
+    pub fn header(&self) -> BlockHeader {
+        match self {
+            Block::V0(block) => BlockHeader::V0(block.header.clone()),
+        }
+    }
+
+    #[inline]
     pub fn height(&self) -> u64 {
         match self {
             Block::V0(block) => block.height,
@@ -116,7 +123,13 @@ pub enum BlockHeader {
 }
 
 impl BlockHeader {
-    pub(self) fn deserialize(cur: &mut Cursor<&[u8]>) -> Option<Self> {
+    pub fn serialize(&self, buf: &mut Vec<u8>) {
+        match self {
+            BlockHeader::V0(header) => header.serialize(buf),
+        }
+    }
+
+    pub fn deserialize(cur: &mut Cursor<&[u8]>) -> Option<Self> {
         let header_ver = cur.take_u16().ok()?;
         match header_ver {
             0 => Some(BlockHeader::V0(BlockHeaderV0::deserialize(cur)?)),

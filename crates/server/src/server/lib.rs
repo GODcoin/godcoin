@@ -143,6 +143,10 @@ fn handle_direct_request(data: &ServerData, req: MsgRequest) -> MsgResponse {
             Some(block) => MsgResponse::GetBlock(block.as_ref().clone()),
             None => MsgResponse::Error(ErrorKind::InvalidHeight),
         },
+        MsgRequest::GetBlockHeader(height) => match data.chain.get_block(height) {
+            Some(block) => MsgResponse::GetBlockHeader(block.header()),
+            None => MsgResponse::Error(ErrorKind::InvalidHeight),
+        },
         MsgRequest::GetAddressInfo(addr) => {
             let res = data.minter.get_addr_info(&addr);
             match res {

@@ -119,14 +119,16 @@ pub enum MsgType {
     // Getters
     GetProperties = 0x20,
     GetBlock = 0x21,
-    GetAddressInfo = 0x22,
+    GetBlockHeader = 0x22,
+    GetAddressInfo = 0x23,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MsgRequest {
     Broadcast(TxVariant),
     GetProperties,
-    GetBlock(u64), // height
+    GetBlock(u64),       // height
+    GetBlockHeader(u64), // height
     GetAddressInfo(ScriptHash),
 }
 
@@ -142,6 +144,11 @@ impl MsgRequest {
             MsgRequest::GetBlock(height) => {
                 buf.reserve_exact(9);
                 buf.push(MsgType::GetBlock as u8);
+                buf.push_u64(*height);
+            }
+            MsgRequest::GetBlockHeader(height) => {
+                buf.reserve_exact(9);
+                buf.push(MsgType::GetBlockHeader as u8);
                 buf.push_u64(*height);
             }
             MsgRequest::GetAddressInfo(addr) => {
@@ -164,6 +171,10 @@ impl MsgRequest {
             t if t == MsgType::GetBlock as u8 => {
                 let height = cursor.take_u64()?;
                 Ok(MsgRequest::GetBlock(height))
+            }
+            t if t == MsgType::GetBlockHeader as u8 => {
+                let height = cursor.take_u64()?;
+                Ok(MsgRequest::GetBlockHeader(height))
             }
             t if t == MsgType::GetAddressInfo as u8 => {
                 let addr = cursor.take_script_hash()?;
@@ -221,6 +232,7 @@ pub enum MsgResponse {
     Broadcast,
     GetProperties(Properties),
     GetBlock(Block),
+    GetBlockHeader(BlockHeader),
     GetAddressInfo(AddressInfo),
 }
 
@@ -258,6 +270,11 @@ impl MsgResponse {
                 buf.reserve_exact(1_048_576);
                 buf.push(MsgType::GetBlock as u8);
                 block.serialize(buf);
+            }
+            MsgResponse::GetBlockHeader(header) => {
+                buf.reserve_exact(256);
+                buf.push(MsgType::GetBlockHeader as u8);
+                header.serialize(buf);
             }
             MsgResponse::GetAddressInfo(info) => {
                 buf.reserve_exact(1 + (mem::size_of::<Asset>() * 3));
@@ -308,6 +325,11 @@ impl MsgResponse {
                 let block = Block::deserialize(cursor)
                     .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
                 Ok(MsgResponse::GetBlock(block))
+            }
+            t if t == MsgType::GetBlockHeader as u8 => {
+                let header = BlockHeader::deserialize(cursor)
+                    .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
+                Ok(MsgResponse::GetBlockHeader(header))
             }
             t if t == MsgType::GetAddressInfo as u8 => {
                 let net_fee = cursor.take_asset()?;
