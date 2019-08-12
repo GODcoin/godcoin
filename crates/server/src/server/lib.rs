@@ -144,7 +144,11 @@ fn handle_direct_request(data: &ServerData, req: MsgRequest) -> MsgResponse {
             None => MsgResponse::Error(ErrorKind::InvalidHeight),
         },
         MsgRequest::GetBlockHeader(height) => match data.chain.get_block(height) {
-            Some(block) => MsgResponse::GetBlockHeader(block.header()),
+            Some(block) => {
+                let header = block.header();
+                let signer = block.signer().expect("cannot get unsigned block").clone();
+                MsgResponse::GetBlockHeader { header, signer }
+            }
             None => MsgResponse::Error(ErrorKind::InvalidHeight),
         },
         MsgRequest::GetAddressInfo(addr) => {

@@ -232,7 +232,10 @@ pub enum MsgResponse {
     Broadcast,
     GetProperties(Properties),
     GetBlock(Block),
-    GetBlockHeader(BlockHeader),
+    GetBlockHeader {
+        header: BlockHeader,
+        signer: SigPair,
+    },
     GetAddressInfo(AddressInfo),
 }
 
@@ -271,10 +274,11 @@ impl MsgResponse {
                 buf.push(MsgType::GetBlock as u8);
                 block.serialize(buf);
             }
-            MsgResponse::GetBlockHeader(header) => {
+            MsgResponse::GetBlockHeader { header, signer } => {
                 buf.reserve_exact(256);
                 buf.push(MsgType::GetBlockHeader as u8);
                 header.serialize(buf);
+                buf.push_sig_pair(signer);
             }
             MsgResponse::GetAddressInfo(info) => {
                 buf.reserve_exact(1 + (mem::size_of::<Asset>() * 3));
@@ -329,7 +333,8 @@ impl MsgResponse {
             t if t == MsgType::GetBlockHeader as u8 => {
                 let header = BlockHeader::deserialize(cursor)
                     .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
-                Ok(MsgResponse::GetBlockHeader(header))
+                let signer = cursor.take_sig_pair()?;
+                Ok(MsgResponse::GetBlockHeader { header, signer })
             }
             t if t == MsgType::GetAddressInfo as u8 => {
                 let net_fee = cursor.take_asset()?;

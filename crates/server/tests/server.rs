@@ -58,7 +58,9 @@ fn get_block_header() {
     assert!(!res.is_err());
 
     let other = minter.chain().get_block(0).unwrap();
-    assert_eq!(res, MsgResponse::GetBlockHeader(other.header()));
+    let header = other.header();
+    let signer = other.signer().unwrap().clone();
+    assert_eq!(res, MsgResponse::GetBlockHeader { header, signer });
 
     let res = minter.request(MsgRequest::GetBlockHeader(2));
     assert!(res.is_err());
