@@ -48,25 +48,23 @@ impl Minter {
 
     pub fn force_produce_block(
         &self,
-        enable_stale_production: bool,
+        force_stale_production: bool,
     ) -> Result<(), verify::BlockErr> {
         warn!("Forcing produced block...");
-        self.produce(enable_stale_production)
+        self.produce(force_stale_production)
     }
 
-    fn produce(&self, enable_stale_production: bool) -> Result<(), verify::BlockErr> {
+    fn produce(&self, force_stale_production: bool) -> Result<(), verify::BlockErr> {
         let mut transactions = self.tx_pool.lock().flush();
-        let should_produce = if enable_stale_production
-            || self.enable_stale_production
-            || !transactions.is_empty()
-        {
-            true
-        } else {
-            // We don't test the current tx pool for transactions because the tip of the chain
-            // should have no transactions to allow propagation finality of the previous block
-            let current_head = self.chain.get_chain_head();
-            !current_head.txs().is_empty()
-        };
+        let should_produce =
+            if force_stale_production || self.enable_stale_production || !transactions.is_empty() {
+                true
+            } else {
+                // We don't test the current tx pool for transactions because the tip of the chain
+                // should have no transactions to allow propagation finality of the previous block
+                let current_head = self.chain.get_chain_head();
+                !current_head.txs().is_empty()
+            };
 
         if !should_produce {
             let height = self.chain.get_chain_head().height();
