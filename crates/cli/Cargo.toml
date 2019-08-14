@@ -5,13 +5,13 @@ authors = ["Samuel Grenier <samrg472@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-dirs = "2.0.1"
+dirs = "2.0.2"
 env_logger = "0.6.2"
 faster-hex = "0.3.1"
 godcoin = { path = "../godcoin" }
-log = "0.4.7"
+log = "0.4.8"
 reqwest = "0.9.19"
-rustyline = "5.0.0"
+rustyline = "5.0.1"
 rocksdb = "0.12.3"
 sodiumoxide = { version = "0.2.2", default-features = false, features = ["std"] }
 
