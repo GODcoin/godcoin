@@ -88,7 +88,7 @@ fn get_address_info() {
 fn error_with_bytes_remaining() {
     let minter = TestMinter::new();
 
-    let body = {
+    let buf = {
         let req = net::RequestType::Batch(vec![MsgRequest::GetBlock(0)]);
         let mut buf = Vec::with_capacity(4096);
         req.serialize(&mut buf);
@@ -100,12 +100,12 @@ fn error_with_bytes_remaining() {
     };
 
     // Confirm the length is actually 0 in case the binary format changes
-    match net::RequestType::deserialize(&mut Cursor::new(&body)).unwrap() {
+    match net::RequestType::deserialize(&mut Cursor::new(&buf)).unwrap() {
         net::RequestType::Batch(reqs) => assert_eq!(reqs.len(), 0),
         _ => panic!("Expected batch request type"),
     }
 
-    let res = minter.raw_request(&body);
+    let res = minter.raw_request(buf);
     let res = res.unwrap_single();
     assert!(res.is_err());
     assert_eq!(res, MsgResponse::Error(ErrorKind::BytesRemaining));

@@ -1,10 +1,11 @@
-use bytes::Buf;
-use futures::future::{ok, FutureResult};
+use futures::sync::mpsc;
 use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
 use log::{error, info, warn};
 use std::{io::Cursor, net::SocketAddr, path::PathBuf, sync::Arc};
-use warp::{Filter, Rejection, Reply};
+use tokio::{net::TcpListener, prelude::*};
+use tokio_tungstenite::tungstenite::{protocol, Message};
 
+mod forever;
 pub mod minter;
 
 pub mod prelude {
@@ -12,19 +13,6 @@ pub mod prelude {
 }
 
 use prelude::*;
-
-#[macro_export]
-macro_rules! app_filter {
-    ($data:expr) => {{
-        let data = warp::any().map(move || Arc::clone(&$data));
-        let index = warp::post2()
-            .and(warp::body::content_length_limit(1024 * 64))
-            .and(warp::body::concat())
-            .and(data)
-            .and_then(index);
-        index.with(warp::log("godcoin"))
-    }};
-}
 
 pub struct ServerOpts {
     pub blocklog_loc: PathBuf,
@@ -82,34 +70,81 @@ pub fn start(opts: ServerOpts) {
         minter,
     });
 
-    let routes = app_filter!(data);
     let addr = opts.bind_addr.parse::<SocketAddr>().unwrap();
-    tokio::spawn(warp::serve(routes).bind(addr));
+    start_server(addr, data);
 }
 
-pub fn index(
-    body: warp::body::FullBody,
-    data: Arc<ServerData>,
-) -> FutureResult<http::Response<hyper::Body>, Rejection> {
-    let body = body.collect::<Vec<u8>>();
-    let mut cur = Cursor::<&[u8]>::new(&body);
-    let res = match RequestType::deserialize(&mut cur) {
-        Ok(req_type) => {
-            if cur.position() != body.len() as u64 {
-                ResponseType::Single(MsgResponse::Error(ErrorKind::BytesRemaining))
-            } else {
-                handle_request_type(&data, req_type)
-            }
-        }
-        Err(e) => {
-            error!("Unknown error occurred during deserialization: {:?}", e);
-            ResponseType::Single(MsgResponse::Error(ErrorKind::Io))
-        }
-    };
+fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
+    let server = TcpListener::bind(&server_addr).unwrap();
+    let incoming = forever::ListenForever::new(server.incoming());
+    tokio::spawn(incoming.for_each(move |stream| {
+        let peer_addr = stream.peer_addr().unwrap();
+        let data = Arc::clone(&data);
+        tokio::spawn(
+            tokio_tungstenite::accept_async(stream)
+                .and_then(move |ws| {
+                    info!("[{}] Connection opened", peer_addr);
 
-    let mut buf = Vec::with_capacity(65536);
-    res.serialize(&mut buf);
-    ok(buf.into_response())
+                    let (tx, rx) = mpsc::unbounded();
+                    let (sink, stream) = ws.split();
+
+                    let ws_reader = stream.for_each(move |msg| {
+                        let res = process_message(&data, msg);
+                        if let Some(res) = res {
+                            tx.unbounded_send(res).unwrap();
+                        }
+                        Ok(())
+                    });
+                    let ws_writer = rx.forward(sink.sink_map_err(move |e| {
+                        error!("[{}] Sink send error: {:?}", peer_addr, e);
+                    }));
+
+                    let conn = ws_reader
+                        .map_err(|_| ())
+                        .select(ws_writer.map(|_| ()).map_err(|_| ()));
+                    tokio::spawn(conn.then(move |_| {
+                        info!("[{}] Connection closed", peer_addr);
+                        Ok(())
+                    }));
+
+                    Ok(())
+                })
+                .map_err(move |e| {
+                    error!("[{}] WS accept error = {:?}", peer_addr, e);
+                }),
+        );
+        Ok(())
+    }));
+}
+
+pub fn process_message(data: &ServerData, msg: Message) -> Option<Message> {
+    match msg {
+        Message::Binary(buf) => {
+            let mut cur = Cursor::<&[u8]>::new(&buf);
+            let res = match RequestType::deserialize(&mut cur) {
+                Ok(req_type) => {
+                    if cur.position() != buf.len() as u64 {
+                        ResponseType::Single(MsgResponse::Error(ErrorKind::BytesRemaining))
+                    } else {
+                        handle_request_type(data, req_type)
+                    }
+                }
+                Err(e) => {
+                    error!("Unknown error occurred during deserialization: {:?}", e);
+                    ResponseType::Single(MsgResponse::Error(ErrorKind::Io))
+                }
+            };
+
+            let mut buf = Vec::with_capacity(65536);
+            res.serialize(&mut buf);
+            Some(Message::Binary(buf))
+        }
+        Message::Text(_) => Some(Message::Close(Some(protocol::CloseFrame {
+            code: protocol::frame::coding::CloseCode::Unsupported,
+            reason: "text is not supported".into(),
+        }))),
+        _ => None,
+    }
 }
 
 fn handle_request_type(data: &ServerData, req_type: RequestType) -> ResponseType {

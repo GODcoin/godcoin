@@ -1,6 +1,6 @@
-use reqwest::Url;
 use rustyline::{error::ReadlineError, Editor};
 use std::path::PathBuf;
+use url::Url;
 
 mod cmd;
 mod db;
@@ -24,11 +24,16 @@ impl Wallet {
             "new>> "
         })
         .to_owned();
-        Wallet {
-            db,
-            prompt,
-            url: "http://localhost:7777".parse().unwrap(),
+
+        let mut url: Url = "ws://localhost:7777".parse().unwrap();
+        if url.host_str().is_none() {
+            panic!("Expected url to have host");
         }
+        if url.port().is_none() {
+            url.set_port(Some(7777)).unwrap();
+        }
+
+        Wallet { db, prompt, url }
     }
 
     pub fn start(mut self) {
