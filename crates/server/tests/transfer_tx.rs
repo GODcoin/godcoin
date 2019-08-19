@@ -37,7 +37,7 @@ fn transfer_from_minter() {
     // The fee transfers back to the minter wallet in the form of a reward tx so it
     // must not be subtracted during the assertion
     let cur_bal = chain.get_balance(&from_addr, &[]);
-    assert_eq!(cur_bal, from_bal.sub(amount));
+    assert_eq!(cur_bal, from_bal.checked_sub(amount));
 }
 
 #[test]
@@ -139,7 +139,7 @@ fn insufficient_fee() {
     let bad_fee = info
         .total_fee()
         .unwrap()
-        .sub(get_asset("0.00001 GRAEL"))
+        .checked_sub(get_asset("0.00001 GRAEL"))
         .unwrap();
     let tx = {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
@@ -304,7 +304,9 @@ fn tx_addr_dynamic_fee_increase_in_pool() {
 
     // Transaction count always start at 1, so test it as though two transactions
     // were made.
-    let expected_fee = GRAEL_FEE_MIN.mul(GRAEL_FEE_MULT.pow(2).unwrap()).unwrap();
+    let expected_fee = GRAEL_FEE_MIN
+        .checked_mul(GRAEL_FEE_MULT.checked_pow(2).unwrap())
+        .unwrap();
     assert_eq!(addr_info.addr_fee, expected_fee);
 
     minter.produce_block().unwrap();
@@ -328,7 +330,9 @@ fn tx_addr_dynamic_fee_increase() {
             _ => panic!("Expected GetAddressInfo response"),
         };
 
-        let expected_fee = GRAEL_FEE_MIN.mul(GRAEL_FEE_MULT.pow(num).unwrap()).unwrap();
+        let expected_fee = GRAEL_FEE_MIN
+            .checked_mul(GRAEL_FEE_MULT.checked_pow(num).unwrap())
+            .unwrap();
         assert_eq!(addr_info.addr_fee, expected_fee);
 
         let tx = {
@@ -362,7 +366,7 @@ fn tx_addr_dynamic_fee_increase() {
     };
 
     // Test the delta reset for address fees
-    let expected_fee = GRAEL_FEE_MIN.mul(GRAEL_FEE_MULT).unwrap();
+    let expected_fee = GRAEL_FEE_MIN.checked_mul(GRAEL_FEE_MULT).unwrap();
     assert_eq!(addr_info.addr_fee, expected_fee);
 }
 
@@ -446,7 +450,7 @@ fn net_fee_dynamic_increase() {
         let tx_count = (tx_count / NETWORK_FEE_AVG_WINDOW) as u16;
         assert!(tx_count > 10);
 
-        let fee = GRAEL_FEE_MIN.mul(GRAEL_FEE_NET_MULT.pow(tx_count).unwrap());
+        let fee = GRAEL_FEE_MIN.checked_mul(GRAEL_FEE_NET_MULT.checked_pow(tx_count).unwrap());
         assert_eq!(Some(props.network_fee), fee);
     }
 
@@ -455,6 +459,6 @@ fn net_fee_dynamic_increase() {
     }
 
     // Test network delta fee reset
-    let expected_fee = GRAEL_FEE_MIN.mul(GRAEL_FEE_NET_MULT);
+    let expected_fee = GRAEL_FEE_MIN.checked_mul(GRAEL_FEE_NET_MULT);
     assert_eq!(minter.chain().get_network_fee(), expected_fee);
 }

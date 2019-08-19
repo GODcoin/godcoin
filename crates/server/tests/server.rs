@@ -44,7 +44,7 @@ fn get_block() {
     assert!(!res.is_err());
 
     let other = minter.chain().get_block(0).unwrap();
-    assert_eq!(res, MsgResponse::GetBlock((*other).clone()));
+    assert_eq!(res, MsgResponse::GetBlock(Box::new((*other).clone())));
 
     let res = minter.request(MsgRequest::GetBlock(2));
     assert!(res.is_err());
@@ -77,7 +77,7 @@ fn get_address_info() {
     let expected = MsgResponse::GetAddressInfo(AddressInfo {
         net_fee: constants::GRAEL_FEE_MIN,
         addr_fee: constants::GRAEL_FEE_MIN
-            .mul(constants::GRAEL_FEE_MULT)
+            .checked_mul(constants::GRAEL_FEE_MULT)
             .unwrap(),
         balance: get_asset("1000.00000 GRAEL"),
     });
@@ -124,10 +124,16 @@ fn batch_preserves_order() {
     let block_0 = minter.chain().get_block(0).unwrap();
     let block_1 = minter.chain().get_block(1).unwrap();
 
-    assert_eq!(responses[0], MsgResponse::GetBlock((*block_0).clone()));
+    assert_eq!(
+        responses[0],
+        MsgResponse::GetBlock(Box::new((*block_0).clone()))
+    );
     assert_eq!(
         responses[1],
         MsgResponse::Error(net::ErrorKind::InvalidHeight)
     );
-    assert_eq!(responses[2], MsgResponse::GetBlock((*block_1).clone()));
+    assert_eq!(
+        responses[2],
+        MsgResponse::GetBlock(Box::new((*block_1).clone()))
+    );
 }

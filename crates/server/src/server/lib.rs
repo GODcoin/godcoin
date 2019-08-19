@@ -175,7 +175,7 @@ fn handle_direct_request(data: &ServerData, req: MsgRequest) -> MsgResponse {
             MsgResponse::GetProperties(props)
         }
         MsgRequest::GetBlock(height) => match data.chain.get_block(height) {
-            Some(block) => MsgResponse::GetBlock(block.as_ref().clone()),
+            Some(block) => MsgResponse::GetBlock(Box::new(block.as_ref().clone())),
             None => MsgResponse::Error(ErrorKind::InvalidHeight),
         },
         MsgRequest::GetBlockHeader(height) => match data.chain.get_block(height) {

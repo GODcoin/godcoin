@@ -158,7 +158,7 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
             self.read_exact(&mut buf)?;
             let byte = buf[0];
 
-            result |= ((byte & 0x7F) as u64) << shift;
+            result |= u64::from(byte & 0x7F) << shift;
             if byte & 0x80 == 0 {
                 break;
             }

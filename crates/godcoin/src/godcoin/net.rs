@@ -39,12 +39,10 @@ impl RequestType {
                 Ok(RequestType::Batch(batch))
             }
             1 => Ok(RequestType::Single(MsgRequest::deserialize(cursor)?)),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "failed to deserialize type",
-                ))
-            }
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "failed to deserialize type",
+            )),
         }
     }
 }
@@ -98,12 +96,10 @@ impl ResponseType {
                 Ok(ResponseType::Batch(batch))
             }
             1 => Ok(ResponseType::Single(MsgResponse::deserialize(cursor)?)),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "failed to deserialize type",
-                ))
-            }
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "failed to deserialize type",
+            )),
         }
     }
 }
@@ -231,7 +227,7 @@ pub enum MsgResponse {
     Error(ErrorKind),
     Broadcast,
     GetProperties(Properties),
-    GetBlock(Block),
+    GetBlock(Box<Block>),
     GetBlockHeader {
         header: BlockHeader,
         signer: SigPair,
@@ -328,7 +324,7 @@ impl MsgResponse {
             t if t == MsgType::GetBlock as u8 => {
                 let block = Block::deserialize(cursor)
                     .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
-                Ok(MsgResponse::GetBlock(block))
+                Ok(MsgResponse::GetBlock(Box::new(block)))
             }
             t if t == MsgType::GetBlockHeader as u8 => {
                 let header = BlockHeader::deserialize(cursor)

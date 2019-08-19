@@ -200,10 +200,10 @@ impl WriteBatch {
     pub fn add_token_supply(&mut self, amount: Asset) {
         match self.token_supply.as_mut() {
             Some(token_supply) => {
-                *token_supply = token_supply.add(amount).unwrap();
+                *token_supply = token_supply.checked_add(amount).unwrap();
             }
             None => {
-                let amt = self.indexer.get_token_supply().add(amount).unwrap();
+                let amt = self.indexer.get_token_supply().checked_add(amount).unwrap();
                 self.token_supply = Some(amt);
             }
         }
@@ -212,14 +212,14 @@ impl WriteBatch {
     pub fn add_bal(&mut self, addr: &ScriptHash, amount: Asset) {
         match self.balances.get_mut(addr) {
             Some(bal) => {
-                *bal = bal.add(amount).unwrap();
+                *bal = bal.checked_add(amount).unwrap();
             }
             None => {
                 let bal = self
                     .indexer
                     .get_balance(addr)
                     .unwrap_or_else(Default::default)
-                    .add(amount)
+                    .checked_add(amount)
                     .unwrap();
                 self.balances.insert(addr.clone(), bal);
             }
@@ -229,14 +229,14 @@ impl WriteBatch {
     pub fn sub_bal(&mut self, addr: &ScriptHash, amount: Asset) {
         match self.balances.get_mut(addr) {
             Some(bal) => {
-                *bal = bal.sub(amount).unwrap();
+                *bal = bal.checked_sub(amount).unwrap();
             }
             None => {
                 let bal = self
                     .indexer
                     .get_balance(addr)
                     .unwrap_or_else(Default::default)
-                    .sub(amount)
+                    .checked_sub(amount)
                     .unwrap();
                 self.balances.insert(addr.clone(), bal);
             }

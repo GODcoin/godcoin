@@ -79,7 +79,7 @@ impl Minter {
             let rewards = transactions
                 .iter()
                 .fold(Asset::default(), |acc, tx| match tx {
-                    TxVariant::V0(tx) => acc.add(tx.fee).unwrap(),
+                    TxVariant::V0(tx) => acc.checked_add(tx.fee).unwrap(),
                 });
             if rewards.amount > 0 {
                 // Retrieve the owner wallet here in case the owner changes, ensuring that the

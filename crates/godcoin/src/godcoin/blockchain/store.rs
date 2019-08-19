@@ -78,8 +78,8 @@ impl BlockStore {
         }
     }
 
-    pub fn is_empty(&mut self) -> bool {
-        let meta = self.file.borrow_mut().metadata().unwrap();
+    pub fn is_empty(&self) -> bool {
+        let meta = self.file.borrow().metadata().unwrap();
         meta.len() == 0
     }
 

@@ -108,7 +108,7 @@ fn reindexed_blockchain() {
     // The fee transfers back to the minter wallet in the form of a reward tx so it
     // must not be subtracted during the assertion
     let cur_bal = chain.get_balance(&from_addr, &[]);
-    assert_eq!(cur_bal, from_bal.sub(amount));
+    assert_eq!(cur_bal, from_bal.checked_sub(amount));
 
     // Test to ensure that after a reindex the tx cannot be rebroadcasted
     let res = minter.request(MsgRequest::Broadcast(tx.clone()));
