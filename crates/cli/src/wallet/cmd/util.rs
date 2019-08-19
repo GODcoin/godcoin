@@ -1,11 +1,11 @@
 use crate::Wallet;
-use godcoin::net::{MsgRequest, MsgResponse, RequestType, ResponseType};
+use godcoin::net::{RequestBody, ResponseBody, Request, Response};
 use std::{
     io::Cursor,
     net::{SocketAddr, TcpStream, ToSocketAddrs},
     time::Duration,
 };
-use tungstenite::{client, handshake::client::Request, protocol::Message};
+use tungstenite::{client, handshake::client::Request as WsReq, protocol::Message};
 
 macro_rules! check_unlocked {
     ($self:expr) => {
@@ -45,15 +45,18 @@ macro_rules! hex_to_bytes {
     }};
 }
 
-pub fn send_print_rpc_req(wallet: &Wallet, req: MsgRequest) {
-    let res = send_rpc_req(wallet, req);
+pub fn send_print_rpc_req(wallet: &Wallet, body: RequestBody) {
+    let res = send_rpc_req(wallet, body);
     println!("{:#?}", res);
 }
 
-pub fn send_rpc_req(wallet: &Wallet, req: MsgRequest) -> Result<MsgResponse, String> {
+pub fn send_rpc_req(wallet: &Wallet, body: RequestBody) -> Result<ResponseBody, String> {
     let buf = {
         let mut buf = Vec::with_capacity(8192);
-        RequestType::Single(req).serialize(&mut buf);
+        let req = Request {
+            body
+        };
+        req.serialize(&mut buf);
         buf
     };
 
@@ -68,14 +71,14 @@ pub fn send_rpc_req(wallet: &Wallet, req: MsgRequest) -> Result<MsgResponse, Str
                     SocketAddr::V4(_) => break addr,
                     _ => continue,
                 },
-                None => return Err("No resolved addresses found from host".to_owned()),
+                None => return Err("No resolved IPv4 addresses found from host".to_owned()),
             }
         };
 
         let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(1))
             .map_err(|e| format!("Failed to connect to host: {:?}", e))?;
         let (ws, _) = client(
-            Request {
+            WsReq {
                 url: wallet.url.clone(),
                 extra_headers: None,
             },
@@ -96,7 +99,7 @@ pub fn send_rpc_req(wallet: &Wallet, req: MsgRequest) -> Result<MsgResponse, Str
     let _ = ws.close(None);
 
     let mut cursor = Cursor::<&[u8]>::new(&res);
-    ResponseType::deserialize(&mut cursor)
-        .map(|res| res.unwrap_single())
+    Response::deserialize(&mut cursor)
+        .map(|res| res.body)
         .map_err(|e| format!("Failed to deserialize response: {}", e))
 }

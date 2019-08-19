@@ -119,23 +119,20 @@ impl TestMinter {
         self.0.minter.force_produce_block(true)
     }
 
-    pub fn request(&self, req: MsgRequest) -> MsgResponse {
-        self.send_request(net::RequestType::Single(req))
-            .unwrap_single()
+    pub fn request(&self, body: RequestBody) -> ResponseBody {
+        let res = self.send_request(net::Request {
+            body
+        });
+        res.body
     }
 
-    pub fn batch_request(&self, reqs: Vec<MsgRequest>) -> Vec<MsgResponse> {
-        self.send_request(net::RequestType::Batch(reqs))
-            .unwrap_batch()
-    }
-
-    pub fn send_request(&self, req: net::RequestType) -> net::ResponseType {
+    pub fn send_request(&self, req: net::Request) -> net::Response {
         let mut buf = Vec::with_capacity(1_048_576);
         req.serialize(&mut buf);
         self.raw_request(buf)
     }
 
-    pub fn raw_request(&self, req_bytes: Vec<u8>) -> net::ResponseType {
+    pub fn raw_request(&self, req_bytes: Vec<u8>) -> net::Response {
         assert!(
             self.3,
             "attempting to send a request to an unindexed minter"
@@ -146,7 +143,7 @@ impl TestMinter {
             _ => panic!("Expected binary response"),
         };
         let mut cur = Cursor::<&[u8]>::new(&res);
-        net::ResponseType::deserialize(&mut cur).unwrap()
+        net::Response::deserialize(&mut cur).unwrap()
     }
 }
 

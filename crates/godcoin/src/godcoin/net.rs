@@ -5,107 +5,41 @@ use crate::{
 use std::io::{self, Cursor, Error};
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum RequestType {
-    Batch(Vec<MsgRequest>),
-    Single(MsgRequest),
+pub struct Request {
+    pub body: RequestBody,
 }
 
-impl RequestType {
+impl Request {
     pub fn serialize(&self, buf: &mut Vec<u8>) {
-        match self {
-            RequestType::Batch(batch) => {
-                buf.push(0);
-                buf.push_u32(batch.len() as u32);
-                for req in batch {
-                    req.serialize(buf);
-                }
-            }
-            RequestType::Single(req) => {
-                buf.push(1);
-                req.serialize(buf);
-            }
-        }
+        self.body.serialize(buf);
     }
 
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
-        let tag = cursor.take_u8()?;
-        match tag {
-            0 => {
-                let len = cursor.take_u32()?;
-                let mut batch = Vec::with_capacity(len as usize);
-                for _ in 0..len {
-                    batch.push(MsgRequest::deserialize(cursor)?);
-                }
-                Ok(RequestType::Batch(batch))
-            }
-            1 => Ok(RequestType::Single(MsgRequest::deserialize(cursor)?)),
-            _ => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "failed to deserialize type",
-            )),
-        }
+        Ok(Self {
+            body: RequestBody::deserialize(cursor)?
+        })
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum ResponseType {
-    Batch(Vec<MsgResponse>),
-    Single(MsgResponse),
+pub struct Response {
+    pub body: ResponseBody,
 }
 
-impl ResponseType {
-    pub fn unwrap_batch(self) -> Vec<MsgResponse> {
-        match self {
-            ResponseType::Batch(batch) => batch,
-            _ => panic!("expected batch response type"),
-        }
-    }
-
-    pub fn unwrap_single(self) -> MsgResponse {
-        match self {
-            ResponseType::Single(res) => res,
-            _ => panic!("expected single response type"),
-        }
-    }
-
+impl Response {
     pub fn serialize(&self, buf: &mut Vec<u8>) {
-        match self {
-            ResponseType::Batch(batch) => {
-                buf.push(0);
-                buf.push_u32(batch.len() as u32);
-                for res in batch {
-                    res.serialize(buf);
-                }
-            }
-            ResponseType::Single(res) => {
-                buf.push(1);
-                res.serialize(buf);
-            }
-        }
+        self.body.serialize(buf);
     }
 
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
-        let tag = cursor.take_u8()?;
-        match tag {
-            0 => {
-                let len = cursor.take_u32()?;
-                let mut batch = Vec::with_capacity(len as usize);
-                for _ in 0..len {
-                    batch.push(MsgResponse::deserialize(cursor)?);
-                }
-                Ok(ResponseType::Batch(batch))
-            }
-            1 => Ok(ResponseType::Single(MsgResponse::deserialize(cursor)?)),
-            _ => Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "failed to deserialize type",
-            )),
-        }
+        Ok(Self {
+            body: ResponseBody::deserialize(cursor)?
+        })
     }
 }
 
 #[repr(u8)]
-pub enum MsgType {
+pub enum BodyType {
     // Returned to clients when an error occurred processing a request
     Error = 0x01,
 
@@ -120,7 +54,7 @@ pub enum MsgType {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum MsgRequest {
+pub enum RequestBody {
     Broadcast(TxVariant),
     GetProperties,
     GetBlock(u64),       // height
@@ -128,28 +62,28 @@ pub enum MsgRequest {
     GetAddressInfo(ScriptHash),
 }
 
-impl MsgRequest {
+impl RequestBody {
     pub fn serialize(&self, buf: &mut Vec<u8>) {
         match self {
-            MsgRequest::Broadcast(tx) => {
+            Self::Broadcast(tx) => {
                 buf.reserve_exact(4096);
-                buf.push(MsgType::Broadcast as u8);
+                buf.push(BodyType::Broadcast as u8);
                 tx.serialize(buf);
             }
-            MsgRequest::GetProperties => buf.push(MsgType::GetProperties as u8),
-            MsgRequest::GetBlock(height) => {
+            Self::GetProperties => buf.push(BodyType::GetProperties as u8),
+            Self::GetBlock(height) => {
                 buf.reserve_exact(9);
-                buf.push(MsgType::GetBlock as u8);
+                buf.push(BodyType::GetBlock as u8);
                 buf.push_u64(*height);
             }
-            MsgRequest::GetBlockHeader(height) => {
+            Self::GetBlockHeader(height) => {
                 buf.reserve_exact(9);
-                buf.push(MsgType::GetBlockHeader as u8);
+                buf.push(BodyType::GetBlockHeader as u8);
                 buf.push_u64(*height);
             }
-            MsgRequest::GetAddressInfo(addr) => {
+            Self::GetAddressInfo(addr) => {
                 buf.reserve_exact(33);
-                buf.push(MsgType::GetAddressInfo as u8);
+                buf.push(BodyType::GetAddressInfo as u8);
                 buf.push_script_hash(addr);
             }
         }
@@ -158,23 +92,23 @@ impl MsgRequest {
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
         let tag = cursor.take_u8()?;
         match tag {
-            t if t == MsgType::Broadcast as u8 => {
+            t if t == BodyType::Broadcast as u8 => {
                 let tx = TxVariant::deserialize(cursor)
                     .ok_or_else(|| Error::new(io::ErrorKind::InvalidData, "failed to decode tx"))?;
-                Ok(MsgRequest::Broadcast(tx))
+                Ok(Self::Broadcast(tx))
             }
-            t if t == MsgType::GetProperties as u8 => Ok(MsgRequest::GetProperties),
-            t if t == MsgType::GetBlock as u8 => {
+            t if t == BodyType::GetProperties as u8 => Ok(Self::GetProperties),
+            t if t == BodyType::GetBlock as u8 => {
                 let height = cursor.take_u64()?;
-                Ok(MsgRequest::GetBlock(height))
+                Ok(Self::GetBlock(height))
             }
-            t if t == MsgType::GetBlockHeader as u8 => {
+            t if t == BodyType::GetBlockHeader as u8 => {
                 let height = cursor.take_u64()?;
-                Ok(MsgRequest::GetBlockHeader(height))
+                Ok(Self::GetBlockHeader(height))
             }
-            t if t == MsgType::GetAddressInfo as u8 => {
+            t if t == BodyType::GetAddressInfo as u8 => {
                 let addr = cursor.take_script_hash()?;
-                Ok(MsgRequest::GetAddressInfo(addr))
+                Ok(Self::GetAddressInfo(addr))
             }
             _ => Err(Error::new(
                 io::ErrorKind::InvalidData,
@@ -184,46 +118,8 @@ impl MsgRequest {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum ErrorKind {
-    Io,
-    BytesRemaining,
-    InvalidHeight,
-    TxValidation(TxErr),
-}
-
-impl ErrorKind {
-    fn serialize(self, buf: &mut Vec<u8>) {
-        match self {
-            ErrorKind::Io => buf.push(0),
-            ErrorKind::BytesRemaining => buf.push(1),
-            ErrorKind::InvalidHeight => buf.push(2),
-            ErrorKind::TxValidation(err) => {
-                buf.push(3);
-                err.serialize(buf);
-            }
-        }
-    }
-
-    fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
-        let tag = cursor.take_u8()?;
-        Ok(match tag {
-            0 => ErrorKind::Io,
-            1 => ErrorKind::BytesRemaining,
-            2 => ErrorKind::InvalidHeight,
-            3 => ErrorKind::TxValidation(TxErr::deserialize(cursor)?),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "failed to deserialize ErrorKind",
-                ))
-            }
-        })
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
-pub enum MsgResponse {
+pub enum ResponseBody {
     Error(ErrorKind),
     Broadcast,
     GetProperties(Properties),
@@ -235,10 +131,10 @@ pub enum MsgResponse {
     GetAddressInfo(AddressInfo),
 }
 
-impl MsgResponse {
+impl ResponseBody {
     pub fn is_err(&self) -> bool {
         match self {
-            MsgResponse::Error(..) => true,
+            Self::Error(..) => true,
             _ => false,
         }
     }
@@ -247,15 +143,15 @@ impl MsgResponse {
         use std::mem;
 
         match self {
-            MsgResponse::Error(err) => {
+            Self::Error(err) => {
                 buf.reserve_exact(2048);
-                buf.push(MsgType::Error as u8);
+                buf.push(BodyType::Error as u8);
                 err.serialize(buf);
             }
-            MsgResponse::Broadcast => buf.push(MsgType::Broadcast as u8),
-            MsgResponse::GetProperties(props) => {
+            Self::Broadcast => buf.push(BodyType::Broadcast as u8),
+            Self::GetProperties(props) => {
                 buf.reserve_exact(4096 + mem::size_of::<Properties>());
-                buf.push(MsgType::GetProperties as u8);
+                buf.push(BodyType::GetProperties as u8);
                 buf.push_u64(props.height);
                 {
                     let mut tx_buf = Vec::with_capacity(4096);
@@ -265,20 +161,20 @@ impl MsgResponse {
                 buf.push_asset(props.network_fee);
                 buf.push_asset(props.token_supply);
             }
-            MsgResponse::GetBlock(block) => {
+            Self::GetBlock(block) => {
                 buf.reserve_exact(1_048_576);
-                buf.push(MsgType::GetBlock as u8);
+                buf.push(BodyType::GetBlock as u8);
                 block.serialize(buf);
             }
-            MsgResponse::GetBlockHeader { header, signer } => {
+            Self::GetBlockHeader { header, signer } => {
                 buf.reserve_exact(256);
-                buf.push(MsgType::GetBlockHeader as u8);
+                buf.push(BodyType::GetBlockHeader as u8);
                 header.serialize(buf);
                 buf.push_sig_pair(signer);
             }
-            MsgResponse::GetAddressInfo(info) => {
+            Self::GetAddressInfo(info) => {
                 buf.reserve_exact(1 + (mem::size_of::<Asset>() * 3));
-                buf.push(MsgType::GetAddressInfo as u8);
+                buf.push(BodyType::GetAddressInfo as u8);
                 buf.push_asset(info.net_fee);
                 buf.push_asset(info.addr_fee);
                 buf.push_asset(info.balance);
@@ -289,12 +185,12 @@ impl MsgResponse {
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
         let tag = cursor.take_u8()?;
         match tag {
-            t if t == MsgType::Error as u8 => {
+            t if t == BodyType::Error as u8 => {
                 let err = ErrorKind::deserialize(cursor)?;
-                Ok(MsgResponse::Error(err))
+                Ok(Self::Error(err))
             }
-            t if t == MsgType::Broadcast as u8 => Ok(MsgResponse::Broadcast),
-            t if t == MsgType::GetProperties as u8 => {
+            t if t == BodyType::Broadcast as u8 => Ok(Self::Broadcast),
+            t if t == BodyType::GetProperties as u8 => {
                 let height = cursor.take_u64()?;
                 let owner = {
                     let tx = TxVariant::deserialize(cursor).ok_or_else(|| {
@@ -314,29 +210,29 @@ impl MsgResponse {
                 };
                 let network_fee = cursor.take_asset()?;
                 let token_supply = cursor.take_asset()?;
-                Ok(MsgResponse::GetProperties(Properties {
+                Ok(Self::GetProperties(Properties {
                     height,
                     owner,
                     network_fee,
                     token_supply,
                 }))
             }
-            t if t == MsgType::GetBlock as u8 => {
+            t if t == BodyType::GetBlock as u8 => {
                 let block = Block::deserialize(cursor)
                     .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
-                Ok(MsgResponse::GetBlock(Box::new(block)))
+                Ok(Self::GetBlock(Box::new(block)))
             }
-            t if t == MsgType::GetBlockHeader as u8 => {
+            t if t == BodyType::GetBlockHeader as u8 => {
                 let header = BlockHeader::deserialize(cursor)
                     .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
                 let signer = cursor.take_sig_pair()?;
-                Ok(MsgResponse::GetBlockHeader { header, signer })
+                Ok(Self::GetBlockHeader { header, signer })
             }
-            t if t == MsgType::GetAddressInfo as u8 => {
+            t if t == BodyType::GetAddressInfo as u8 => {
                 let net_fee = cursor.take_asset()?;
                 let addr_fee = cursor.take_asset()?;
                 let balance = cursor.take_asset()?;
-                Ok(MsgResponse::GetAddressInfo(AddressInfo {
+                Ok(Self::GetAddressInfo(AddressInfo {
                     net_fee,
                     addr_fee,
                     balance,
@@ -347,5 +243,43 @@ impl MsgResponse {
                 "invalid msg response",
             )),
         }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum ErrorKind {
+    Io,
+    BytesRemaining,
+    InvalidHeight,
+    TxValidation(TxErr),
+}
+
+impl ErrorKind {
+    fn serialize(self, buf: &mut Vec<u8>) {
+        match self {
+            Self::Io => buf.push(0),
+            Self::BytesRemaining => buf.push(1),
+            Self::InvalidHeight => buf.push(2),
+            Self::TxValidation(err) => {
+                buf.push(3);
+                err.serialize(buf);
+            }
+        }
+    }
+
+    fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
+        let tag = cursor.take_u8()?;
+        Ok(match tag {
+            0 => Self::Io,
+            1 => Self::BytesRemaining,
+            2 => Self::InvalidHeight,
+            3 => Self::TxValidation(TxErr::deserialize(cursor)?),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "failed to deserialize ErrorKind",
+                ))
+            }
+        })
     }
 }

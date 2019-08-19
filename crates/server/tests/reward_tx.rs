@@ -13,10 +13,10 @@ fn deny_broadcasted_reward_tx() {
         rewards: get_asset("1.00000 GRAEL"),
     }));
 
-    let res = minter.request(MsgRequest::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx));
     assert!(res.is_err(), format!("{:?}", res));
     assert_eq!(
         res,
-        MsgResponse::Error(net::ErrorKind::TxValidation(verify::TxErr::TxProhibited))
+        ResponseBody::Error(net::ErrorKind::TxValidation(verify::TxErr::TxProhibited))
     );
 }

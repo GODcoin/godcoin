@@ -2,7 +2,6 @@ use godcoin::{
     constants,
     prelude::{net::ErrorKind, *},
 };
-use std::io::Cursor;
 
 mod common;
 pub use common::*;
@@ -23,58 +22,58 @@ fn successful_broadcast() {
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
     tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-    let res = minter.request(MsgRequest::Broadcast(tx));
-    assert_eq!(res, MsgResponse::Broadcast);
+    let res = minter.request(RequestBody::Broadcast(tx));
+    assert_eq!(res, ResponseBody::Broadcast);
 }
 
 #[test]
 fn get_properties() {
     let minter = TestMinter::new();
-    let res = minter.request(MsgRequest::GetProperties);
+    let res = minter.request(RequestBody::GetProperties);
     let chain_props = minter.chain().get_properties();
     assert!(!res.is_err());
-    assert_eq!(res, MsgResponse::GetProperties(chain_props));
+    assert_eq!(res, ResponseBody::GetProperties(chain_props));
 }
 
 #[test]
 fn get_block() {
     let minter = TestMinter::new();
-    let res = minter.request(MsgRequest::GetBlock(0));
+    let res = minter.request(RequestBody::GetBlock(0));
 
     assert!(!res.is_err());
 
     let other = minter.chain().get_block(0).unwrap();
-    assert_eq!(res, MsgResponse::GetBlock(Box::new((*other).clone())));
+    assert_eq!(res, ResponseBody::GetBlock(Box::new((*other).clone())));
 
-    let res = minter.request(MsgRequest::GetBlock(2));
+    let res = minter.request(RequestBody::GetBlock(2));
     assert!(res.is_err());
-    assert_eq!(res, MsgResponse::Error(ErrorKind::InvalidHeight));
+    assert_eq!(res, ResponseBody::Error(ErrorKind::InvalidHeight));
 }
 
 #[test]
 fn get_block_header() {
     let minter = TestMinter::new();
-    let res = minter.request(MsgRequest::GetBlockHeader(0));
+    let res = minter.request(RequestBody::GetBlockHeader(0));
     assert!(!res.is_err());
 
     let other = minter.chain().get_block(0).unwrap();
     let header = other.header();
     let signer = other.signer().unwrap().clone();
-    assert_eq!(res, MsgResponse::GetBlockHeader { header, signer });
+    assert_eq!(res, ResponseBody::GetBlockHeader { header, signer });
 
-    let res = minter.request(MsgRequest::GetBlockHeader(2));
+    let res = minter.request(RequestBody::GetBlockHeader(2));
     assert!(res.is_err());
-    assert_eq!(res, MsgResponse::Error(ErrorKind::InvalidHeight));
+    assert_eq!(res, ResponseBody::Error(ErrorKind::InvalidHeight));
 }
 
 #[test]
 fn get_address_info() {
     let minter = TestMinter::new();
     let addr = (&minter.genesis_info().script).into();
-    let res = minter.request(MsgRequest::GetAddressInfo(addr));
+    let res = minter.request(RequestBody::GetAddressInfo(addr));
     assert!(!res.is_err());
 
-    let expected = MsgResponse::GetAddressInfo(AddressInfo {
+    let expected = ResponseBody::GetAddressInfo(AddressInfo {
         net_fee: constants::GRAEL_FEE_MIN,
         addr_fee: constants::GRAEL_FEE_MIN
             .checked_mul(constants::GRAEL_FEE_MULT)
@@ -89,51 +88,19 @@ fn error_with_bytes_remaining() {
     let minter = TestMinter::new();
 
     let buf = {
-        let req = net::RequestType::Batch(vec![MsgRequest::GetBlock(0)]);
+        let req = net::Request {
+            body: RequestBody::GetBlock(0)
+        };
         let mut buf = Vec::with_capacity(4096);
         req.serialize(&mut buf);
 
-        // Set the batch len to 0
-        buf[1..=4].iter_mut().for_each(|x| *x = 0);
+        // Push an extra byte that should trigger the error
+        buf.push(0);
 
         buf
     };
 
-    // Confirm the length is actually 0 in case the binary format changes
-    match net::RequestType::deserialize(&mut Cursor::new(&buf)).unwrap() {
-        net::RequestType::Batch(reqs) => assert_eq!(reqs.len(), 0),
-        _ => panic!("Expected batch request type"),
-    }
-
     let res = minter.raw_request(buf);
-    let res = res.unwrap_single();
-    assert!(res.is_err());
-    assert_eq!(res, MsgResponse::Error(ErrorKind::BytesRemaining));
-}
-
-#[test]
-fn batch_preserves_order() {
-    let minter = TestMinter::new();
-    let responses = minter.batch_request(vec![
-        MsgRequest::GetBlock(0),
-        MsgRequest::GetBlock(2),
-        MsgRequest::GetBlock(1),
-    ]);
-    assert_eq!(responses.len(), 3);
-
-    let block_0 = minter.chain().get_block(0).unwrap();
-    let block_1 = minter.chain().get_block(1).unwrap();
-
-    assert_eq!(
-        responses[0],
-        MsgResponse::GetBlock(Box::new((*block_0).clone()))
-    );
-    assert_eq!(
-        responses[1],
-        MsgResponse::Error(net::ErrorKind::InvalidHeight)
-    );
-    assert_eq!(
-        responses[2],
-        MsgResponse::GetBlock(Box::new((*block_1).clone()))
-    );
+    assert!(res.body.is_err());
+    assert_eq!(res.body, ResponseBody::Error(ErrorKind::BytesRemaining));
 }

@@ -173,7 +173,7 @@ pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, St
         TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?
     };
 
-    send_print_rpc_req(wallet, net::MsgRequest::Broadcast(tx));
+    send_print_rpc_req(wallet, net::RequestBody::Broadcast(tx));
     Ok(true)
 }
 
@@ -189,9 +189,9 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
     let amount = args[2].parse().map_err(|_| "Failed to parse grael asset")?;
     let script: Script = hex_to_bytes!(args[3])?.into();
 
-    let res = send_rpc_req(wallet, MsgRequest::GetProperties)?;
+    let res = send_rpc_req(wallet, RequestBody::GetProperties)?;
     let owner = match res {
-        MsgResponse::GetProperties(props) => props,
+        ResponseBody::GetProperties(props) => props,
         _ => return Err("wallet not unlocked".to_owned()),
     }
     .owner;
@@ -238,7 +238,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
 }
 
 pub fn get_properties(wallet: &mut Wallet, _args: &mut Vec<String>) -> Result<bool, String> {
-    send_print_rpc_req(wallet, MsgRequest::GetProperties);
+    send_print_rpc_req(wallet, RequestBody::GetProperties);
     Ok(true)
 }
 
@@ -248,6 +248,6 @@ pub fn get_block(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, St
         .parse()
         .map_err(|_| "Failed to parse height argument".to_owned())?;
 
-    send_print_rpc_req(wallet, MsgRequest::GetBlock(height));
+    send_print_rpc_req(wallet, RequestBody::GetBlock(height));
     Ok(true)
 }

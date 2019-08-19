@@ -60,8 +60,8 @@ fn reindexed_blockchain() {
 
     {
         // Broadcast the tx
-        let res = minter.request(MsgRequest::Broadcast(tx.clone()));
-        assert_eq!(res, MsgResponse::Broadcast);
+        let res = minter.request(RequestBody::Broadcast(tx.clone()));
+        assert_eq!(res, ResponseBody::Broadcast);
         minter.produce_block().unwrap();
     }
 
@@ -111,11 +111,11 @@ fn reindexed_blockchain() {
     assert_eq!(cur_bal, from_bal.checked_sub(amount));
 
     // Test to ensure that after a reindex the tx cannot be rebroadcasted
-    let res = minter.request(MsgRequest::Broadcast(tx.clone()));
+    let res = minter.request(RequestBody::Broadcast(tx.clone()));
 
     assert_eq!(
         res,
-        MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxDupe))
+        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxDupe))
     );
 }
 
@@ -134,14 +134,14 @@ fn tx_dupe() {
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
     tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-    let res = minter.request(MsgRequest::Broadcast(tx.clone()));
+    let res = minter.request(RequestBody::Broadcast(tx.clone()));
     assert!(!res.is_err(), format!("{:?}", res));
 
-    let res = minter.request(MsgRequest::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx));
     assert!(res.is_err());
     assert_eq!(
         res,
-        MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxDupe))
+        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxDupe))
     );
 }
 
@@ -161,11 +161,11 @@ fn tx_expired() {
         script: minter.genesis_info().script.clone(),
     }));
 
-    let res = minter.request(MsgRequest::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx));
     assert!(res.is_err());
     assert_eq!(
         res,
-        MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxExpired))
+        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxExpired))
     );
 }
 
@@ -183,11 +183,11 @@ fn tx_far_in_the_future() {
         script: minter.genesis_info().script.clone(),
     }));
 
-    let res = minter.request(MsgRequest::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx));
     assert!(res.is_err());
     assert_eq!(
         res,
-        MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxExpired))
+        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxExpired))
     );
 }
 
@@ -204,11 +204,11 @@ fn tx_script_too_large_err() {
         script: Script::new((0..=constants::MAX_SCRIPT_BYTE_SIZE).map(|_| 0).collect()),
     }));
 
-    let res = minter.request(MsgRequest::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx));
     assert!(res.is_err());
     assert_eq!(
         res,
-        MsgResponse::Error(ErrorKind::TxValidation(TxErr::TxTooLarge))
+        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxTooLarge))
     );
 }
 
@@ -226,10 +226,10 @@ fn tx_too_many_signatures_err() {
     }));
     (0..=constants::MAX_TX_SIGNATURES).for_each(|_| tx.append_sign(&KeyPair::gen()));
 
-    let res = minter.request(MsgRequest::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx));
     assert!(res.is_err());
     assert_eq!(
         res,
-        MsgResponse::Error(ErrorKind::TxValidation(TxErr::TooManySignatures))
+        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TooManySignatures))
     );
 }

@@ -121,17 +121,23 @@ pub fn process_message(data: &ServerData, msg: Message) -> Option<Message> {
     match msg {
         Message::Binary(buf) => {
             let mut cur = Cursor::<&[u8]>::new(&buf);
-            let res = match RequestType::deserialize(&mut cur) {
-                Ok(req_type) => {
+            let res = match Request::deserialize(&mut cur) {
+                Ok(req) => {
                     if cur.position() != buf.len() as u64 {
-                        ResponseType::Single(MsgResponse::Error(ErrorKind::BytesRemaining))
+                        Response {
+                            body: ResponseBody::Error(ErrorKind::BytesRemaining)
+                        }
                     } else {
-                        handle_request_type(data, req_type)
+                        Response {
+                            body: handle_request(&data, req.body)
+                        }
                     }
                 }
                 Err(e) => {
                     error!("Unknown error occurred during deserialization: {:?}", e);
-                    ResponseType::Single(MsgResponse::Error(ErrorKind::Io))
+                    Response {
+                        body: ResponseBody::Error(ErrorKind::Io)
+                    }
                 }
             };
 
@@ -147,50 +153,36 @@ pub fn process_message(data: &ServerData, msg: Message) -> Option<Message> {
     }
 }
 
-fn handle_request_type(data: &ServerData, req_type: RequestType) -> ResponseType {
-    match req_type {
-        RequestType::Batch(mut reqs) => {
-            let mut responses = Vec::with_capacity(reqs.len());
-            for req in reqs.drain(..) {
-                responses.push(handle_direct_request(&data, req));
-            }
-
-            ResponseType::Batch(responses)
-        }
-        RequestType::Single(req) => ResponseType::Single(handle_direct_request(&data, req)),
-    }
-}
-
-fn handle_direct_request(data: &ServerData, req: MsgRequest) -> MsgResponse {
-    match req {
-        MsgRequest::Broadcast(tx) => {
+fn handle_request(data: &ServerData, body: RequestBody) -> ResponseBody {
+    match body {
+        RequestBody::Broadcast(tx) => {
             let res = data.minter.push_tx(tx);
             match res {
-                Ok(_) => MsgResponse::Broadcast,
-                Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e)),
+                Ok(_) => ResponseBody::Broadcast,
+                Err(e) => ResponseBody::Error(ErrorKind::TxValidation(e)),
             }
         }
-        MsgRequest::GetProperties => {
+        RequestBody::GetProperties => {
             let props = data.chain.get_properties();
-            MsgResponse::GetProperties(props)
+            ResponseBody::GetProperties(props)
         }
-        MsgRequest::GetBlock(height) => match data.chain.get_block(height) {
-            Some(block) => MsgResponse::GetBlock(Box::new(block.as_ref().clone())),
-            None => MsgResponse::Error(ErrorKind::InvalidHeight),
+        RequestBody::GetBlock(height) => match data.chain.get_block(height) {
+            Some(block) => ResponseBody::GetBlock(Box::new(block.as_ref().clone())),
+            None => ResponseBody::Error(ErrorKind::InvalidHeight),
         },
-        MsgRequest::GetBlockHeader(height) => match data.chain.get_block(height) {
+        RequestBody::GetBlockHeader(height) => match data.chain.get_block(height) {
             Some(block) => {
                 let header = block.header();
                 let signer = block.signer().expect("cannot get unsigned block").clone();
-                MsgResponse::GetBlockHeader { header, signer }
+                ResponseBody::GetBlockHeader { header, signer }
             }
-            None => MsgResponse::Error(ErrorKind::InvalidHeight),
+            None => ResponseBody::Error(ErrorKind::InvalidHeight),
         },
-        MsgRequest::GetAddressInfo(addr) => {
+        RequestBody::GetAddressInfo(addr) => {
             let res = data.minter.get_addr_info(&addr);
             match res {
-                Ok(info) => MsgResponse::GetAddressInfo(info),
-                Err(e) => MsgResponse::Error(ErrorKind::TxValidation(e)),
+                Ok(info) => ResponseBody::GetAddressInfo(info),
+                Err(e) => ResponseBody::Error(ErrorKind::TxValidation(e)),
             }
         }
     }
