@@ -13,6 +13,8 @@ pub struct Wallet {
     prompt: String,
     url: Url,
     db: Db,
+    // Current ID to be sent when making requests
+    req_id: u32,
 }
 
 impl Wallet {
@@ -33,7 +35,7 @@ impl Wallet {
             url.set_port(Some(7777)).unwrap();
         }
 
-        Wallet { db, prompt, url }
+        Wallet { db, prompt, url, req_id: 0 }
     }
 
     pub fn start(mut self) {

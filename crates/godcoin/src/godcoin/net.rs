@@ -6,34 +6,48 @@ use std::io::{self, Cursor, Error};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Request {
+    /// A 32-bit unsigned integer max value is reserved for deserialization errors that occur during request processing.
+    /// When a request is received with a reserved id, an IO error is returned regardless if the request is valid.
+    pub id: u32,
     pub body: RequestBody,
 }
 
 impl Request {
     pub fn serialize(&self, buf: &mut Vec<u8>) {
+        buf.push_u32(self.id);
         self.body.serialize(buf);
     }
 
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
+        let id = cursor.take_u32()?;
+        let body = RequestBody::deserialize(cursor)?;
         Ok(Self {
-            body: RequestBody::deserialize(cursor)?
+            id,
+            body,
         })
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Response {
+    /// A 32-bit unsigned integer max value represents an IO error during processing the request. Note that sending a
+    /// request with a max value will be treated as an IO error regardless if the request is valid.
+    pub id: u32,
     pub body: ResponseBody,
 }
 
 impl Response {
     pub fn serialize(&self, buf: &mut Vec<u8>) {
+        buf.push_u32(self.id);
         self.body.serialize(buf);
     }
 
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
+        let id = cursor.take_u32()?;
+        let body = ResponseBody::deserialize(cursor)?;
         Ok(Self {
-            body: ResponseBody::deserialize(cursor)?
+            id,
+            body,
         })
     }
 }

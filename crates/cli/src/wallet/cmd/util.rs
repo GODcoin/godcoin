@@ -45,15 +45,25 @@ macro_rules! hex_to_bytes {
     }};
 }
 
-pub fn send_print_rpc_req(wallet: &Wallet, body: RequestBody) {
+pub fn send_print_rpc_req(wallet: &mut Wallet, body: RequestBody) {
     let res = send_rpc_req(wallet, body);
     println!("{:#?}", res);
 }
 
-pub fn send_rpc_req(wallet: &Wallet, body: RequestBody) -> Result<ResponseBody, String> {
+pub fn send_rpc_req(wallet: &mut Wallet, body: RequestBody) -> Result<ResponseBody, String> {
     let buf = {
+        let req_id = {
+            let id = wallet.req_id;
+            wallet.req_id += 1;
+            if wallet.req_id == u32::max_value() {
+                wallet.req_id = 0;
+            }
+            id
+        };
+
         let mut buf = Vec::with_capacity(8192);
         let req = Request {
+            id: req_id,
             body
         };
         req.serialize(&mut buf);

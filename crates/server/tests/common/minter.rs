@@ -121,7 +121,8 @@ impl TestMinter {
 
     pub fn request(&self, body: RequestBody) -> ResponseBody {
         let res = self.send_request(net::Request {
-            body
+            id: 0,
+            body,
         });
         res.body
     }

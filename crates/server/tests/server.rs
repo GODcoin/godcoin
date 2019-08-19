@@ -89,6 +89,7 @@ fn error_with_bytes_remaining() {
 
     let buf = {
         let req = net::Request {
+            id: 123456789,
             body: RequestBody::GetBlock(0)
         };
         let mut buf = Vec::with_capacity(4096);
@@ -102,5 +103,87 @@ fn error_with_bytes_remaining() {
 
     let res = minter.raw_request(buf);
     assert!(res.body.is_err());
+    assert_eq!(res.id, 123456789);
     assert_eq!(res.body, ResponseBody::Error(ErrorKind::BytesRemaining));
+}
+
+#[test]
+fn eof_returns_max_u32_id() {
+    let minter = TestMinter::new();
+
+    let buf = {
+        let req = net::Request {
+            id: 123456789,
+            body: RequestBody::GetBlock(0)
+        };
+        let mut buf = Vec::with_capacity(4096);
+        req.serialize(&mut buf);
+
+        // Delete an extra byte causing an EOF error triggering a failure to deserialize the message
+        buf.truncate(buf.len() - 1);
+
+        buf
+    };
+
+    let res = minter.raw_request(buf);
+    assert!(res.body.is_err());
+    assert_eq!(res.id, u32::max_value());
+    assert_eq!(res.body, ResponseBody::Error(ErrorKind::Io));
+}
+
+#[test]
+fn u32_max_val_with_valid_request_fails() {
+    let minter = TestMinter::new();
+    let addr = (&minter.genesis_info().script).into();
+
+    let buf = {
+        let req = net::Request {
+            id: u32::max_value(),
+            body: RequestBody::GetAddressInfo(addr)
+        };
+        let mut buf = Vec::with_capacity(4096);
+        req.serialize(&mut buf);
+
+        buf
+    };
+    let res = minter.raw_request(buf);
+
+    let expected = net::Response {
+        id: u32::max_value(),
+        body: ResponseBody::Error(ErrorKind::Io)
+    };
+    assert_eq!(res, expected);
+    assert!(res.body.is_err());
+}
+
+#[test]
+fn response_id_matches_request() {
+    let minter = TestMinter::new();
+    let addr = (&minter.genesis_info().script).into();
+
+    let buf = {
+        let req = net::Request {
+            id: 123456789,
+            body: RequestBody::GetAddressInfo(addr)
+        };
+        let mut buf = Vec::with_capacity(4096);
+        req.serialize(&mut buf);
+
+        buf
+    };
+    let res = minter.raw_request(buf);
+
+    assert!(!res.body.is_err());
+
+    let expected = net::Response {
+        id: 123456789,
+        body: ResponseBody::GetAddressInfo(AddressInfo {
+            net_fee: constants::GRAEL_FEE_MIN,
+            addr_fee: constants::GRAEL_FEE_MIN
+                .checked_mul(constants::GRAEL_FEE_MULT)
+                .unwrap(),
+            balance: get_asset("1000.00000 GRAEL"),
+        })
+    };
+    assert_eq!(res, expected);
 }

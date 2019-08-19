@@ -123,19 +123,29 @@ pub fn process_message(data: &ServerData, msg: Message) -> Option<Message> {
             let mut cur = Cursor::<&[u8]>::new(&buf);
             let res = match Request::deserialize(&mut cur) {
                 Ok(req) => {
-                    if cur.position() != buf.len() as u64 {
+                    let id = req.id;
+                    if id == u32::max_value() {
+                        // Max value is reserved for deserialization errors that occur
                         Response {
+                            id: u32::max_value(),
+                            body: ResponseBody::Error(ErrorKind::Io)
+                        }
+                    } else if cur.position() != buf.len() as u64 {
+                        Response {
+                            id,
                             body: ResponseBody::Error(ErrorKind::BytesRemaining)
                         }
                     } else {
                         Response {
+                            id,
                             body: handle_request(&data, req.body)
                         }
                     }
                 }
                 Err(e) => {
-                    error!("Unknown error occurred during deserialization: {:?}", e);
+                    error!("Error occurred during deserialization: {:?}", e);
                     Response {
+                        id: u32::max_value(),
                         body: ResponseBody::Error(ErrorKind::Io)
                     }
                 }
