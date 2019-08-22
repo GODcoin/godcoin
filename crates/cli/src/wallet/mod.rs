@@ -35,7 +35,12 @@ impl Wallet {
             url.set_port(Some(7777)).unwrap();
         }
 
-        Wallet { db, prompt, url, req_id: 0 }
+        Wallet {
+            db,
+            prompt,
+            url,
+            req_id: 0,
+        }
     }
 
     pub fn start(mut self) {

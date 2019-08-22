@@ -1,5 +1,5 @@
 use crate::Wallet;
-use godcoin::net::{RequestBody, ResponseBody, Request, Response};
+use godcoin::net::{Request, RequestBody, Response, ResponseBody};
 use std::{
     io::Cursor,
     net::{SocketAddr, TcpStream, ToSocketAddrs},
@@ -62,10 +62,7 @@ pub fn send_rpc_req(wallet: &mut Wallet, body: RequestBody) -> Result<ResponseBo
         };
 
         let mut buf = Vec::with_capacity(8192);
-        let req = Request {
-            id: req_id,
-            body
-        };
+        let req = Request { id: req_id, body };
         req.serialize(&mut buf);
         buf
     };
