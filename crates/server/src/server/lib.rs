@@ -1,7 +1,7 @@
 use futures::sync::mpsc;
 use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
 use log::{error, info, warn};
-use std::{io::Cursor, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{collections::BTreeSet, io::Cursor, net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::{net::TcpListener, prelude::*};
 use tokio_tungstenite::tungstenite::{protocol, Message};
 
@@ -85,11 +85,12 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                 .and_then(move |ws| {
                     info!("[{}] Connection opened", peer_addr);
 
+                    let mut state = WsState::default();
                     let (tx, rx) = mpsc::unbounded();
                     let (sink, stream) = ws.split();
 
                     let ws_reader = stream.for_each(move |msg| {
-                        let res = process_message(&data, msg);
+                        let res = process_message(&data, &mut state, msg);
                         if let Some(res) = res {
                             tx.unbounded_send(res).unwrap();
                         }
@@ -117,7 +118,7 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
     }));
 }
 
-pub fn process_message(data: &ServerData, msg: Message) -> Option<Message> {
+pub fn process_message(data: &ServerData, state: &mut WsState, msg: Message) -> Option<Message> {
     match msg {
         Message::Binary(buf) => {
             let mut cur = Cursor::<&[u8]>::new(&buf);
@@ -128,17 +129,17 @@ pub fn process_message(data: &ServerData, msg: Message) -> Option<Message> {
                         // Max value is reserved for deserialization errors that occur
                         Response {
                             id: u32::max_value(),
-                            body: ResponseBody::Error(ErrorKind::Io)
+                            body: ResponseBody::Error(ErrorKind::Io),
                         }
                     } else if cur.position() != buf.len() as u64 {
                         Response {
                             id,
-                            body: ResponseBody::Error(ErrorKind::BytesRemaining)
+                            body: ResponseBody::Error(ErrorKind::BytesRemaining),
                         }
                     } else {
                         Response {
                             id,
-                            body: handle_request(&data, req.body)
+                            body: handle_request(data, state, req.body),
                         }
                     }
                 }
@@ -146,7 +147,7 @@ pub fn process_message(data: &ServerData, msg: Message) -> Option<Message> {
                     error!("Error occurred during deserialization: {:?}", e);
                     Response {
                         id: u32::max_value(),
-                        body: ResponseBody::Error(ErrorKind::Io)
+                        body: ResponseBody::Error(ErrorKind::Io),
                     }
                 }
             };
@@ -163,7 +164,7 @@ pub fn process_message(data: &ServerData, msg: Message) -> Option<Message> {
     }
 }
 
-fn handle_request(data: &ServerData, body: RequestBody) -> ResponseBody {
+fn handle_request(data: &ServerData, state: &mut WsState, body: RequestBody) -> ResponseBody {
     match body {
         RequestBody::Broadcast(tx) => {
             let res = data.minter.push_tx(tx);
@@ -172,13 +173,33 @@ fn handle_request(data: &ServerData, body: RequestBody) -> ResponseBody {
                 Err(e) => ResponseBody::Error(ErrorKind::TxValidation(e)),
             }
         }
+        RequestBody::SetBlockFilter(filter) => {
+            match filter {
+                BlockFilter::Addr(addrs) => {
+                    if addrs.len() > 16 {
+                        return ResponseBody::Error(ErrorKind::InvalidRequest);
+                    }
+                    state.filter = Some(addrs);
+                }
+                BlockFilter::None => {
+                    state.filter = None;
+                }
+            }
+            ResponseBody::SetBlockFilter
+        }
         RequestBody::GetProperties => {
             let props = data.chain.get_properties();
             ResponseBody::GetProperties(props)
         }
-        RequestBody::GetBlock(height) => match data.chain.get_block(height) {
-            Some(block) => ResponseBody::GetBlock(Box::new(block.as_ref().clone())),
-            None => ResponseBody::Error(ErrorKind::InvalidHeight),
+        RequestBody::GetBlock(height) => match &state.filter {
+            Some(filter) => match data.chain.get_filtered_block(height, filter) {
+                Some(block) => ResponseBody::GetBlock(block),
+                None => ResponseBody::Error(ErrorKind::InvalidHeight),
+            },
+            None => match data.chain.get_block(height) {
+                Some(block) => ResponseBody::GetBlock(FilteredBlock::Block(block)),
+                None => ResponseBody::Error(ErrorKind::InvalidHeight),
+            },
         },
         RequestBody::GetBlockHeader(height) => match data.chain.get_block(height) {
             Some(block) => {
@@ -195,5 +216,21 @@ fn handle_request(data: &ServerData, body: RequestBody) -> ResponseBody {
                 Err(e) => ResponseBody::Error(ErrorKind::TxValidation(e)),
             }
         }
+    }
+}
+
+pub struct WsState {
+    filter: Option<BTreeSet<ScriptHash>>,
+}
+
+impl WsState {
+    pub fn filter(&self) -> Option<&BTreeSet<ScriptHash>> {
+        self.filter.as_ref()
+    }
+}
+
+impl Default for WsState {
+    fn default() -> Self {
+        WsState { filter: None }
     }
 }

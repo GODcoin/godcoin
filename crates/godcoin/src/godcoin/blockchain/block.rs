@@ -1,9 +1,24 @@
 use crate::{
-    crypto::{double_sha256, Digest, KeyPair, SigPair},
+    crypto::{double_sha256, Digest, KeyPair, ScriptHash, SigPair},
     serializer::*,
     tx::*,
 };
-use std::{io::Cursor, ops::Deref};
+use std::{collections::BTreeSet, io::Cursor, ops::Deref, sync::Arc};
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum BlockFilter {
+    /// No filter applied
+    None,
+    /// Filters block based on funds being transferred from or to an address. Some nodes may treat a request with
+    /// too many addresses as invalid.
+    Addr(BTreeSet<ScriptHash>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum FilteredBlock {
+    Header((BlockHeader, SigPair)),
+    Block(Arc<Block>),
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Block {

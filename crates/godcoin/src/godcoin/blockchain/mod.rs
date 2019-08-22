@@ -1,6 +1,6 @@
 use log::info;
 use parking_lot::Mutex;
-use std::{path::Path, sync::Arc};
+use std::{collections::BTreeSet, path::Path, sync::Arc};
 
 pub mod block;
 pub mod index;
@@ -136,6 +136,52 @@ impl Blockchain {
     pub fn get_block(&self, height: u64) -> Option<Arc<Block>> {
         let store = self.store.lock();
         store.get(height)
+    }
+
+    pub fn get_filtered_block(
+        &self,
+        height: u64,
+        filter: &BTreeSet<ScriptHash>,
+    ) -> Option<FilteredBlock> {
+        let store = self.store.lock();
+        let block = store.get(height);
+
+        match block {
+            Some(block) => {
+                let has_match = if filter.is_empty() {
+                    false
+                } else {
+                    block
+                        .txs()
+                        .iter()
+                        .find(|&tx| match tx {
+                            TxVariant::V0(tx) => match tx {
+                                TxVariantV0::OwnerTx(owner_tx) => {
+                                    let hash = ScriptHash::from(&owner_tx.script);
+                                    filter.contains(&owner_tx.wallet) || filter.contains(&hash)
+                                }
+                                TxVariantV0::MintTx(mint_tx) => {
+                                    let hash = (&mint_tx.script).into();
+                                    filter.contains(&hash) || filter.contains(&mint_tx.to)
+                                }
+                                TxVariantV0::RewardTx(reward_tx) => filter.contains(&reward_tx.to),
+                                TxVariantV0::TransferTx(transfer_tx) => {
+                                    filter.contains(&transfer_tx.from)
+                                        || filter.contains(&transfer_tx.to)
+                                }
+                            },
+                        })
+                        .is_some()
+                };
+                if has_match {
+                    Some(FilteredBlock::Block(block))
+                } else {
+                    let signer = block.signer().unwrap().clone();
+                    Some(FilteredBlock::Header((block.header(), signer)))
+                }
+            }
+            None => None,
+        }
     }
 
     pub fn get_address_info(

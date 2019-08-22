@@ -3,7 +3,7 @@ use godcoin::{
     blockchain::{GenesisBlockInfo, ReindexOpts},
     prelude::*,
 };
-use godcoin_server::{prelude::*, process_message, ServerData};
+use godcoin_server::{prelude::*, process_message, ServerData, WsState};
 use sodiumoxide::randombytes;
 use std::{
     env, fs,
@@ -120,26 +120,24 @@ impl TestMinter {
     }
 
     pub fn request(&self, body: RequestBody) -> ResponseBody {
-        let res = self.send_request(net::Request {
-            id: 0,
-            body,
-        });
+        let mut state = WsState::default();
+        let res = self.send_request(&mut state, net::Request { id: 0, body });
         res.body
     }
 
-    pub fn send_request(&self, req: net::Request) -> net::Response {
+    pub fn send_request(&self, state: &mut WsState, req: net::Request) -> net::Response {
         let mut buf = Vec::with_capacity(1_048_576);
         req.serialize(&mut buf);
-        self.raw_request(buf)
+        self.raw_request(state, buf)
     }
 
-    pub fn raw_request(&self, req_bytes: Vec<u8>) -> net::Response {
+    pub fn raw_request(&self, state: &mut WsState, req_bytes: Vec<u8>) -> net::Response {
         assert!(
             self.3,
             "attempting to send a request to an unindexed minter"
         );
 
-        let res = match process_message(&self.0, Message::Binary(req_bytes)).unwrap() {
+        let res = match process_message(&self.0, state, Message::Binary(req_bytes)).unwrap() {
             Message::Binary(res) => res,
             _ => panic!("Expected binary response"),
         };

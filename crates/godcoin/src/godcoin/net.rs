@@ -2,7 +2,12 @@ use crate::{
     prelude::{verify::TxErr, *},
     serializer::*,
 };
-use std::io::{self, Cursor, Error};
+use std::{
+    collections::BTreeSet,
+    io::{self, Cursor, Error},
+    mem,
+    sync::Arc,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Request {
@@ -21,10 +26,7 @@ impl Request {
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
         let id = cursor.take_u32()?;
         let body = RequestBody::deserialize(cursor)?;
-        Ok(Self {
-            id,
-            body,
-        })
+        Ok(Self { id, body })
     }
 }
 
@@ -45,10 +47,7 @@ impl Response {
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
         let id = cursor.take_u32()?;
         let body = ResponseBody::deserialize(cursor)?;
-        Ok(Self {
-            id,
-            body,
-        })
+        Ok(Self { id, body })
     }
 }
 
@@ -57,8 +56,9 @@ pub enum BodyType {
     // Returned to clients when an error occurred processing a request
     Error = 0x01,
 
-    // Operations that can update the blockchain state
+    // Operations that can update the connection or blockchain state
     Broadcast = 0x10,
+    SetBlockFilter = 0x11,
 
     // Getters
     GetProperties = 0x20,
@@ -70,6 +70,7 @@ pub enum BodyType {
 #[derive(Clone, Debug, PartialEq)]
 pub enum RequestBody {
     Broadcast(TxVariant),
+    SetBlockFilter(BlockFilter),
     GetProperties,
     GetBlock(u64),       // height
     GetBlockHeader(u64), // height
@@ -83,6 +84,22 @@ impl RequestBody {
                 buf.reserve_exact(4096);
                 buf.push(BodyType::Broadcast as u8);
                 tx.serialize(buf);
+            }
+            Self::SetBlockFilter(filter) => {
+                buf.push(BodyType::SetBlockFilter as u8);
+                match filter {
+                    BlockFilter::None => {
+                        // Addr len
+                        buf.push(0);
+                    }
+                    BlockFilter::Addr(addrs) => {
+                        buf.reserve_exact(1 + addrs.len() * mem::size_of::<ScriptHash>());
+                        buf.push(addrs.len() as u8);
+                        for addr in addrs {
+                            buf.push_script_hash(addr);
+                        }
+                    }
+                }
             }
             Self::GetProperties => buf.push(BodyType::GetProperties as u8),
             Self::GetBlock(height) => {
@@ -111,6 +128,18 @@ impl RequestBody {
                     .ok_or_else(|| Error::new(io::ErrorKind::InvalidData, "failed to decode tx"))?;
                 Ok(Self::Broadcast(tx))
             }
+            t if t == BodyType::SetBlockFilter as u8 => {
+                let addr_len = usize::from(cursor.take_u8()?);
+                if addr_len == 0 {
+                    Ok(Self::SetBlockFilter(BlockFilter::None))
+                } else {
+                    let mut addrs = BTreeSet::new();
+                    for _ in 0..addr_len {
+                        addrs.insert(cursor.take_script_hash()?);
+                    }
+                    Ok(Self::SetBlockFilter(BlockFilter::Addr(addrs)))
+                }
+            }
             t if t == BodyType::GetProperties as u8 => Ok(Self::GetProperties),
             t if t == BodyType::GetBlock as u8 => {
                 let height = cursor.take_u64()?;
@@ -136,8 +165,9 @@ impl RequestBody {
 pub enum ResponseBody {
     Error(ErrorKind),
     Broadcast,
+    SetBlockFilter,
     GetProperties(Properties),
-    GetBlock(Box<Block>),
+    GetBlock(FilteredBlock),
     GetBlockHeader {
         header: BlockHeader,
         signer: SigPair,
@@ -154,8 +184,6 @@ impl ResponseBody {
     }
 
     pub fn serialize(&self, buf: &mut Vec<u8>) {
-        use std::mem;
-
         match self {
             Self::Error(err) => {
                 buf.reserve_exact(2048);
@@ -163,6 +191,7 @@ impl ResponseBody {
                 err.serialize(buf);
             }
             Self::Broadcast => buf.push(BodyType::Broadcast as u8),
+            Self::SetBlockFilter => buf.push(BodyType::SetBlockFilter as u8),
             Self::GetProperties(props) => {
                 buf.reserve_exact(4096 + mem::size_of::<Properties>());
                 buf.push(BodyType::GetProperties as u8);
@@ -178,7 +207,17 @@ impl ResponseBody {
             Self::GetBlock(block) => {
                 buf.reserve_exact(1_048_576);
                 buf.push(BodyType::GetBlock as u8);
-                block.serialize(buf);
+                match block {
+                    FilteredBlock::Header((header, signer)) => {
+                        buf.push(0);
+                        header.serialize(buf);
+                        buf.push_sig_pair(signer);
+                    }
+                    FilteredBlock::Block(block) => {
+                        buf.push(1);
+                        block.serialize(buf);
+                    }
+                }
             }
             Self::GetBlockHeader { header, signer } => {
                 buf.reserve_exact(256);
@@ -204,6 +243,7 @@ impl ResponseBody {
                 Ok(Self::Error(err))
             }
             t if t == BodyType::Broadcast as u8 => Ok(Self::Broadcast),
+            t if t == BodyType::SetBlockFilter as u8 => Ok(Self::SetBlockFilter),
             t if t == BodyType::GetProperties as u8 => {
                 let height = cursor.take_u64()?;
                 let owner = {
@@ -232,9 +272,24 @@ impl ResponseBody {
                 }))
             }
             t if t == BodyType::GetBlock as u8 => {
-                let block = Block::deserialize(cursor)
-                    .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
-                Ok(Self::GetBlock(Box::new(block)))
+                let filtered_type = cursor.take_u8()?;
+                match filtered_type {
+                    0 => {
+                        let header = BlockHeader::deserialize(cursor)
+                            .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
+                        let signer = cursor.take_sig_pair()?;
+                        Ok(Self::GetBlock(FilteredBlock::Header((header, signer))))
+                    }
+                    1 => {
+                        let block = Block::deserialize(cursor)
+                            .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
+                        Ok(Self::GetBlock(FilteredBlock::Block(Arc::new(block))))
+                    }
+                    _ => Err(Error::new(
+                        io::ErrorKind::InvalidData,
+                        "invalid GetBlock response",
+                    )),
+                }
             }
             t if t == BodyType::GetBlockHeader as u8 => {
                 let header = BlockHeader::deserialize(cursor)
@@ -264,6 +319,7 @@ impl ResponseBody {
 pub enum ErrorKind {
     Io,
     BytesRemaining,
+    InvalidRequest,
     InvalidHeight,
     TxValidation(TxErr),
 }
@@ -273,9 +329,10 @@ impl ErrorKind {
         match self {
             Self::Io => buf.push(0),
             Self::BytesRemaining => buf.push(1),
-            Self::InvalidHeight => buf.push(2),
+            Self::InvalidRequest => buf.push(2),
+            Self::InvalidHeight => buf.push(3),
             Self::TxValidation(err) => {
-                buf.push(3);
+                buf.push(4);
                 err.serialize(buf);
             }
         }
@@ -286,8 +343,9 @@ impl ErrorKind {
         Ok(match tag {
             0 => Self::Io,
             1 => Self::BytesRemaining,
-            2 => Self::InvalidHeight,
-            3 => Self::TxValidation(TxErr::deserialize(cursor)?),
+            2 => Self::InvalidRequest,
+            3 => Self::InvalidHeight,
+            4 => Self::TxValidation(TxErr::deserialize(cursor)?),
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
