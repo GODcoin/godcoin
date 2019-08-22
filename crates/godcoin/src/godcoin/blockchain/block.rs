@@ -57,7 +57,7 @@ impl Block {
     #[inline]
     pub fn signer(&self) -> Option<&SigPair> {
         match self {
-            Block::V0(block) => block.sig_pair.as_ref(),
+            Block::V0(block) => block.signer.as_ref(),
         }
     }
 
@@ -65,7 +65,7 @@ impl Block {
         let buf = self.calc_header_hash();
         match self {
             Block::V0(block) => {
-                block.sig_pair = Some(key_pair.sign(buf.as_ref()));
+                block.signer = Some(key_pair.sign(buf.as_ref()));
             }
         }
     }
@@ -96,7 +96,7 @@ impl Block {
         let header = BlockHeader::deserialize(cur)?;
         match header {
             BlockHeader::V0(header) => {
-                let sig_pair = Some(cur.take_sig_pair().ok()?);
+                let signer = Some(cur.take_sig_pair().ok()?);
 
                 let len = cur.take_u32().ok()?;
                 let mut transactions = Vec::<TxVariant>::with_capacity(len as usize);
@@ -106,7 +106,7 @@ impl Block {
 
                 Some(Block::V0(BlockV0 {
                     header,
-                    sig_pair,
+                    signer,
                     transactions,
                 }))
             }
@@ -119,7 +119,7 @@ impl Block {
                 block.header.serialize(buf);
                 buf.push_sig_pair(
                     block
-                        .sig_pair
+                        .signer
                         .as_ref()
                         .expect("block must be signed to serialize"),
                 );
@@ -191,7 +191,7 @@ impl BlockHeaderV0 {
 #[derive(Clone, Debug, PartialEq)]
 pub struct BlockV0 {
     pub header: BlockHeaderV0,
-    pub sig_pair: Option<SigPair>,
+    pub signer: Option<SigPair>,
     pub transactions: Vec<TxVariant>,
 }
 
@@ -208,7 +208,7 @@ impl BlockV0 {
                 timestamp,
                 tx_merkle_root,
             },
-            sig_pair: None,
+            signer: None,
             transactions: txs,
         })
     }
@@ -267,7 +267,7 @@ mod tests {
                 timestamp: 1532992800,
                 tx_merkle_root,
             },
-            sig_pair: None,
+            signer: None,
             transactions,
         });
         block.sign(&keys);
@@ -290,7 +290,7 @@ mod tests {
                 timestamp: 0,
                 tx_merkle_root: double_sha256(&[0; 0]),
             },
-            sig_pair: None,
+            signer: None,
             transactions: vec![],
         });
         assert!(block.verify_tx_merkle_root());
@@ -313,7 +313,7 @@ mod tests {
                 timestamp: 0,
                 tx_merkle_root: double_sha256(&[0; 0]),
             },
-            sig_pair: None,
+            signer: None,
             transactions: vec![],
         });
 
@@ -324,7 +324,7 @@ mod tests {
                 timestamp: 0,
                 tx_merkle_root: double_sha256(&[0; 0]),
             },
-            sig_pair: None,
+            signer: None,
             transactions: vec![],
         });
 
@@ -335,7 +335,7 @@ mod tests {
                 timestamp: 0,
                 tx_merkle_root: double_sha256(&[0; 0]),
             },
-            sig_pair: None,
+            signer: None,
             transactions: vec![],
         });
 

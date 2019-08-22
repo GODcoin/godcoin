@@ -532,7 +532,7 @@ impl Blockchain {
                 tx_merkle_root: Digest::from_slice(&[0u8; 32]).unwrap(),
                 timestamp,
             },
-            sig_pair: None,
+            signer: None,
             transactions: vec![owner_tx.clone()],
         });
         block.sign(&info.minter_key);
