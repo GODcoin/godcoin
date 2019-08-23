@@ -5,7 +5,7 @@ use sodiumoxide::crypto::{
 use std::io::{Cursor, Error, ErrorKind, Read};
 
 use crate::asset::Asset;
-use crate::crypto::{PublicKey, ScriptHash, SigPair, Signature};
+use crate::crypto::{Digest, PublicKey, SigPair, Signature};
 
 macro_rules! read_exact_bytes {
     ($self:expr, $len:expr) => {{
@@ -35,8 +35,8 @@ pub trait BufWrite {
     fn push_var_i64(&mut self, num: i64);
     fn push_u64(&mut self, num: u64);
     fn push_bytes(&mut self, slice: &[u8]);
+    fn push_digest(&mut self, digest: &Digest);
     fn push_pub_key(&mut self, key: &PublicKey);
-    fn push_script_hash(&mut self, hash: &ScriptHash);
     fn push_sig_pair(&mut self, pair: &SigPair);
     fn push_asset(&mut self, asset: Asset);
 }
@@ -89,12 +89,12 @@ impl BufWrite for Vec<u8> {
         self.extend_from_slice(other);
     }
 
-    fn push_pub_key(&mut self, key: &PublicKey) {
-        self.extend_from_slice(key.as_ref());
+    fn push_digest(&mut self, value: &Digest) {
+        self.extend_from_slice(value.as_ref());
     }
 
-    fn push_script_hash(&mut self, hash: &ScriptHash) {
-        self.extend_from_slice(hash.as_ref());
+    fn push_pub_key(&mut self, key: &PublicKey) {
+        self.extend_from_slice(key.as_ref());
     }
 
     fn push_sig_pair(&mut self, pair: &SigPair) {
@@ -115,8 +115,8 @@ pub trait BufRead {
     fn take_var_i64(&mut self) -> Result<i64, Error>;
     fn take_u64(&mut self) -> Result<u64, Error>;
     fn take_bytes(&mut self) -> Result<Vec<u8>, Error>;
+    fn take_digest(&mut self) -> Result<Digest, Error>;
     fn take_pub_key(&mut self) -> Result<PublicKey, Error>;
-    fn take_script_hash(&mut self) -> Result<ScriptHash, Error>;
     fn take_sig_pair(&mut self) -> Result<SigPair, Error>;
     fn take_asset(&mut self) -> Result<Asset, Error>;
 }
@@ -181,16 +181,15 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
         Ok(buf)
     }
 
+    fn take_digest(&mut self) -> Result<Digest, Error> {
+        let buf = read_exact_bytes!(self, DIGESTBYTES);
+        Digest::from_slice(&buf).ok_or_else(|| Error::new(ErrorKind::Other, "digest length"))
+    }
+
     fn take_pub_key(&mut self) -> Result<PublicKey, Error> {
         let buf = read_exact_bytes!(self, PUBLICKEYBYTES);
         PublicKey::from_slice(&buf)
             .ok_or_else(|| Error::new(ErrorKind::Other, "incorrect public key length"))
-    }
-
-    fn take_script_hash(&mut self) -> Result<ScriptHash, Error> {
-        let buf = read_exact_bytes!(self, DIGESTBYTES);
-        ScriptHash::from_slice(&buf)
-            .ok_or_else(|| Error::new(ErrorKind::Other, "incorrect script hash length"))
     }
 
     fn take_sig_pair(&mut self) -> Result<SigPair, Error> {

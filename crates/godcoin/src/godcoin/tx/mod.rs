@@ -331,7 +331,7 @@ impl SerializeTx for OwnerTx {
         v.push(TxType::OWNER as u8);
         self.serialize_header(v);
         v.push_pub_key(&self.minter);
-        v.push_script_hash(&self.wallet);
+        v.push_digest(&self.wallet.0);
         v.push_bytes(&self.script);
     }
 }
@@ -339,7 +339,7 @@ impl SerializeTx for OwnerTx {
 impl DeserializeTx<OwnerTx> for OwnerTx {
     fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<OwnerTx> {
         let minter = cur.take_pub_key().ok()?;
-        let wallet = cur.take_script_hash().ok()?;
+        let wallet = ScriptHash(cur.take_digest().ok()?);
         let script = cur.take_bytes().ok()?.into();
         Some(OwnerTx {
             base: tx,
@@ -364,7 +364,7 @@ impl SerializeTx for MintTx {
     fn serialize(&self, v: &mut Vec<u8>) {
         v.push(TxType::MINT as u8);
         self.serialize_header(v);
-        v.push_script_hash(&self.to);
+        v.push_digest(&self.to.0);
         v.push_asset(self.amount);
         v.push_bytes(&self.attachment);
         v.push_bytes(self.attachment_name.as_bytes());
@@ -374,7 +374,7 @@ impl SerializeTx for MintTx {
 
 impl DeserializeTx<MintTx> for MintTx {
     fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<Self> {
-        let to = cur.take_script_hash().ok()?;
+        let to = ScriptHash(cur.take_digest().ok()?);
         let amount = cur.take_asset().ok()?;
         let attachment = cur.take_bytes().ok()?;
         let attachment_name = {
@@ -405,14 +405,14 @@ impl SerializeTx for RewardTx {
         debug_assert_eq!(self.base.signature_pairs.len(), 0);
         v.push(TxType::REWARD as u8);
         self.serialize_header(v);
-        v.push_script_hash(&self.to);
+        v.push_digest(&self.to.0);
         v.push_asset(self.rewards);
     }
 }
 
 impl DeserializeTx<RewardTx> for RewardTx {
     fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<RewardTx> {
-        let key = cur.take_script_hash().ok()?;
+        let key = ScriptHash(cur.take_digest().ok()?);
         let rewards = cur.take_asset().ok()?;
 
         Some(RewardTx {
@@ -437,8 +437,8 @@ impl SerializeTx for TransferTx {
     fn serialize(&self, v: &mut Vec<u8>) {
         v.push(TxType::TRANSFER as u8);
         self.serialize_header(v);
-        v.push_script_hash(&self.from);
-        v.push_script_hash(&self.to);
+        v.push_digest(&self.from.0);
+        v.push_digest(&self.to.0);
         v.push_bytes(&self.script);
         v.push_asset(self.amount);
         v.push_bytes(&self.memo);
@@ -447,8 +447,8 @@ impl SerializeTx for TransferTx {
 
 impl DeserializeTx<TransferTx> for TransferTx {
     fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<TransferTx> {
-        let from = cur.take_script_hash().ok()?;
-        let to = cur.take_script_hash().ok()?;
+        let from = ScriptHash(cur.take_digest().ok()?);
+        let to = ScriptHash(cur.take_digest().ok()?);
         let script = cur.take_bytes().ok()?.into();
         let amount = cur.take_asset().ok()?;
         let memo = cur.take_bytes().ok()?;

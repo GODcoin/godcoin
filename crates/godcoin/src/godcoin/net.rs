@@ -96,7 +96,7 @@ impl RequestBody {
                         buf.reserve_exact(1 + addrs.len() * mem::size_of::<ScriptHash>());
                         buf.push(addrs.len() as u8);
                         for addr in addrs {
-                            buf.push_script_hash(addr);
+                            buf.push_digest(&addr.0);
                         }
                     }
                 }
@@ -115,7 +115,7 @@ impl RequestBody {
             Self::GetAddressInfo(addr) => {
                 buf.reserve_exact(33);
                 buf.push(BodyType::GetAddressInfo as u8);
-                buf.push_script_hash(addr);
+                buf.push_digest(&addr.0);
             }
         }
     }
@@ -135,7 +135,7 @@ impl RequestBody {
                 } else {
                     let mut addrs = BTreeSet::new();
                     for _ in 0..addr_len {
-                        addrs.insert(cursor.take_script_hash()?);
+                        addrs.insert(ScriptHash(cursor.take_digest()?));
                     }
                     Ok(Self::SetBlockFilter(BlockFilter::Addr(addrs)))
                 }
@@ -150,7 +150,7 @@ impl RequestBody {
                 Ok(Self::GetBlockHeader(height))
             }
             t if t == BodyType::GetAddressInfo as u8 => {
-                let addr = cursor.take_script_hash()?;
+                let addr = ScriptHash(cursor.take_digest()?);
                 Ok(Self::GetAddressInfo(addr))
             }
             _ => Err(Error::new(

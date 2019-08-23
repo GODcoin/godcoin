@@ -166,19 +166,19 @@ impl BlockHeaderV0 {
         // Header version (2 bytes)
         buf.push_u16(0);
 
-        buf.push_bytes(self.previous_hash.as_ref());
+        buf.push_digest(&self.previous_hash);
         buf.push_u64(self.height);
         buf.push_u64(self.timestamp);
-        buf.push_bytes(self.tx_merkle_root.as_ref());
+        buf.push_digest(&self.tx_merkle_root);
     }
 
     pub(self) fn deserialize(cur: &mut Cursor<&[u8]>) -> Option<Self> {
         // We expect the version to already be deserialized here
 
-        let previous_hash = Digest::from_slice(&cur.take_bytes().ok()?)?;
+        let previous_hash = cur.take_digest().ok()?;
         let height = cur.take_u64().ok()?;
         let timestamp = cur.take_u64().ok()?;
-        let tx_merkle_root = Digest::from_slice(&cur.take_bytes().ok()?)?;
+        let tx_merkle_root = cur.take_digest().ok()?;
         Some(Self {
             previous_hash,
             height,
