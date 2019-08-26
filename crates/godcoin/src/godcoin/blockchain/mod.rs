@@ -20,8 +20,8 @@ use crate::{asset::Asset, constants::*, crypto::*, script::*, tx::*};
 pub struct Properties {
     pub height: u64,
     pub owner: Box<TxVariant>,
-    pub token_supply: Asset,
     pub network_fee: Asset,
+    pub token_supply: Asset,
 }
 
 #[derive(Clone, Debug, PartialEq)]
