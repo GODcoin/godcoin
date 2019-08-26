@@ -13,9 +13,9 @@ impl EvalErr {
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum EvalErrType {
-    UnexpectedEOF,
-    UnknownOp,
-    InvalidItemOnStack,
-    StackOverflow,
-    StackUnderflow,
+    UnexpectedEOF = 0x00,
+    UnknownOp = 0x01,
+    InvalidItemOnStack = 0x02,
+    StackOverflow = 0x03,
+    StackUnderflow = 0x04,
 }
