@@ -22,10 +22,10 @@ pub use self::tx_pool::*;
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum TxType {
-    OWNER = 0,
-    MINT = 1,
-    REWARD = 2,
-    TRANSFER = 3,
+    OWNER = 0x00,
+    MINT = 0x01,
+    REWARD = 0x02,
+    TRANSFER = 0x03,
 }
 
 pub trait SerializeTx {
@@ -200,7 +200,7 @@ impl TxVariant {
         match self {
             TxVariant::V0(var) => {
                 // Tx version (2 bytes)
-                buf.push_u16(0);
+                buf.push_u16(0x00);
 
                 match var {
                     TxVariantV0::OwnerTx(tx) => tx.serialize(buf),
@@ -215,7 +215,7 @@ impl TxVariant {
     pub fn deserialize(cur: &mut Cursor<&[u8]>) -> Option<TxVariant> {
         let tx_ver = cur.take_u16().ok()?;
         match tx_ver {
-            0 => {
+            0x00 => {
                 let (base, tx_type) = Tx::deserialize_header(cur)?;
                 let mut tx = match tx_type {
                     TxType::OWNER => TxVariantV0::OwnerTx(OwnerTx::deserialize(cur, base)?),

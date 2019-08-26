@@ -327,12 +327,12 @@ pub enum ErrorKind {
 impl ErrorKind {
     fn serialize(self, buf: &mut Vec<u8>) {
         match self {
-            Self::Io => buf.push(0),
-            Self::BytesRemaining => buf.push(1),
-            Self::InvalidRequest => buf.push(2),
-            Self::InvalidHeight => buf.push(3),
+            Self::Io => buf.push(0x00),
+            Self::BytesRemaining => buf.push(0x01),
+            Self::InvalidRequest => buf.push(0x02),
+            Self::InvalidHeight => buf.push(0x03),
             Self::TxValidation(err) => {
-                buf.push(4);
+                buf.push(0x04);
                 err.serialize(buf);
             }
         }
@@ -341,11 +341,11 @@ impl ErrorKind {
     fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
         let tag = cursor.take_u8()?;
         Ok(match tag {
-            0 => Self::Io,
-            1 => Self::BytesRemaining,
-            2 => Self::InvalidRequest,
-            3 => Self::InvalidHeight,
-            4 => Self::TxValidation(TxErr::deserialize(cursor)?),
+            0x00 => Self::Io,
+            0x01 => Self::BytesRemaining,
+            0x02 => Self::InvalidRequest,
+            0x03 => Self::InvalidHeight,
+            0x04 => Self::TxValidation(TxErr::deserialize(cursor)?),
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,

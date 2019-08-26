@@ -147,7 +147,7 @@ impl BlockHeader {
     pub fn deserialize(cur: &mut Cursor<&[u8]>) -> Option<Self> {
         let header_ver = cur.take_u16().ok()?;
         match header_ver {
-            0 => Some(BlockHeader::V0(BlockHeaderV0::deserialize(cur)?)),
+            0x00 => Some(BlockHeader::V0(BlockHeaderV0::deserialize(cur)?)),
             _ => None,
         }
     }
@@ -164,7 +164,7 @@ pub struct BlockHeaderV0 {
 impl BlockHeaderV0 {
     pub(self) fn serialize(&self, buf: &mut Vec<u8>) {
         // Header version (2 bytes)
-        buf.push_u16(0);
+        buf.push_u16(0x00);
 
         buf.push_digest(&self.previous_hash);
         buf.push_u64(self.height);
