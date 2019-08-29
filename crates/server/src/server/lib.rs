@@ -1,4 +1,4 @@
-use futures::sync::mpsc;
+use futures::sync::mpsc::{self, UnboundedSender};
 use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
 use log::{error, info, warn};
 use std::{collections::BTreeSet, io::Cursor, net::SocketAddr, path::PathBuf, sync::Arc};
@@ -7,9 +7,11 @@ use tokio_tungstenite::tungstenite::{protocol, Message};
 
 mod forever;
 pub mod minter;
+pub mod pool;
 
 pub mod prelude {
     pub use super::minter::*;
+    pub use super::pool::ClientPool;
 }
 
 use prelude::*;
@@ -27,6 +29,7 @@ pub struct ServerOpts {
 pub struct ServerData {
     pub chain: Arc<Blockchain>,
     pub minter: Minter,
+    pub client_pool: ClientPool,
 }
 
 pub fn start(opts: ServerOpts) {
@@ -58,9 +61,11 @@ pub fn start(opts: ServerOpts) {
         blockchain.get_chain_height()
     );
 
+    let client_pool = ClientPool::new();
     let minter = Minter::new(
         Arc::clone(&blockchain),
         opts.minter_key,
+        client_pool.clone(),
         opts.enable_stale_production,
     );
     minter.clone().start_production_loop();
@@ -68,6 +73,7 @@ pub fn start(opts: ServerOpts) {
     let data = Arc::new(ServerData {
         chain: Arc::clone(&blockchain),
         minter,
+        client_pool,
     });
 
     let addr = opts.bind_addr.parse::<SocketAddr>().unwrap();
@@ -85,16 +91,19 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                 .and_then(move |ws| {
                     info!("[{}] Connection opened", peer_addr);
 
-                    let mut state = WsState::default();
                     let (tx, rx) = mpsc::unbounded();
                     let (sink, stream) = ws.split();
+                    let mut state = WsState::new(peer_addr, tx.clone());
 
-                    let ws_reader = stream.for_each(move |msg| {
-                        let res = process_message(&data, &mut state, msg);
-                        if let Some(res) = res {
-                            tx.unbounded_send(res).unwrap();
+                    let ws_reader = stream.for_each({
+                        let data = Arc::clone(&data);
+                        move |msg| {
+                            let res = process_message(&data, &mut state, msg);
+                            if let Some(res) = res {
+                                tx.unbounded_send(res).unwrap();
+                            }
+                            Ok(())
                         }
-                        Ok(())
                     });
                     let ws_writer = rx.forward(sink.sink_map_err(move |e| {
                         error!("[{}] Sink send error: {:?}", peer_addr, e);
@@ -105,6 +114,8 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                         .select(ws_writer.map(|_| ()).map_err(|_| ()));
                     tokio::spawn(conn.then(move |_| {
                         info!("[{}] Connection closed", peer_addr);
+                        // Remove block subscriptions if there are any
+                        data.client_pool.remove(peer_addr);
                         Ok(())
                     }));
 
@@ -187,6 +198,14 @@ fn handle_request(data: &ServerData, state: &mut WsState, body: RequestBody) -> 
             }
             ResponseBody::SetBlockFilter
         }
+        RequestBody::Subscribe => {
+            data.client_pool.insert(state.addr(), state.sender());
+            ResponseBody::Subscribe
+        }
+        RequestBody::Unsubscribe => {
+            data.client_pool.remove(state.addr());
+            ResponseBody::Unsubscribe
+        }
         RequestBody::GetProperties => {
             let props = data.chain.get_properties();
             ResponseBody::GetProperties(props)
@@ -221,16 +240,32 @@ fn handle_request(data: &ServerData, state: &mut WsState, body: RequestBody) -> 
 
 pub struct WsState {
     filter: Option<BTreeSet<ScriptHash>>,
+    addr: SocketAddr,
+    tx: UnboundedSender<Message>,
 }
 
 impl WsState {
+    #[inline]
+    pub fn new(addr: SocketAddr, tx: UnboundedSender<Message>) -> Self {
+        Self {
+            filter: None,
+            addr,
+            tx,
+        }
+    }
+
+    #[inline]
+    pub fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+
+    #[inline]
     pub fn filter(&self) -> Option<&BTreeSet<ScriptHash>> {
         self.filter.as_ref()
     }
-}
 
-impl Default for WsState {
-    fn default() -> Self {
-        WsState { filter: None }
+    #[inline]
+    pub fn sender(&self) -> UnboundedSender<Message> {
+        self.tx.clone()
     }
 }

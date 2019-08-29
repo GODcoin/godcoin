@@ -8,6 +8,7 @@ use sodiumoxide::randombytes;
 use std::{
     env, fs,
     io::Cursor,
+    net::SocketAddr,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -75,8 +76,13 @@ impl TestMinter {
             chain.insert_block(child).unwrap();
         }
 
-        let minter = Minter::new(Arc::clone(&chain), minter_key, false);
-        let data = ServerData { chain, minter };
+        let client_pool = ClientPool::default();
+        let minter = Minter::new(Arc::clone(&chain), minter_key, client_pool.clone(), false);
+        let data = ServerData {
+            chain,
+            minter,
+            client_pool,
+        };
         Self(data, info, tmp_dir, true)
     }
 
@@ -103,7 +109,9 @@ impl TestMinter {
         let chain = Arc::clone(&self.0.chain);
         assert_eq!(chain.index_status(), IndexStatus::None);
         chain.reindex(ReindexOpts { auto_trim: true });
-        self.0.minter = Minter::new(chain, self.1.minter_key.clone(), false);
+        let key = self.1.minter_key.clone();
+        let pool = self.0.client_pool.clone();
+        self.0.minter = Minter::new(chain, key, pool, false);
         self.3 = true;
     }
 
@@ -120,7 +128,8 @@ impl TestMinter {
     }
 
     pub fn request(&self, body: RequestBody) -> ResponseBody {
-        let mut state = WsState::default();
+        let (tx, _) = futures::sync::mpsc::unbounded();
+        let mut state = WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx);
         let res = self.send_request(&mut state, net::Request { id: 0, body });
         res.body
     }

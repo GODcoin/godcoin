@@ -1,3 +1,4 @@
+use crate::ClientPool;
 use godcoin::prelude::*;
 use log::{info, warn};
 use parking_lot::Mutex;
@@ -12,11 +13,17 @@ pub struct Minter {
     chain: Arc<Blockchain>,
     minter_key: KeyPair,
     tx_pool: Arc<Mutex<TxPool>>,
+    client_pool: ClientPool,
     enable_stale_production: bool,
 }
 
 impl Minter {
-    pub fn new(chain: Arc<Blockchain>, minter_key: KeyPair, enable_stale_production: bool) -> Self {
+    pub fn new(
+        chain: Arc<Blockchain>,
+        minter_key: KeyPair,
+        pool: ClientPool,
+        enable_stale_production: bool,
+    ) -> Self {
         match chain.get_owner() {
             TxVariant::V0(tx) => match tx {
                 TxVariantV0::OwnerTx(tx) => assert_eq!(tx.minter, minter_key.0),
@@ -27,6 +34,7 @@ impl Minter {
             chain: Arc::clone(&chain),
             minter_key,
             tx_pool: Arc::new(Mutex::new(TxPool::new(chain))),
+            client_pool: pool,
             enable_stale_production,
         }
     }
@@ -114,12 +122,17 @@ impl Minter {
         let height = block.height();
         let tx_len = block.txs().len();
 
-        self.chain.insert_block(block)?;
+        self.chain.insert_block(block.clone())?;
         let txs = if tx_len == 1 { "tx" } else { "txs" };
         info!(
             "Produced block at height {} with {} {}",
             height, tx_len, txs
         );
+
+        self.client_pool
+            .broadcast(ResponseBody::GetBlock(FilteredBlock::Block(Arc::new(
+                block,
+            ))));
         Ok(())
     }
 

@@ -3,7 +3,7 @@ use godcoin::{
     prelude::{net::ErrorKind, *},
 };
 use godcoin_server::WsState;
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, net::SocketAddr};
 
 mod common;
 pub use common::*;
@@ -54,7 +54,7 @@ fn get_block_unfiltered() {
 
 #[test]
 fn get_block_filtered() {
-    let mut state = WsState::default();
+    let mut state = create_uninit_state();
     let minter = TestMinter::new();
 
     let mut filter = BTreeSet::<ScriptHash>::new();
@@ -195,7 +195,7 @@ fn error_with_bytes_remaining() {
         buf
     };
 
-    let res = minter.raw_request(&mut WsState::default(), buf);
+    let res = minter.raw_request(&mut create_uninit_state(), buf);
     assert!(res.body.is_err());
     assert_eq!(res.id, 123456789);
     assert_eq!(res.body, ResponseBody::Error(ErrorKind::BytesRemaining));
@@ -219,7 +219,7 @@ fn eof_returns_max_u32_id() {
         buf
     };
 
-    let res = minter.raw_request(&mut WsState::default(), buf);
+    let res = minter.raw_request(&mut create_uninit_state(), buf);
     assert!(res.body.is_err());
     assert_eq!(res.id, u32::max_value());
     assert_eq!(res.body, ResponseBody::Error(ErrorKind::Io));
@@ -240,7 +240,7 @@ fn u32_max_val_with_valid_request_fails() {
 
         buf
     };
-    let res = minter.raw_request(&mut WsState::default(), buf);
+    let res = minter.raw_request(&mut create_uninit_state(), buf);
 
     let expected = net::Response {
         id: u32::max_value(),
@@ -265,7 +265,7 @@ fn response_id_matches_request() {
 
         buf
     };
-    let res = minter.raw_request(&mut WsState::default(), buf);
+    let res = minter.raw_request(&mut create_uninit_state(), buf);
 
     assert!(!res.body.is_err());
 
@@ -280,4 +280,9 @@ fn response_id_matches_request() {
         }),
     };
     assert_eq!(res, expected);
+}
+
+fn create_uninit_state() -> WsState {
+    let (tx, _) = futures::sync::mpsc::unbounded();
+    WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx)
 }
