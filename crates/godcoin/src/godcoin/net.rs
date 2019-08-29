@@ -59,6 +59,10 @@ pub enum BodyType {
     // Operations that can update the connection or blockchain state
     Broadcast = 0x10,
     SetBlockFilter = 0x11,
+    /// Subscribe to receive block updates. Any block filters applied may be ignored.
+    Subscribe = 0x12,
+    /// Unsubscribe from receiving block updates.
+    Unsubscribe = 0x13,
 
     // Getters
     GetProperties = 0x20,
@@ -71,6 +75,8 @@ pub enum BodyType {
 pub enum RequestBody {
     Broadcast(TxVariant),
     SetBlockFilter(BlockFilter),
+    Subscribe,
+    Unsubscribe,
     GetProperties,
     GetBlock(u64),       // height
     GetBlockHeader(u64), // height
@@ -101,6 +107,8 @@ impl RequestBody {
                     }
                 }
             }
+            Self::Subscribe => buf.push(BodyType::Subscribe as u8),
+            Self::Unsubscribe => buf.push(BodyType::Unsubscribe as u8),
             Self::GetProperties => buf.push(BodyType::GetProperties as u8),
             Self::GetBlock(height) => {
                 buf.reserve_exact(9);
@@ -140,6 +148,8 @@ impl RequestBody {
                     Ok(Self::SetBlockFilter(BlockFilter::Addr(addrs)))
                 }
             }
+            t if t == BodyType::Subscribe as u8 => Ok(Self::Subscribe),
+            t if t == BodyType::Unsubscribe as u8 => Ok(Self::Unsubscribe),
             t if t == BodyType::GetProperties as u8 => Ok(Self::GetProperties),
             t if t == BodyType::GetBlock as u8 => {
                 let height = cursor.take_u64()?;
@@ -166,6 +176,8 @@ pub enum ResponseBody {
     Error(ErrorKind),
     Broadcast,
     SetBlockFilter,
+    Subscribe,
+    Unsubscribe,
     GetProperties(Properties),
     GetBlock(FilteredBlock),
     GetBlockHeader {
@@ -192,6 +204,8 @@ impl ResponseBody {
             }
             Self::Broadcast => buf.push(BodyType::Broadcast as u8),
             Self::SetBlockFilter => buf.push(BodyType::SetBlockFilter as u8),
+            Self::Subscribe => buf.push(BodyType::Subscribe as u8),
+            Self::Unsubscribe => buf.push(BodyType::Unsubscribe as u8),
             Self::GetProperties(props) => {
                 buf.reserve_exact(4096 + mem::size_of::<Properties>());
                 buf.push(BodyType::GetProperties as u8);
@@ -244,6 +258,8 @@ impl ResponseBody {
             }
             t if t == BodyType::Broadcast as u8 => Ok(Self::Broadcast),
             t if t == BodyType::SetBlockFilter as u8 => Ok(Self::SetBlockFilter),
+            t if t == BodyType::Subscribe as u8 => Ok(Self::Subscribe),
+            t if t == BodyType::Unsubscribe as u8 => Ok(Self::Unsubscribe),
             t if t == BodyType::GetProperties as u8 => {
                 let height = cursor.take_u64()?;
                 let owner = {
