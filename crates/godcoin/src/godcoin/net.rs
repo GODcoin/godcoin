@@ -11,7 +11,7 @@ use std::{
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Request {
-    /// A 32-bit unsigned integer max value is reserved for deserialization errors that occur during request processing.
+    /// Max value is reserved for subscription updates or deserialization errors that occur during request processing.
     /// When a request is received with a reserved id, an IO error is returned regardless if the request is valid.
     pub id: u32,
     pub body: RequestBody,
@@ -32,8 +32,7 @@ impl Request {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Response {
-    /// A 32-bit unsigned integer max value represents an IO error during processing the request. Note that sending a
-    /// request with a max value will be treated as an IO error regardless if the request is valid.
+    /// Max value represents a subscription update or an IO error during processing the request.
     pub id: u32,
     pub body: ResponseBody,
 }

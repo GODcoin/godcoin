@@ -137,7 +137,7 @@ pub fn process_message(data: &ServerData, state: &mut WsState, msg: Message) -> 
                 Ok(req) => {
                     let id = req.id;
                     if id == u32::max_value() {
-                        // Max value is reserved for deserialization errors that occur
+                        // Max value is reserved
                         Response {
                             id: u32::max_value(),
                             body: ResponseBody::Error(ErrorKind::Io),
