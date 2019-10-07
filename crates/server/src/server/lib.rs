@@ -11,7 +11,7 @@ pub mod pool;
 
 pub mod prelude {
     pub use super::minter::*;
-    pub use super::pool::ClientPool;
+    pub use super::pool::SubscriptionPool;
 }
 
 use prelude::*;
@@ -29,7 +29,7 @@ pub struct ServerOpts {
 pub struct ServerData {
     pub chain: Arc<Blockchain>,
     pub minter: Minter,
-    pub client_pool: ClientPool,
+    pub sub_pool: SubscriptionPool,
 }
 
 pub fn start(opts: ServerOpts) {
@@ -61,11 +61,11 @@ pub fn start(opts: ServerOpts) {
         blockchain.get_chain_height()
     );
 
-    let client_pool = ClientPool::new();
+    let sub_pool = SubscriptionPool::new();
     let minter = Minter::new(
         Arc::clone(&blockchain),
         opts.minter_key,
-        client_pool.clone(),
+        sub_pool.clone(),
         opts.enable_stale_production,
     );
     minter.clone().start_production_loop();
@@ -73,7 +73,7 @@ pub fn start(opts: ServerOpts) {
     let data = Arc::new(ServerData {
         chain: Arc::clone(&blockchain),
         minter,
-        client_pool,
+        sub_pool,
     });
 
     let addr = opts.bind_addr.parse::<SocketAddr>().unwrap();
@@ -115,7 +115,7 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                     tokio::spawn(conn.then(move |_| {
                         info!("[{}] Connection closed", peer_addr);
                         // Remove block subscriptions if there are any
-                        data.client_pool.remove(peer_addr);
+                        data.sub_pool.remove(peer_addr);
                         Ok(())
                     }));
 
@@ -199,11 +199,11 @@ fn handle_request(data: &ServerData, state: &mut WsState, body: RequestBody) -> 
             ResponseBody::SetBlockFilter
         }
         RequestBody::Subscribe => {
-            data.client_pool.insert(state.addr(), state.sender());
+            data.sub_pool.insert(state.addr(), state.sender());
             ResponseBody::Subscribe
         }
         RequestBody::Unsubscribe => {
-            data.client_pool.remove(state.addr());
+            data.sub_pool.remove(state.addr());
             ResponseBody::Unsubscribe
         }
         RequestBody::GetProperties => {

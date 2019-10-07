@@ -5,11 +5,11 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio_tungstenite::tungstenite::Message;
 
 #[derive(Clone)]
-pub struct ClientPool {
+pub struct SubscriptionPool {
     clients: Arc<RwLock<HashMap<SocketAddr, UnboundedSender<Message>>>>,
 }
 
-impl ClientPool {
+impl SubscriptionPool {
     #[inline]
     pub fn new() -> Self {
         Self {
@@ -47,7 +47,7 @@ impl ClientPool {
     }
 }
 
-impl Default for ClientPool {
+impl Default for SubscriptionPool {
     #[inline]
     fn default() -> Self {
         ClientPool::new()

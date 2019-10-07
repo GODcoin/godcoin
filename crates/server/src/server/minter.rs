@@ -1,4 +1,4 @@
-use crate::ClientPool;
+use crate::SubscriptionPool;
 use godcoin::prelude::*;
 use log::{info, warn};
 use parking_lot::Mutex;
@@ -13,7 +13,7 @@ pub struct Minter {
     chain: Arc<Blockchain>,
     minter_key: KeyPair,
     tx_pool: Arc<Mutex<TxPool>>,
-    client_pool: ClientPool,
+    client_pool: SubscriptionPool,
     enable_stale_production: bool,
 }
 
@@ -21,7 +21,7 @@ impl Minter {
     pub fn new(
         chain: Arc<Blockchain>,
         minter_key: KeyPair,
-        pool: ClientPool,
+        pool: SubscriptionPool,
         enable_stale_production: bool,
     ) -> Self {
         match chain.get_owner() {
