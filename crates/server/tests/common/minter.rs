@@ -76,12 +76,12 @@ impl TestMinter {
             chain.insert_block(child).unwrap();
         }
 
-        let client_pool = ClientPool::default();
-        let minter = Minter::new(Arc::clone(&chain), minter_key, client_pool.clone(), false);
+        let sub_pool = SubscriptionPool::default();
+        let minter = Minter::new(Arc::clone(&chain), minter_key, sub_pool.clone(), false);
         let data = ServerData {
             chain,
             minter,
-            client_pool,
+            sub_pool,
         };
         Self(data, info, tmp_dir, true)
     }
@@ -110,7 +110,7 @@ impl TestMinter {
         assert_eq!(chain.index_status(), IndexStatus::None);
         chain.reindex(ReindexOpts { auto_trim: true });
         let key = self.1.minter_key.clone();
-        let pool = self.0.client_pool.clone();
+        let pool = self.0.sub_pool.clone();
         self.0.minter = Minter::new(chain, key, pool, false);
         self.3 = true;
     }

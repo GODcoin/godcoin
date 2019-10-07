@@ -50,6 +50,6 @@ impl SubscriptionPool {
 impl Default for SubscriptionPool {
     #[inline]
     fn default() -> Self {
-        ClientPool::new()
+        SubscriptionPool::new()
     }
 }
