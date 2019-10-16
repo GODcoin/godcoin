@@ -53,23 +53,19 @@ impl Wallet {
                         continue;
                     }
                     let mut args = parser::parse_line(&line);
-
-                    match self.process_line(&mut args) {
-                        Ok(store_history) => {
-                            if store_history {
-                                rl.add_history_entry(line);
-                            } else {
-                                sodiumoxide::utils::memzero(&mut line.into_bytes());
-                            }
-                        }
-                        Err(s) => {
-                            println!("{}", s);
-                            sodiumoxide::utils::memzero(&mut line.into_bytes());
-                        }
+                    let (store_history, err_msg) = self.process_line(&mut args);
+                    if store_history {
+                        rl.add_history_entry(line);
+                    } else {
+                        sodiumoxide::utils::memzero(&mut line.into_bytes());
                     }
 
                     for a in args {
                         sodiumoxide::utils::memzero(&mut a.into_bytes());
+                    }
+
+                    if let Err(msg) = err_msg {
+                        println!("{}", msg);
                     }
                 }
                 Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
@@ -84,36 +80,36 @@ impl Wallet {
         }
     }
 
-    fn process_line(&mut self, args: &mut Vec<String>) -> Result<bool, String> {
+    fn process_line(&mut self, args: &mut Vec<String>) -> (bool, Result<(), String>) {
         if args.is_empty() {
-            return Ok(false);
+            return (false, Ok(()));
         }
         println!();
         match &*args[0] {
-            "new" => cmd::create_wallet(self, args),
-            "unlock" => cmd::unlock(self, args),
-            "create_account" => cmd::account::create(self, args),
-            "import_account" => cmd::account::import(self, args),
-            "get_account" => cmd::account::get(self, args),
-            "delete_account" => cmd::account::delete(self, args),
-            "list_accounts" => cmd::account::list(self, args),
-            "build_script" => cmd::build_script(self, args),
-            "check_script_size" => cmd::check_script_size(self, args),
-            "script_to_p2sh" => cmd::script_to_p2sh(self, args),
-            "decode_tx" => cmd::decode_tx(self, args),
-            "sign_tx" => cmd::sign_tx(self, args),
-            "unsign_tx" => cmd::unsign_tx(self, args),
-            "broadcast" => cmd::broadcast(self, args),
-            "build_mint_tx" => cmd::build_mint_tx(self, args),
-            "get_properties" => cmd::get_properties(self, args),
-            "get_block" => cmd::get_block(self, args),
+            "new" => (false, cmd::create_wallet(self, args)),
+            "unlock" => (false, cmd::unlock(self, args)),
+            "create_account" => (true, cmd::account::create(self, args)),
+            "import_account" => (true, cmd::account::import(self, args)),
+            "get_account" => (true, cmd::account::get(self, args)),
+            "delete_account" => (true, cmd::account::delete(self, args)),
+            "list_accounts" => (true, cmd::account::list(self, args)),
+            "build_script" => (true, cmd::build_script(self, args)),
+            "check_script_size" => (true, cmd::check_script_size(self, args)),
+            "script_to_p2sh" => (true, cmd::script_to_p2sh(self, args)),
+            "decode_tx" => (true, cmd::decode_tx(self, args)),
+            "sign_tx" => (true, cmd::sign_tx(self, args)),
+            "unsign_tx" => (true, cmd::unsign_tx(self, args)),
+            "broadcast" => (true, cmd::broadcast(self, args)),
+            "build_mint_tx" => (true, cmd::build_mint_tx(self, args)),
+            "get_properties" => (true, cmd::get_properties(self, args)),
+            "get_block" => (true, cmd::get_block(self, args)),
             "help" => {
                 Self::print_usage("Displaying help...");
-                Ok(true)
+                (true, Ok(()))
             }
             _ => {
                 Self::print_usage(&format!("Invalid command: {}", args[0]));
-                Ok(true)
+                (true, Ok(()))
             }
         }
     }

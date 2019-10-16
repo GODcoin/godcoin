@@ -12,15 +12,15 @@ pub mod account;
 
 use util::{send_print_rpc_req, send_rpc_req};
 
-pub fn create_wallet(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn create_wallet(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     let state = wallet.db.state();
     if state != DbState::New {
         if state == DbState::Locked {
             println!("Use unlock to use the existing wallet");
-            return Ok(false);
+            return Ok(());
         } else if state == DbState::Unlocked {
             println!("Existing wallet already unlocked");
-            return Ok(false);
+            return Ok(());
         } else {
             return Err(format!("Unknown state: {:?}", state));
         }
@@ -30,18 +30,18 @@ pub fn create_wallet(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
     let pass = &Password(args.remove(1).into_bytes());
     wallet.db.set_password(pass);
     wallet.prompt = "locked>> ".to_owned();
-    Ok(false)
+    Ok(())
 }
 
-pub fn unlock(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn unlock(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     let state = wallet.db.state();
     if state != DbState::Locked {
         if state == DbState::New {
             println!("A wallet has not yet been created, use new to create one");
-            return Ok(false);
+            return Ok(());
         } else if state == DbState::Unlocked {
             println!("Wallet already unlocked");
-            return Ok(false);
+            return Ok(());
         }
         return Err(format!("Unknown state: {:?}", state));
     }
@@ -53,10 +53,10 @@ pub fn unlock(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, Strin
     } else {
         println!("Failed to unlock wallet...incorrect password");
     }
-    Ok(false)
+    Ok(())
 }
 
-pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     let script = script_builder::build(&args[1..]);
     match script {
         Ok(script) => {
@@ -73,10 +73,10 @@ pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
             println!("{:?}", e);
         }
     }
-    Ok(true)
+    Ok(())
 }
 
-pub fn check_script_size(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn check_script_size(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_args!(args, 1);
     let script = Script::new(hex_to_bytes!(args[1])?);
     if script.len() > MAX_SCRIPT_BYTE_SIZE {
@@ -87,18 +87,18 @@ pub fn check_script_size(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
     }
     let word = if script.len() == 1 { "byte" } else { "bytes" };
     println!("Script is {} {}", script.len(), word);
-    Ok(true)
+    Ok(())
 }
 
-pub fn script_to_p2sh(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn script_to_p2sh(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_args!(args, 1);
     let hash: ScriptHash = Script::new(hex_to_bytes!(args[1])?).into();
     println!("P2SH address => {}", hash.to_wif());
 
-    Ok(true)
+    Ok(())
 }
 
-pub fn decode_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn decode_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_args!(args, 1);
 
     let tx_bytes = hex_to_bytes!(args[1])?;
@@ -106,10 +106,10 @@ pub fn decode_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, S
     let tx = TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?;
     println!("{:#?}", tx);
 
-    Ok(true)
+    Ok(())
 }
 
-pub fn sign_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn sign_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_unlocked!(wallet);
     check_at_least_args!(args, 2);
 
@@ -139,10 +139,10 @@ pub fn sign_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, Stri
     tx.serialize(&mut tx_bytes);
     println!("{}", faster_hex::hex_string(&tx_bytes).unwrap());
 
-    Ok(true)
+    Ok(())
 }
 
-pub fn unsign_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn unsign_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_args!(args, 2);
     let sig_pos: usize = args[1]
         .parse()
@@ -162,10 +162,10 @@ pub fn unsign_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, S
     tx.serialize(&mut tx_bytes);
     println!("{}", faster_hex::hex_string(&tx_bytes).unwrap());
 
-    Ok(true)
+    Ok(())
 }
 
-pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_args!(args, 1);
     let tx_bytes = hex_to_bytes!(args[1])?;
     let tx = {
@@ -174,10 +174,10 @@ pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, St
     };
 
     send_print_rpc_req(wallet, net::RequestBody::Broadcast(tx));
-    Ok(true)
+    Ok(())
 }
 
-pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_args!(args, 4);
     let timestamp: u64 = {
         let ts: u64 = args[1]
@@ -234,20 +234,20 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool
     mint_tx.serialize(&mut buf);
     println!("{}", faster_hex::hex_string(&buf).unwrap());
 
-    Ok(true)
+    Ok(())
 }
 
-pub fn get_properties(wallet: &mut Wallet, _args: &mut Vec<String>) -> Result<bool, String> {
+pub fn get_properties(wallet: &mut Wallet, _args: &mut Vec<String>) -> Result<(), String> {
     send_print_rpc_req(wallet, RequestBody::GetProperties);
-    Ok(true)
+    Ok(())
 }
 
-pub fn get_block(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn get_block(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_args!(args, 1);
     let height: u64 = args[1]
         .parse()
         .map_err(|_| "Failed to parse height argument".to_owned())?;
 
     send_print_rpc_req(wallet, RequestBody::GetBlock(height));
-    Ok(true)
+    Ok(())
 }

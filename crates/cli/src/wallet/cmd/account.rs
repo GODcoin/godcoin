@@ -1,21 +1,21 @@
 use super::*;
 
-pub fn create(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn create(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_unlocked!(wallet);
     check_args!(args, 1);
     let account = &args[1];
     if wallet.db.get_account(account).is_some() {
         println!("Account already exists");
-        return Ok(true);
+        return Ok(());
     }
     let key = KeyPair::gen();
     wallet.db.set_account(account, &key.1);
     println!("Public key => {}", key.0.to_wif());
     println!("Private key => {}", key.1.to_wif());
-    Ok(true)
+    Ok(())
 }
 
-pub fn import(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn import(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_unlocked!(wallet);
     check_args!(args, 2);
     let account = &args[1];
@@ -23,17 +23,17 @@ pub fn import(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, Strin
     for (acc, pair) in wallet.db.get_accounts() {
         if &acc == account {
             println!("Account already exists");
-            return Ok(true);
+            return Ok(());
         } else if pair.1 == wif.1 {
             println!("Wif already exists under account `{}`", &acc);
-            return Ok(true);
+            return Ok(());
         }
     }
     wallet.db.set_account(account, &wif.1);
-    Ok(true)
+    Ok(())
 }
 
-pub fn get(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn get(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_unlocked!(wallet);
     check_args!(args, 1);
     let key = wallet.db.get_account(&args[1]);
@@ -46,10 +46,10 @@ pub fn get(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> 
             println!("Account not found");
         }
     }
-    Ok(true)
+    Ok(())
 }
 
-pub fn delete(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, String> {
+pub fn delete(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_unlocked!(wallet);
     check_args!(args, 1);
     if wallet.db.del_account(&args[1]) {
@@ -57,14 +57,14 @@ pub fn delete(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<bool, Strin
     } else {
         println!("Account not found");
     }
-    Ok(true)
+    Ok(())
 }
 
-pub fn list(wallet: &mut Wallet, _args: &mut Vec<String>) -> Result<bool, String> {
+pub fn list(wallet: &mut Wallet, _args: &mut Vec<String>) -> Result<(), String> {
     check_unlocked!(wallet);
     println!("Accounts:");
     for (acc, key) in wallet.db.get_accounts() {
         println!("  {} => {}", acc, key.0.to_wif());
     }
-    Ok(true)
+    Ok(())
 }
