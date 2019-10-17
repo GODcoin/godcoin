@@ -1,6 +1,6 @@
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 mod precision;
 use self::precision::*;
@@ -11,7 +11,7 @@ pub use self::error::*;
 pub const MAX_STR_LEN: usize = 26;
 pub const MAX_PRECISION: u8 = 5;
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Default, PartialEq, PartialOrd)]
 pub struct Asset {
     pub amount: i64,
 }
@@ -87,6 +87,12 @@ impl Asset {
         Some(Asset {
             amount: res.to_i64()?,
         })
+    }
+}
+
+impl fmt::Debug for Asset {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "Asset(\"{}\")", self.to_string())
     }
 }
 
