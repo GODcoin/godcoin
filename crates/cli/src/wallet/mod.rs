@@ -102,6 +102,7 @@ impl Wallet {
             "unsign_tx" => (true, cmd::unsign_tx(self, args)),
             "broadcast" => (true, cmd::broadcast(self, args)),
             "build_mint_tx" => (true, cmd::build_mint_tx(self, args)),
+            "build_transfer_tx" => (true, cmd::build_transfer_tx(self, args)),
             "get_properties" => (true, cmd::get_properties(self, args)),
             "get_block" => (true, cmd::get_block(self, args)),
             "help" => {
@@ -155,8 +156,12 @@ impl Wallet {
             "Broadcasts a transaction to the network",
         ]);
         cmds.push([
-            "build_mint_tx <timestamp_offset> <grael_asset> <owner_script> <attachment_path>",
+            "build_mint_tx <ts_offset> <grael_asset> <owner_script> <attachment_path>",
             "Builds a mint transaction",
+        ]);
+        cmds.push([
+            "build_transfer_tx <ts_offset> <from:script_hex> <to:p2sh> <amount:grael_asset> <fee:grael_asset> <memo>",
+            "Builds a transfer transaction",
         ]);
         cmds.push(["get_properties", "Retrieve global network properties"]);
         cmds.push(["get_block <height>", "Retrieve a block from the network"]);

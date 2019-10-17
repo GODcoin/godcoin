@@ -204,7 +204,10 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
 
     let (attachment, attachment_name) = if !args[4].is_empty() {
         let path = Path::new(&args[4]);
-        let mut file = File::open(path).map_err(|e| format!("Failed to open file: {:?}", e))?;
+        let mut file = File::open(path).map_err(|e| {
+            let cur_dir = std::env::current_dir().unwrap();
+            format!("Failed to open file: {:?} (cwd: {:?})", e, cur_dir)
+        })?;
         let meta = file
             .metadata()
             .map_err(|e| format!("Failed to query file metadata: {:?}", e))?;
@@ -232,6 +235,48 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
     }));
     let mut buf = Vec::with_capacity(4096);
     mint_tx.serialize(&mut buf);
+    println!("{}", faster_hex::hex_string(&buf).unwrap());
+
+    Ok(())
+}
+
+pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
+    check_args!(args, 6);
+
+    let timestamp: u64 = {
+        let ts: u64 = args[1]
+            .parse()
+            .map_err(|_| "Failed to parse timestamp offset".to_owned())?;
+        ts + godcoin::get_epoch_ms()
+    };
+
+    let from_script = Script::new(hex_to_bytes!(args[2])?);
+    let to_script = ScriptHash::from_wif(&args[3])
+        .map_err(|e| format!("Failed to parse P2SH address: {}", e))?;
+
+    let amount = args[4]
+        .parse()
+        .map_err(|_| "Failed to parse grael asset amount")?;
+    let fee = args[5]
+        .parse()
+        .map_err(|_| "Failed to parse grael asset fee")?;
+    let memo = args[6].as_bytes();
+
+    let transfer_tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+        base: Tx {
+            timestamp,
+            signature_pairs: vec![],
+            fee,
+        },
+        from: ScriptHash::from(&from_script),
+        to: to_script,
+        script: from_script,
+        amount,
+        memo: memo.into(),
+    }));
+
+    let mut buf = Vec::with_capacity(4096);
+    transfer_tx.serialize(&mut buf);
     println!("{}", faster_hex::hex_string(&buf).unwrap());
 
     Ok(())
