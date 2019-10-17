@@ -41,6 +41,7 @@ pub fn get(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
         Some(key) => {
             println!("Public key => {}", key.0.to_wif());
             println!("Private key => {}", key.1.to_wif());
+            println!("P2SH address => {}", ScriptHash::from(key.0).to_wif());
         }
         None => {
             println!("Account not found");
