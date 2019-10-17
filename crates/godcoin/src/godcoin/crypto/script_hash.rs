@@ -91,3 +91,19 @@ impl AsRef<[u8]> for ScriptHash {
         self.0.as_ref()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn import_p2sh_from_wif() {
+        let kp =
+            PrivateKey::from_wif("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").unwrap();
+
+        let wif = "GOD78WVbdCHAwEVajuPKprZ6je6t1zvTieLEsEcKiYVtTjbpfjqLR";
+        let hash = ScriptHash::from_wif(&wif).unwrap();
+        assert_eq!(hash.to_wif().as_ref(), wif);
+        assert_eq!(ScriptHash::from(Script::from(kp.0.clone())), hash);
+    }
+}
