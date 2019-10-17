@@ -90,9 +90,10 @@ impl Wallet {
             "unlock" => (false, cmd::unlock(self, args)),
             "create_account" => (true, cmd::account::create(self, args)),
             "import_account" => (true, cmd::account::import(self, args)),
-            "get_account" => (true, cmd::account::get(self, args)),
             "delete_account" => (true, cmd::account::delete(self, args)),
             "list_accounts" => (true, cmd::account::list(self, args)),
+            "get_account" => (true, cmd::account::get(self, args)),
+            "get_addr_info" => (true, cmd::account::get_addr_info(self, args)),
             "build_script" => (true, cmd::build_script(self, args)),
             "check_script_size" => (true, cmd::check_script_size(self, args)),
             "script_to_p2sh" => (true, cmd::script_to_p2sh(self, args)),
@@ -122,8 +123,15 @@ impl Wallet {
         cmds.push(["create_account <account>", "Create an account"]);
         cmds.push(["import_account <account> <wif>", "Import an account"]);
         cmds.push(["delete_account <account>", "Delete an existing account"]);
-        cmds.push(["get_account <account>", "Retrieve account information"]);
         cmds.push(["list_accounts", "List all accounts"]);
+        cmds.push([
+            "get_account <account>",
+            "Retrieve account keys and addresses",
+        ]);
+        cmds.push([
+            "get_addr_info <account|p2sh>",
+            "Retrieve account or P2SH address information",
+        ]);
         cmds.push(["build_script <...op>", "Builds a script"]);
         cmds.push([
             "check_script_size <raw_hex>",

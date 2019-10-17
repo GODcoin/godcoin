@@ -173,7 +173,7 @@ pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), Stri
         TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?
     };
 
-    send_print_rpc_req(wallet, net::RequestBody::Broadcast(tx));
+    send_print_rpc_req(wallet, RequestBody::Broadcast(tx));
     Ok(())
 }
 

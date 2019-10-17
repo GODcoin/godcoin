@@ -50,6 +50,20 @@ pub fn get(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     Ok(())
 }
 
+pub fn get_addr_info(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
+    check_unlocked!(wallet);
+    check_args!(args, 1);
+
+    let script_hash = match wallet.db.get_account(&args[1]) {
+        Some(key) => ScriptHash::from(key.0),
+        None => ScriptHash::from_wif(&args[1])
+            .map_err(|e| format!("Invalid account or key: {:?}", e))?,
+    };
+
+    send_print_rpc_req(wallet, RequestBody::GetAddressInfo(script_hash));
+    Ok(())
+}
+
 pub fn delete(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_unlocked!(wallet);
     check_args!(args, 1);
