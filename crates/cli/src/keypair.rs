@@ -1,4 +1,4 @@
-use godcoin::prelude::{KeyPair, Wif, ScriptHash};
+use godcoin::prelude::{KeyPair, ScriptHash, Wif};
 
 pub fn generate_keypair() {
     let pair = KeyPair::gen();
