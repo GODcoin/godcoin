@@ -57,5 +57,7 @@ The server requires a configuration file in the home folder called
 Configuration keys:
 
 - `minter_key` - (required) Minter key to use for block production
+- `enable_stale_production` - (required) Produces blocks even if there are no
+  transactions
 - `bind_address` - (optional) - default is 127.0.0.1:7777) The bind address for
   the server to listen on
