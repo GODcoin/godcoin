@@ -1,0 +1,8 @@
+**/.DS_Store
+**/*.log
+.git
+
+.vscode/
+target/
+.idea/
+run/
