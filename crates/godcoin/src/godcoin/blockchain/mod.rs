@@ -151,27 +151,23 @@ impl Blockchain {
                 let has_match = if filter.is_empty() {
                     false
                 } else {
-                    block
-                        .txs()
-                        .iter()
-                        .find(|&tx| match tx {
-                            TxVariant::V0(tx) => match tx {
-                                TxVariantV0::OwnerTx(owner_tx) => {
-                                    let hash = ScriptHash::from(&owner_tx.script);
-                                    filter.contains(&owner_tx.wallet) || filter.contains(&hash)
-                                }
-                                TxVariantV0::MintTx(mint_tx) => {
-                                    let hash = (&mint_tx.script).into();
-                                    filter.contains(&hash) || filter.contains(&mint_tx.to)
-                                }
-                                TxVariantV0::RewardTx(reward_tx) => filter.contains(&reward_tx.to),
-                                TxVariantV0::TransferTx(transfer_tx) => {
-                                    filter.contains(&transfer_tx.from)
-                                        || filter.contains(&transfer_tx.to)
-                                }
-                            },
-                        })
-                        .is_some()
+                    block.txs().iter().any(|tx| match tx {
+                        TxVariant::V0(tx) => match tx {
+                            TxVariantV0::OwnerTx(owner_tx) => {
+                                let hash = ScriptHash::from(&owner_tx.script);
+                                filter.contains(&owner_tx.wallet) || filter.contains(&hash)
+                            }
+                            TxVariantV0::MintTx(mint_tx) => {
+                                let hash = (&mint_tx.script).into();
+                                filter.contains(&hash) || filter.contains(&mint_tx.to)
+                            }
+                            TxVariantV0::RewardTx(reward_tx) => filter.contains(&reward_tx.to),
+                            TxVariantV0::TransferTx(transfer_tx) => {
+                                filter.contains(&transfer_tx.from)
+                                    || filter.contains(&transfer_tx.to)
+                            }
+                        },
+                    })
                 };
                 if has_match {
                     Some(FilteredBlock::Block(block))
