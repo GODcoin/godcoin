@@ -18,7 +18,7 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    pub fn new(home: PathBuf) -> Wallet {
+    pub fn new(home: PathBuf, url: &str) -> Wallet {
         let db = Db::new(home.join("wallet_db"));
         let prompt = (if db.state() == DbState::Locked {
             "locked>> "
@@ -27,7 +27,7 @@ impl Wallet {
         })
         .to_owned();
 
-        let mut url: Url = "ws://localhost:7777".parse().unwrap();
+        let mut url: Url = url.parse().unwrap();
         if url.host_str().is_none() {
             panic!("Expected url to have host");
         }

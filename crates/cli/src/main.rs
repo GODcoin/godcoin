@@ -1,4 +1,4 @@
-use clap::{App, AppSettings, SubCommand};
+use clap::{App, AppSettings, Arg, SubCommand};
 use std::{
     env,
     path::{Path, PathBuf},
@@ -21,12 +21,22 @@ fn main() {
         .setting(AppSettings::VersionlessSubcommands)
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(SubCommand::with_name("keygen").about("Generates a keypair"))
-        .subcommand(SubCommand::with_name("wallet").about("Opens the GODcoin CLI wallet"));
+        .subcommand(
+            SubCommand::with_name("wallet")
+                .about("Opens the GODcoin CLI wallet")
+                .arg(
+                    Arg::with_name("node_url")
+                        .long("node-url")
+                        .default_value("ws://localhost:7777")
+                        .empty_values(false)
+                        .help("Connects to the following node"),
+                ),
+        );
     let matches = app.get_matches();
 
     if matches.subcommand_matches("keygen").is_some() {
         generate_keypair();
-    } else if matches.subcommand_matches("wallet").is_some() {
+    } else if let Some(matches) = matches.subcommand_matches("wallet") {
         let home: PathBuf = {
             let home = {
                 match env::var("GODCOIN_HOME") {
@@ -44,7 +54,8 @@ fn main() {
             home
         };
 
-        Wallet::new(home).start();
+        let url = matches.value_of("node_url").unwrap();
+        Wallet::new(home, url).start();
     } else {
         println!("Failed to match subcommand");
         std::process::exit(1);
