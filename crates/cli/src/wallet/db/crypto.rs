@@ -1,13 +1,5 @@
 use sodiumoxide::crypto::secretbox;
 
-pub struct Password(pub Vec<u8>);
-
-impl Drop for Password {
-    fn drop(&mut self) {
-        sodiumoxide::utils::memzero(&mut self.0);
-    }
-}
-
 pub fn encrypt_with_key(msg: &[u8], key: &secretbox::Key) -> Vec<u8> {
     let nonce = secretbox::gen_nonce();
     let cipher_text = secretbox::seal(msg, &nonce, key);

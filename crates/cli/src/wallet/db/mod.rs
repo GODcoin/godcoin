@@ -1,18 +1,21 @@
-use godcoin::crypto::{double_sha256, KeyPair, PrivateKey, Wif};
+use godcoin::crypto::{KeyPair, PrivateKey, Wif};
 use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, DB};
-use sodiumoxide::crypto::secretbox::{gen_key, Key};
-use std::path::PathBuf;
+use sodiumoxide::{
+    crypto::{
+        pwhash::argon2id13,
+        secretbox::{self, gen_key, Key},
+    },
+    randombytes::randombytes_into,
+};
+use std::{borrow::Cow, path::PathBuf};
 
 mod crypto;
 
 use self::crypto::*;
 
-pub use self::crypto::Password;
-
 pub const CF_ACCOUNTS: &str = "accounts";
 
 pub const PROP_INIT: &[u8] = b"init";
-pub const PROP_INIT_KEY: &[u8] = b"init_key";
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DbState {
@@ -51,66 +54,81 @@ impl Db {
         self.state
     }
 
-    pub fn set_password(&mut self, pass: &Password) {
+    pub fn set_password(&mut self, pass: &[u8]) {
         use self::DbState::*;
         assert!(
             self.state == New || self.state == Unlocked,
             "invalid state setting password"
         );
-        let key = double_sha256(&pass.0);
-        let key = Key::from_slice(key.as_ref()).unwrap();
-        {
-            let hash = double_sha256(&key.0);
-            let enc = encrypt_with_key(hash.as_ref(), &key);
-            {
-                // Sanity decryption test
-                let dec = decrypt_with_key(&enc, &key).unwrap();
-                assert_eq!(dec, hash.as_ref());
-            }
-            self.db.put(PROP_INIT, &enc).unwrap();
-        }
 
-        match self.state {
-            DbState::New => {
-                let perm_key = gen_key();
-                let enc = encrypt_with_key(&perm_key.0, &key);
-                self.db.put(PROP_INIT_KEY, &enc).unwrap();
-            }
-            DbState::Unlocked => {
-                let perm_key = self.db.get(PROP_INIT_KEY).unwrap().unwrap();
-                let enc = encrypt_with_key(&perm_key, &key);
-                self.db.put(PROP_INIT_KEY, &enc).unwrap();
-            }
-            _ => unreachable!(),
-        }
+        let salt = {
+            let mut bytes = [0; argon2id13::SALTBYTES];
+            randombytes_into(&mut bytes);
+            argon2id13::Salt(bytes)
+        };
+
+        let perm_key = {
+            let temp_key = {
+                let mut bytes = [0; secretbox::KEYBYTES];
+                argon2id13::derive_key(
+                    &mut bytes,
+                    &pass,
+                    &salt,
+                    argon2id13::OPSLIMIT_MODERATE,
+                    argon2id13::MEMLIMIT_MODERATE,
+                )
+                .unwrap();
+                Key(bytes)
+            };
+
+            let perm_key_dec = match self.state {
+                DbState::New => Cow::Owned(gen_key()),
+                DbState::Unlocked => Cow::Borrowed(self.key.as_ref().unwrap()),
+                _ => unreachable!(),
+            };
+
+            encrypt_with_key(perm_key_dec.as_ref().as_ref(), &temp_key)
+        };
+
+        let mut prop_bytes = Vec::with_capacity(salt.as_ref().len() + perm_key.len());
+        prop_bytes.extend_from_slice(salt.as_ref());
+        prop_bytes.extend_from_slice(&perm_key);
+        self.db.put(PROP_INIT, prop_bytes).unwrap();
+
+        // If the wallet is already unlocked, lock it again.
         self.lock();
     }
 
-    pub fn unlock(&mut self, pass: &Password) -> bool {
+    pub fn unlock(&mut self, pass: &[u8]) -> bool {
         assert_eq!(self.state, DbState::Locked);
-        let key = double_sha256(&pass.0);
-        let key = Key::from_slice(key.as_ref()).unwrap();
-        {
-            let msg = self.db.get(PROP_INIT).unwrap().unwrap();
-            let msg = decrypt_with_key(&msg, &key);
-            match msg {
-                Some(msg) => {
-                    let hash = double_sha256(&key.0);
-                    if hash.as_ref() != msg.as_slice() {
-                        return false;
-                    }
-                }
-                None => return false,
+
+        let init_bytes = self.db.get(PROP_INIT).unwrap().unwrap();
+        let salt = argon2id13::Salt::from_slice(&init_bytes[0..argon2id13::SALTBYTES]).unwrap();
+
+        let temp_key = {
+            let mut bytes = [0; secretbox::KEYBYTES];
+            argon2id13::derive_key(
+                &mut bytes,
+                &pass,
+                &salt,
+                argon2id13::OPSLIMIT_MODERATE,
+                argon2id13::MEMLIMIT_MODERATE,
+            )
+            .unwrap();
+            Key(bytes)
+        };
+
+        let key_enc = &init_bytes[argon2id13::SALTBYTES..];
+        match decrypt_with_key(&key_enc, &temp_key) {
+            Some(mut key) => {
+                self.key = Some(Key::from_slice(&key).unwrap());
+                self.state = DbState::Unlocked;
+                sodiumoxide::utils::memzero(&mut key);
+
+                true
             }
+            None => false,
         }
-        {
-            let msg = self.db.get(PROP_INIT_KEY).unwrap().unwrap();
-            let mut msg = decrypt_with_key(&msg, &key).unwrap();
-            self.key = Some(Key::from_slice(&msg).unwrap());
-            self.state = DbState::Unlocked;
-            sodiumoxide::utils::memzero(&mut msg);
-        }
-        true
     }
 
     pub fn lock(&mut self) {

@@ -1,4 +1,4 @@
-use super::{db::Password, *};
+use super::*;
 use godcoin::{constants::*, prelude::*};
 use std::{
     fs::File,
@@ -27,7 +27,7 @@ pub fn create_wallet(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
     }
 
     check_args!(args, 1);
-    let pass = &Password(args.remove(1).into_bytes());
+    let pass = &args[1].as_ref();
     wallet.db.set_password(pass);
     wallet.prompt = "locked>> ".to_owned();
     Ok(())
@@ -47,7 +47,7 @@ pub fn unlock(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String>
     }
 
     check_args!(args, 1);
-    let pass = &Password(args.remove(1).into_bytes());
+    let pass = &args[1].as_ref();
     if wallet.db.unlock(pass) {
         wallet.prompt = "unlocked>> ".to_owned();
     } else {
