@@ -34,6 +34,10 @@ impl Wallet {
         if url.port().is_none() {
             url.set_port(Some(7777)).unwrap();
         }
+        match url.scheme() {
+            "ws" | "wss" => {}
+            _ => panic!("Expected node URL scheme to be ws or wss"),
+        }
 
         Wallet {
             db,

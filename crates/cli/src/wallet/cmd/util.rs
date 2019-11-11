@@ -1,11 +1,12 @@
 use crate::Wallet;
 use godcoin::net::{Request, RequestBody, Response, ResponseBody};
+use native_tls::TlsConnector;
 use std::{
     io::Cursor,
     net::{SocketAddr, TcpStream, ToSocketAddrs},
     time::Duration,
 };
-use tungstenite::{client, handshake::client::Request as WsReq, protocol::Message};
+use tungstenite::{client, handshake::client::Request as WsReq, protocol::Message, stream::Stream};
 
 macro_rules! check_unlocked {
     ($self:expr) => {
@@ -82,8 +83,21 @@ pub fn send_rpc_req(wallet: &mut Wallet, body: RequestBody) -> Result<ResponseBo
             }
         };
 
-        let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(1))
+        let stream = TcpStream::connect_timeout(&addr, Duration::from_secs(3))
             .map_err(|e| format!("Failed to connect to host: {:?}", e))?;
+        let stream = match wallet.url.scheme() {
+            "ws" => Stream::Plain(stream),
+            "wss" => {
+                let connector = TlsConnector::new().unwrap();
+                Stream::Tls(
+                    connector
+                        .connect(wallet.url.host_str().unwrap(), stream)
+                        .unwrap(),
+                )
+            }
+            _ => panic!("Expected node url scheme to be ws or wss"),
+        };
+
         let (ws, _) = client(
             WsReq {
                 url: wallet.url.clone(),
