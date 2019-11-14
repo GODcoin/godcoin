@@ -7,9 +7,6 @@ RUN apt-get update && \
         make \
         clang
 
-# Required for libsodium-sys crate
-RUN rustup component add rustfmt
-
 # Copy and build
 COPY . .
 RUN cargo build -p godcoin-server --release
