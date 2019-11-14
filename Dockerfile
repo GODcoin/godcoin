@@ -4,8 +4,6 @@ WORKDIR /app
 
 RUN apt-get update && \
     apt-get install -y \
-        libsodium23 \
-        libsodium-dev \
         make \
         clang
 
