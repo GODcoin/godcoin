@@ -3,7 +3,6 @@ use crate::{
     serializer::*,
 };
 use std::{
-    collections::BTreeSet,
     io::{self, Cursor, Error},
     mem,
     sync::Arc,
@@ -58,10 +57,11 @@ pub enum BodyType {
     // Operations that can update the connection or blockchain state
     Broadcast = 0x10,
     SetBlockFilter = 0x11,
+    ClearBlockFilter = 0x12,
     /// Subscribe to receive block updates. Any block filters applied may be ignored.
-    Subscribe = 0x12,
+    Subscribe = 0x13,
     /// Unsubscribe from receiving block updates.
-    Unsubscribe = 0x13,
+    Unsubscribe = 0x14,
 
     // Getters
     GetProperties = 0x20,
@@ -74,6 +74,7 @@ pub enum BodyType {
 pub enum RequestBody {
     Broadcast(TxVariant),
     SetBlockFilter(BlockFilter),
+    ClearBlockFilter,
     Subscribe,
     Unsubscribe,
     GetProperties,
@@ -91,21 +92,14 @@ impl RequestBody {
                 tx.serialize(buf);
             }
             Self::SetBlockFilter(filter) => {
+                buf.reserve_exact(1 + filter.len() * mem::size_of::<ScriptHash>());
                 buf.push(BodyType::SetBlockFilter as u8);
-                match filter {
-                    BlockFilter::None => {
-                        // Addr len
-                        buf.push(0);
-                    }
-                    BlockFilter::Addr(addrs) => {
-                        buf.reserve_exact(1 + addrs.len() * mem::size_of::<ScriptHash>());
-                        buf.push(addrs.len() as u8);
-                        for addr in addrs {
-                            buf.push_digest(&addr.0);
-                        }
-                    }
+                buf.push(filter.len() as u8);
+                for addr in filter {
+                    buf.push_digest(&addr.0);
                 }
             }
+            Self::ClearBlockFilter => buf.push(BodyType::ClearBlockFilter as u8),
             Self::Subscribe => buf.push(BodyType::Subscribe as u8),
             Self::Unsubscribe => buf.push(BodyType::Unsubscribe as u8),
             Self::GetProperties => buf.push(BodyType::GetProperties as u8),
@@ -137,16 +131,13 @@ impl RequestBody {
             }
             t if t == BodyType::SetBlockFilter as u8 => {
                 let addr_len = usize::from(cursor.take_u8()?);
-                if addr_len == 0 {
-                    Ok(Self::SetBlockFilter(BlockFilter::None))
-                } else {
-                    let mut addrs = BTreeSet::new();
-                    for _ in 0..addr_len {
-                        addrs.insert(ScriptHash(cursor.take_digest()?));
-                    }
-                    Ok(Self::SetBlockFilter(BlockFilter::Addr(addrs)))
+                let mut filter = BlockFilter::new();
+                for _ in 0..addr_len {
+                    filter.insert(ScriptHash(cursor.take_digest()?));
                 }
+                Ok(Self::SetBlockFilter(filter))
             }
+            t if t == BodyType::ClearBlockFilter as u8 => Ok(Self::ClearBlockFilter),
             t if t == BodyType::Subscribe as u8 => Ok(Self::Subscribe),
             t if t == BodyType::Unsubscribe as u8 => Ok(Self::Unsubscribe),
             t if t == BodyType::GetProperties as u8 => Ok(Self::GetProperties),
@@ -175,6 +166,7 @@ pub enum ResponseBody {
     Error(ErrorKind),
     Broadcast,
     SetBlockFilter,
+    ClearBlockFilter,
     Subscribe,
     Unsubscribe,
     GetProperties(Properties),
@@ -203,6 +195,7 @@ impl ResponseBody {
             }
             Self::Broadcast => buf.push(BodyType::Broadcast as u8),
             Self::SetBlockFilter => buf.push(BodyType::SetBlockFilter as u8),
+            Self::ClearBlockFilter => buf.push(BodyType::ClearBlockFilter as u8),
             Self::Subscribe => buf.push(BodyType::Subscribe as u8),
             Self::Unsubscribe => buf.push(BodyType::Unsubscribe as u8),
             Self::GetProperties(props) => {
@@ -257,6 +250,7 @@ impl ResponseBody {
             }
             t if t == BodyType::Broadcast as u8 => Ok(Self::Broadcast),
             t if t == BodyType::SetBlockFilter as u8 => Ok(Self::SetBlockFilter),
+            t if t == BodyType::ClearBlockFilter as u8 => Ok(Self::ClearBlockFilter),
             t if t == BodyType::Subscribe as u8 => Ok(Self::Subscribe),
             t if t == BodyType::Unsubscribe as u8 => Ok(Self::Unsubscribe),
             t if t == BodyType::GetProperties as u8 => {

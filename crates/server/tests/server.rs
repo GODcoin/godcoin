@@ -3,7 +3,7 @@ use godcoin::{
     prelude::{net::ErrorKind, *},
 };
 use godcoin_server::WsState;
-use std::{collections::BTreeSet, net::SocketAddr};
+use std::net::SocketAddr;
 
 mod common;
 pub use common::*;
@@ -53,18 +53,18 @@ fn get_block_unfiltered() {
 }
 
 #[test]
-fn get_block_filtered() {
+fn get_block_filtered_with_addresses() {
     let mut state = create_uninit_state();
     let minter = TestMinter::new();
 
-    let mut filter = BTreeSet::<ScriptHash>::new();
+    let mut filter = BlockFilter::new();
     filter.insert((&minter.genesis_info().script).into());
     let res = minter
         .send_request(
             &mut state,
             net::Request {
                 id: 0,
-                body: RequestBody::SetBlockFilter(BlockFilter::Addr(filter.clone())),
+                body: RequestBody::SetBlockFilter(filter.clone()),
             },
         )
         .body;
@@ -137,6 +137,130 @@ fn get_block_filtered() {
                 net::Request {
                     id: 0,
                     body: RequestBody::GetBlock(3),
+                },
+            )
+            .body;
+        assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(block)));
+    }
+}
+
+#[test]
+fn get_block_filtered_all() {
+    let mut state = create_uninit_state();
+    let minter = TestMinter::new();
+
+    {
+        // Unfiltered
+        let block = minter.chain().get_block(1).unwrap();
+        let res = minter
+            .send_request(
+                &mut state,
+                net::Request {
+                    id: 0,
+                    body: RequestBody::GetBlock(1),
+                },
+            )
+            .body;
+        assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(block)));
+    }
+
+    // Empty filter means filter everything
+    let filter = BlockFilter::new();
+    let res = minter
+        .send_request(
+            &mut state,
+            net::Request {
+                id: 0,
+                body: RequestBody::SetBlockFilter(filter.clone()),
+            },
+        )
+        .body;
+    assert_eq!(res, ResponseBody::SetBlockFilter);
+    assert!(!res.is_err());
+
+    assert_eq!(state.filter(), Some(&filter));
+
+    {
+        // Filtered
+        let block = minter.chain().get_block(1).unwrap();
+        let res = minter
+            .send_request(
+                &mut state,
+                net::Request {
+                    id: 0,
+                    body: RequestBody::GetBlock(1),
+                },
+            )
+            .body;
+        let signer = block.signer().unwrap().clone();
+        assert_eq!(
+            res,
+            ResponseBody::GetBlock(FilteredBlock::Header((block.header(), signer)))
+        );
+    }
+}
+
+#[test]
+fn clear_block_filter() {
+    let mut state = create_uninit_state();
+    let minter = TestMinter::new();
+
+    // Empty filter means filter everything
+    let filter = BlockFilter::new();
+    let res = minter
+        .send_request(
+            &mut state,
+            net::Request {
+                id: 0,
+                body: RequestBody::SetBlockFilter(filter.clone()),
+            },
+        )
+        .body;
+    assert_eq!(res, ResponseBody::SetBlockFilter);
+    assert!(!res.is_err());
+
+    assert_eq!(state.filter(), Some(&filter));
+
+    {
+        // Filtered
+        let block = minter.chain().get_block(1).unwrap();
+        let res = minter
+            .send_request(
+                &mut state,
+                net::Request {
+                    id: 0,
+                    body: RequestBody::GetBlock(1),
+                },
+            )
+            .body;
+        let signer = block.signer().unwrap().clone();
+        assert_eq!(
+            res,
+            ResponseBody::GetBlock(FilteredBlock::Header((block.header(), signer)))
+        );
+    }
+
+    let res = minter
+        .send_request(
+            &mut state,
+            net::Request {
+                id: 0,
+                body: RequestBody::ClearBlockFilter,
+            },
+        )
+        .body;
+    assert_eq!(res, ResponseBody::ClearBlockFilter);
+    assert!(!res.is_err());
+
+    {
+        // Unfiltered
+        let block = minter.chain().get_block(1).unwrap();
+        let res = minter
+            .send_request(
+                &mut state,
+                net::Request {
+                    id: 0,
+                    body: RequestBody::GetBlock(1),
                 },
             )
             .body;

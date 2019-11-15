@@ -1,7 +1,7 @@
 use futures::sync::mpsc::{self, UnboundedSender};
 use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
 use log::{error, info, warn};
-use std::{collections::BTreeSet, io::Cursor, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{io::Cursor, net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::{net::TcpListener, prelude::*};
 use tokio_tungstenite::tungstenite::{protocol, Message};
 
@@ -185,18 +185,15 @@ fn handle_request(data: &ServerData, state: &mut WsState, body: RequestBody) -> 
             }
         }
         RequestBody::SetBlockFilter(filter) => {
-            match filter {
-                BlockFilter::Addr(addrs) => {
-                    if addrs.len() > 16 {
-                        return ResponseBody::Error(ErrorKind::InvalidRequest);
-                    }
-                    state.filter = Some(addrs);
-                }
-                BlockFilter::None => {
-                    state.filter = None;
-                }
+            if filter.len() > 16 {
+                return ResponseBody::Error(ErrorKind::InvalidRequest);
             }
+            state.filter = Some(filter);
             ResponseBody::SetBlockFilter
+        }
+        RequestBody::ClearBlockFilter => {
+            state.filter = None;
+            ResponseBody::ClearBlockFilter
         }
         RequestBody::Subscribe => {
             data.sub_pool.insert(state.addr(), state.sender());
@@ -239,7 +236,7 @@ fn handle_request(data: &ServerData, state: &mut WsState, body: RequestBody) -> 
 }
 
 pub struct WsState {
-    filter: Option<BTreeSet<ScriptHash>>,
+    filter: Option<BlockFilter>,
     addr: SocketAddr,
     tx: UnboundedSender<Message>,
 }
@@ -260,7 +257,7 @@ impl WsState {
     }
 
     #[inline]
-    pub fn filter(&self) -> Option<&BTreeSet<ScriptHash>> {
+    pub fn filter(&self) -> Option<&BlockFilter> {
         self.filter.as_ref()
     }
 

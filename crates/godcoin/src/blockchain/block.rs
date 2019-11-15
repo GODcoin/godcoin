@@ -5,14 +5,7 @@ use crate::{
 };
 use std::{collections::BTreeSet, io::Cursor, ops::Deref, sync::Arc};
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum BlockFilter {
-    /// No filter applied
-    None,
-    /// Filters block based on funds being transferred from or to an address. Some nodes may treat a request with
-    /// too many addresses as invalid.
-    Addr(BTreeSet<ScriptHash>),
-}
+pub type BlockFilter = BTreeSet<ScriptHash>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum FilteredBlock {

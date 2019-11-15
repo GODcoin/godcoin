@@ -5,6 +5,14 @@ simplifies documenting any changes.
 
 # Unreleased
 
+- Network protocol supports setting the block filter with an empty hash set to
+  retrieve only block headers.
+- Add ClearBlockFilter API to the network protocol.
+
+### Breaking changes
+
+- The network protocol message type constants have been changed.
+
 # Version 0.1.0 (2019-11-14)
 
 This marks the first release of the project. The blockchain server supports

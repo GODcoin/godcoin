@@ -1,6 +1,6 @@
 use log::info;
 use parking_lot::Mutex;
-use std::{collections::BTreeSet, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 pub mod block;
 pub mod index;
@@ -138,11 +138,7 @@ impl Blockchain {
         store.get(height)
     }
 
-    pub fn get_filtered_block(
-        &self,
-        height: u64,
-        filter: &BTreeSet<ScriptHash>,
-    ) -> Option<FilteredBlock> {
+    pub fn get_filtered_block(&self, height: u64, filter: &BlockFilter) -> Option<FilteredBlock> {
         let store = self.store.lock();
         let block = store.get(height);
 
