@@ -269,17 +269,64 @@ fn clear_block_filter() {
 }
 
 #[test]
-fn get_block_header() {
+fn get_full_block() {
+    let mut state = create_uninit_state();
     let minter = TestMinter::new();
-    let res = minter.request(RequestBody::GetBlockHeader(0));
-    assert!(!res.is_err());
 
-    let other = minter.chain().get_block(0).unwrap();
-    let header = other.header();
-    let signer = other.signer().unwrap().clone();
-    assert_eq!(res, ResponseBody::GetBlockHeader { header, signer });
+    {
+        // Empty filter means filter everything
+        let filter = BlockFilter::new();
+        let res = minter
+            .send_request(
+                &mut state,
+                net::Request {
+                    id: 0,
+                    body: RequestBody::SetBlockFilter(filter.clone()),
+                },
+            )
+            .body;
+        assert_eq!(res, ResponseBody::SetBlockFilter);
+        assert!(!res.is_err());
 
-    let res = minter.request(RequestBody::GetBlockHeader(2));
+        assert_eq!(state.filter(), Some(&filter));
+    }
+
+    {
+        // Filtered
+        let block = minter.chain().get_block(1).unwrap();
+        let res = minter
+            .send_request(
+                &mut state,
+                net::Request {
+                    id: 0,
+                    body: RequestBody::GetBlock(1),
+                },
+            )
+            .body;
+        let signer = block.signer().unwrap().clone();
+        assert_eq!(
+            res,
+            ResponseBody::GetBlock(FilteredBlock::Header((block.header(), signer)))
+        );
+    }
+
+    {
+        // Full block
+        let res = minter
+            .send_request(
+                &mut state,
+                net::Request {
+                    id: 0,
+                    body: RequestBody::GetFullBlock(1),
+                },
+            )
+            .body;
+        let other = minter.chain().get_block(1).unwrap();
+        assert_eq!(res, ResponseBody::GetFullBlock(other));
+    }
+
+    // Invalid height
+    let res = minter.request(RequestBody::GetFullBlock(2));
     assert!(res.is_err());
     assert_eq!(res, ResponseBody::Error(ErrorKind::InvalidHeight));
 }

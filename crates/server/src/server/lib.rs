@@ -217,12 +217,8 @@ fn handle_request(data: &ServerData, state: &mut WsState, body: RequestBody) -> 
                 None => ResponseBody::Error(ErrorKind::InvalidHeight),
             },
         },
-        RequestBody::GetBlockHeader(height) => match data.chain.get_block(height) {
-            Some(block) => {
-                let header = block.header();
-                let signer = block.signer().expect("cannot get unsigned block").clone();
-                ResponseBody::GetBlockHeader { header, signer }
-            }
+        RequestBody::GetFullBlock(height) => match data.chain.get_block(height) {
+            Some(block) => ResponseBody::GetFullBlock(block),
             None => ResponseBody::Error(ErrorKind::InvalidHeight),
         },
         RequestBody::GetAddressInfo(addr) => {

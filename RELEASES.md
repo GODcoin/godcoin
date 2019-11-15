@@ -7,7 +7,10 @@ simplifies documenting any changes.
 
 - Network protocol supports setting the block filter with an empty hash set to
   retrieve only block headers.
-- Add ClearBlockFilter API to the network protocol.
+- Add ClearBlockFilter net API to the network protocol.
+- Remove GetBlockHeader net API from the network protocol.
+- Add GetFullBlock net API to allow filtering all blocks and allow retrieving
+  full blocks when necessary.
 
 ### Breaking changes
 

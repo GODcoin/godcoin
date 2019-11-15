@@ -66,7 +66,7 @@ pub enum BodyType {
     // Getters
     GetProperties = 0x20,
     GetBlock = 0x21,
-    GetBlockHeader = 0x22,
+    GetFullBlock = 0x22,
     GetAddressInfo = 0x23,
 }
 
@@ -78,8 +78,8 @@ pub enum RequestBody {
     Subscribe,
     Unsubscribe,
     GetProperties,
-    GetBlock(u64),       // height
-    GetBlockHeader(u64), // height
+    GetBlock(u64),     // height
+    GetFullBlock(u64), // height
     GetAddressInfo(ScriptHash),
 }
 
@@ -108,9 +108,9 @@ impl RequestBody {
                 buf.push(BodyType::GetBlock as u8);
                 buf.push_u64(*height);
             }
-            Self::GetBlockHeader(height) => {
+            Self::GetFullBlock(height) => {
                 buf.reserve_exact(9);
-                buf.push(BodyType::GetBlockHeader as u8);
+                buf.push(BodyType::GetFullBlock as u8);
                 buf.push_u64(*height);
             }
             Self::GetAddressInfo(addr) => {
@@ -145,9 +145,9 @@ impl RequestBody {
                 let height = cursor.take_u64()?;
                 Ok(Self::GetBlock(height))
             }
-            t if t == BodyType::GetBlockHeader as u8 => {
+            t if t == BodyType::GetFullBlock as u8 => {
                 let height = cursor.take_u64()?;
-                Ok(Self::GetBlockHeader(height))
+                Ok(Self::GetFullBlock(height))
             }
             t if t == BodyType::GetAddressInfo as u8 => {
                 let addr = ScriptHash(cursor.take_digest()?);
@@ -171,10 +171,7 @@ pub enum ResponseBody {
     Unsubscribe,
     GetProperties(Properties),
     GetBlock(FilteredBlock),
-    GetBlockHeader {
-        header: BlockHeader,
-        signer: SigPair,
-    },
+    GetFullBlock(Arc<Block>),
     GetAddressInfo(AddressInfo),
 }
 
@@ -225,11 +222,10 @@ impl ResponseBody {
                     }
                 }
             }
-            Self::GetBlockHeader { header, signer } => {
-                buf.reserve_exact(256);
-                buf.push(BodyType::GetBlockHeader as u8);
-                header.serialize(buf);
-                buf.push_sig_pair(signer);
+            Self::GetFullBlock(block) => {
+                buf.reserve_exact(1_048_576);
+                buf.push(BodyType::GetFullBlock as u8);
+                block.serialize(buf);
             }
             Self::GetAddressInfo(info) => {
                 buf.reserve_exact(1 + (mem::size_of::<Asset>() * 3));
@@ -300,11 +296,10 @@ impl ResponseBody {
                     )),
                 }
             }
-            t if t == BodyType::GetBlockHeader as u8 => {
-                let header = BlockHeader::deserialize(cursor)
+            t if t == BodyType::GetFullBlock as u8 => {
+                let block = Block::deserialize(cursor)
                     .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
-                let signer = cursor.take_sig_pair()?;
-                Ok(Self::GetBlockHeader { header, signer })
+                Ok(Self::GetFullBlock(Arc::new(block)))
             }
             t if t == BodyType::GetAddressInfo as u8 => {
                 let net_fee = cursor.take_asset()?;
