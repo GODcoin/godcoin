@@ -127,31 +127,31 @@ impl TestMinter {
         self.0.minter.force_produce_block(true)
     }
 
-    pub fn request(&self, body: RequestBody) -> ResponseBody {
+    pub fn request(&self, body: RequestBody) -> Option<ResponseBody> {
         let (tx, _) = futures::sync::mpsc::unbounded();
         let mut state = WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx);
-        let res = self.send_request(&mut state, net::Request { id: 0, body });
-        res.body
+        let res = self.send_request(&mut state, net::Request { id: 0, body })?;
+        Some(res.body)
     }
 
-    pub fn send_request(&self, state: &mut WsState, req: net::Request) -> net::Response {
+    pub fn send_request(&self, state: &mut WsState, req: net::Request) -> Option<net::Response> {
         let mut buf = Vec::with_capacity(1_048_576);
         req.serialize(&mut buf);
         self.raw_request(state, buf)
     }
 
-    pub fn raw_request(&self, state: &mut WsState, req_bytes: Vec<u8>) -> net::Response {
+    pub fn raw_request(&self, state: &mut WsState, req_bytes: Vec<u8>) -> Option<net::Response> {
         assert!(
             self.3,
             "attempting to send a request to an unindexed minter"
         );
 
-        let res = match process_message(&self.0, state, Message::Binary(req_bytes)).unwrap() {
+        let res = match process_message(&self.0, state, Message::Binary(req_bytes))? {
             Message::Binary(res) => res,
             _ => panic!("Expected binary response"),
         };
         let mut cur = Cursor::<&[u8]>::new(&res);
-        net::Response::deserialize(&mut cur).unwrap()
+        Some(net::Response::deserialize(&mut cur).unwrap())
     }
 }
 

@@ -61,7 +61,7 @@ fn reindexed_blockchain() {
     {
         // Broadcast the tx
         let res = minter.request(RequestBody::Broadcast(tx.clone()));
-        assert_eq!(res, ResponseBody::Broadcast);
+        assert_eq!(res, Some(ResponseBody::Broadcast));
         minter.produce_block().unwrap();
     }
 
@@ -115,7 +115,7 @@ fn reindexed_blockchain() {
 
     assert_eq!(
         res,
-        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxDupe))
+        Some(ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxDupe)))
     );
 }
 
@@ -134,10 +134,10 @@ fn tx_dupe() {
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
     tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-    let res = minter.request(RequestBody::Broadcast(tx.clone()));
+    let res = minter.request(RequestBody::Broadcast(tx.clone())).unwrap();
     assert!(!res.is_err(), format!("{:?}", res));
 
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
     assert!(res.is_err());
     assert_eq!(
         res,
@@ -161,7 +161,7 @@ fn tx_expired() {
         script: minter.genesis_info().script.clone(),
     }));
 
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
     assert!(res.is_err());
     assert_eq!(
         res,
@@ -183,7 +183,7 @@ fn tx_far_in_the_future() {
         script: minter.genesis_info().script.clone(),
     }));
 
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
     assert!(res.is_err());
     assert_eq!(
         res,
@@ -204,7 +204,7 @@ fn tx_script_too_large_err() {
         script: Script::new((0..=constants::MAX_SCRIPT_BYTE_SIZE).map(|_| 0).collect()),
     }));
 
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
     assert!(res.is_err());
     assert_eq!(
         res,
@@ -226,7 +226,7 @@ fn tx_too_many_signatures_err() {
     }));
     (0..=constants::MAX_TX_SIGNATURES).for_each(|_| tx.append_sign(&KeyPair::gen()));
 
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
     assert!(res.is_err());
     assert_eq!(
         res,

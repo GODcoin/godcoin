@@ -22,7 +22,7 @@ fn owner_tx_minter_key_change() {
         tx
     };
 
-    let res = minter.request(RequestBody::Broadcast(tx.clone()));
+    let res = minter.request(RequestBody::Broadcast(tx.clone())).unwrap();
     assert!(!res.is_err(), format!("{:?}", res));
     assert_eq!(res, ResponseBody::Broadcast);
     minter.produce_block().unwrap();
@@ -52,7 +52,7 @@ fn owner_tx_deny_mint_tokens() {
         tx
     };
 
-    let res = minter.request(RequestBody::Broadcast(tx.clone()));
+    let res = minter.request(RequestBody::Broadcast(tx.clone())).unwrap();
     assert!(!res.is_err(), format!("{:?}", res));
     assert_eq!(res, ResponseBody::Broadcast);
     minter.produce_block().unwrap();
@@ -75,9 +75,9 @@ fn owner_tx_deny_mint_tokens() {
     let res = minter.request(RequestBody::Broadcast(tx));
     assert_eq!(
         res,
-        ResponseBody::Error(net::ErrorKind::TxValidation(
+        Some(ResponseBody::Error(net::ErrorKind::TxValidation(
             verify::TxErr::ScriptHashMismatch
-        ))
+        )))
     );
 }
 
@@ -98,7 +98,7 @@ fn owner_tx_accept_mint_tokens() {
         tx
     };
 
-    let res = minter.request(RequestBody::Broadcast(tx.clone()));
+    let res = minter.request(RequestBody::Broadcast(tx.clone())).unwrap();
     assert!(!res.is_err(), format!("{:?}", res));
     assert_eq!(res, ResponseBody::Broadcast);
     minter.produce_block().unwrap();
@@ -117,7 +117,7 @@ fn owner_tx_accept_mint_tokens() {
     }));
     tx.append_sign(&wallet_key);
     let res = minter.request(RequestBody::Broadcast(tx));
-    assert_eq!(res, ResponseBody::Broadcast);
+    assert_eq!(res, Some(ResponseBody::Broadcast));
     minter.produce_block().unwrap();
 
     let chain = minter.chain();

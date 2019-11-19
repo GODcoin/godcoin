@@ -148,9 +148,9 @@ pub fn process_message(data: &ServerData, state: &mut WsState, msg: Message) -> 
                             body: ResponseBody::Error(ErrorKind::BytesRemaining),
                         }
                     } else {
-                        Response {
-                            id,
-                            body: handle_request(data, state, req.body),
+                        match handle_request(data, state, req) {
+                            Some(res) => Response { id, body: res },
+                            None => return None,
                         }
                     }
                 }
@@ -175,8 +175,8 @@ pub fn process_message(data: &ServerData, state: &mut WsState, msg: Message) -> 
     }
 }
 
-fn handle_request(data: &ServerData, state: &mut WsState, body: RequestBody) -> ResponseBody {
-    match body {
+fn handle_request(data: &ServerData, state: &mut WsState, req: Request) -> Option<ResponseBody> {
+    Some(match req.body {
         RequestBody::Broadcast(tx) => {
             let res = data.minter.push_tx(tx);
             match res {
@@ -186,7 +186,7 @@ fn handle_request(data: &ServerData, state: &mut WsState, body: RequestBody) -> 
         }
         RequestBody::SetBlockFilter(filter) => {
             if filter.len() > 16 {
-                return ResponseBody::Error(ErrorKind::InvalidRequest);
+                return Some(ResponseBody::Error(ErrorKind::InvalidRequest));
             }
             state.filter = Some(filter);
             ResponseBody::SetBlockFilter
@@ -228,7 +228,7 @@ fn handle_request(data: &ServerData, state: &mut WsState, body: RequestBody) -> 
                 Err(e) => ResponseBody::Error(ErrorKind::TxValidation(e)),
             }
         }
-    }
+    })
 }
 
 pub struct WsState {

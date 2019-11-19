@@ -4,6 +4,7 @@ use godcoin::{
 };
 use godcoin_server::WsState;
 use std::net::SocketAddr;
+use tokio_tungstenite::tungstenite::Message;
 
 mod common;
 pub use common::*;
@@ -24,14 +25,14 @@ fn successful_broadcast() {
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
     tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
     assert_eq!(res, ResponseBody::Broadcast);
 }
 
 #[test]
 fn get_properties() {
     let minter = TestMinter::new();
-    let res = minter.request(RequestBody::GetProperties);
+    let res = minter.request(RequestBody::GetProperties).unwrap();
     let chain_props = minter.chain().get_properties();
     assert!(!res.is_err());
     assert_eq!(res, ResponseBody::GetProperties(chain_props));
@@ -40,21 +41,21 @@ fn get_properties() {
 #[test]
 fn get_block_unfiltered() {
     let minter = TestMinter::new();
-    let res = minter.request(RequestBody::GetBlock(0));
+    let res = minter.request(RequestBody::GetBlock(0)).unwrap();
 
     assert!(!res.is_err());
 
     let other = minter.chain().get_block(0).unwrap();
     assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(other)));
 
-    let res = minter.request(RequestBody::GetBlock(2));
+    let res = minter.request(RequestBody::GetBlock(2)).unwrap();
     assert!(res.is_err());
     assert_eq!(res, ResponseBody::Error(ErrorKind::InvalidHeight));
 }
 
 #[test]
 fn get_block_filtered_with_addresses() {
-    let mut state = create_uninit_state();
+    let mut state = create_uninit_state().0;
     let minter = TestMinter::new();
 
     let mut filter = BlockFilter::new();
@@ -67,6 +68,7 @@ fn get_block_filtered_with_addresses() {
                 body: RequestBody::SetBlockFilter(filter.clone()),
             },
         )
+        .unwrap()
         .body;
     assert_eq!(res, ResponseBody::SetBlockFilter);
     assert!(!res.is_err());
@@ -83,6 +85,7 @@ fn get_block_filtered_with_addresses() {
                     body: RequestBody::GetBlock(1),
                 },
             )
+            .unwrap()
             .body;
         assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(block)));
     }
@@ -104,7 +107,7 @@ fn get_block_filtered_with_addresses() {
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
             tx
         };
-        let res = minter.request(RequestBody::Broadcast(tx));
+        let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
         assert_eq!(res, ResponseBody::Broadcast);
         // Produce block 3, should not be filtered
         minter.produce_block().unwrap();
@@ -120,6 +123,7 @@ fn get_block_filtered_with_addresses() {
                     body: RequestBody::GetBlock(2),
                 },
             )
+            .unwrap()
             .body;
 
         let signer = block.signer().unwrap().clone();
@@ -139,6 +143,7 @@ fn get_block_filtered_with_addresses() {
                     body: RequestBody::GetBlock(3),
                 },
             )
+            .unwrap()
             .body;
         assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(block)));
     }
@@ -146,7 +151,7 @@ fn get_block_filtered_with_addresses() {
 
 #[test]
 fn get_block_filtered_all() {
-    let mut state = create_uninit_state();
+    let mut state = create_uninit_state().0;
     let minter = TestMinter::new();
 
     {
@@ -160,6 +165,7 @@ fn get_block_filtered_all() {
                     body: RequestBody::GetBlock(1),
                 },
             )
+            .unwrap()
             .body;
         assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(block)));
     }
@@ -174,6 +180,7 @@ fn get_block_filtered_all() {
                 body: RequestBody::SetBlockFilter(filter.clone()),
             },
         )
+        .unwrap()
         .body;
     assert_eq!(res, ResponseBody::SetBlockFilter);
     assert!(!res.is_err());
@@ -191,6 +198,7 @@ fn get_block_filtered_all() {
                     body: RequestBody::GetBlock(1),
                 },
             )
+            .unwrap()
             .body;
         let signer = block.signer().unwrap().clone();
         assert_eq!(
@@ -202,7 +210,7 @@ fn get_block_filtered_all() {
 
 #[test]
 fn clear_block_filter() {
-    let mut state = create_uninit_state();
+    let mut state = create_uninit_state().0;
     let minter = TestMinter::new();
 
     // Empty filter means filter everything
@@ -215,6 +223,7 @@ fn clear_block_filter() {
                 body: RequestBody::SetBlockFilter(filter.clone()),
             },
         )
+        .unwrap()
         .body;
     assert_eq!(res, ResponseBody::SetBlockFilter);
     assert!(!res.is_err());
@@ -232,6 +241,7 @@ fn clear_block_filter() {
                     body: RequestBody::GetBlock(1),
                 },
             )
+            .unwrap()
             .body;
         let signer = block.signer().unwrap().clone();
         assert_eq!(
@@ -248,6 +258,7 @@ fn clear_block_filter() {
                 body: RequestBody::ClearBlockFilter,
             },
         )
+        .unwrap()
         .body;
     assert_eq!(res, ResponseBody::ClearBlockFilter);
     assert!(!res.is_err());
@@ -263,6 +274,7 @@ fn clear_block_filter() {
                     body: RequestBody::GetBlock(1),
                 },
             )
+            .unwrap()
             .body;
         assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(block)));
     }
@@ -270,7 +282,7 @@ fn clear_block_filter() {
 
 #[test]
 fn get_full_block() {
-    let mut state = create_uninit_state();
+    let mut state = create_uninit_state().0;
     let minter = TestMinter::new();
 
     {
@@ -284,6 +296,7 @@ fn get_full_block() {
                     body: RequestBody::SetBlockFilter(filter.clone()),
                 },
             )
+            .unwrap()
             .body;
         assert_eq!(res, ResponseBody::SetBlockFilter);
         assert!(!res.is_err());
@@ -302,6 +315,7 @@ fn get_full_block() {
                     body: RequestBody::GetBlock(1),
                 },
             )
+            .unwrap()
             .body;
         let signer = block.signer().unwrap().clone();
         assert_eq!(
@@ -320,13 +334,14 @@ fn get_full_block() {
                     body: RequestBody::GetFullBlock(1),
                 },
             )
+            .unwrap()
             .body;
         let other = minter.chain().get_block(1).unwrap();
         assert_eq!(res, ResponseBody::GetFullBlock(other));
     }
 
     // Invalid height
-    let res = minter.request(RequestBody::GetFullBlock(2));
+    let res = minter.request(RequestBody::GetFullBlock(2)).unwrap();
     assert!(res.is_err());
     assert_eq!(res, ResponseBody::Error(ErrorKind::InvalidHeight));
 }
@@ -335,7 +350,7 @@ fn get_full_block() {
 fn get_address_info() {
     let minter = TestMinter::new();
     let addr = (&minter.genesis_info().script).into();
-    let res = minter.request(RequestBody::GetAddressInfo(addr));
+    let res = minter.request(RequestBody::GetAddressInfo(addr)).unwrap();
     assert!(!res.is_err());
 
     let expected = ResponseBody::GetAddressInfo(AddressInfo {
@@ -366,7 +381,9 @@ fn error_with_bytes_remaining() {
         buf
     };
 
-    let res = minter.raw_request(&mut create_uninit_state(), buf);
+    let res = minter
+        .raw_request(&mut create_uninit_state().0, buf)
+        .unwrap();
     assert!(res.body.is_err());
     assert_eq!(res.id, 123456789);
     assert_eq!(res.body, ResponseBody::Error(ErrorKind::BytesRemaining));
@@ -390,7 +407,9 @@ fn eof_returns_max_u32_id() {
         buf
     };
 
-    let res = minter.raw_request(&mut create_uninit_state(), buf);
+    let res = minter
+        .raw_request(&mut create_uninit_state().0, buf)
+        .unwrap();
     assert!(res.body.is_err());
     assert_eq!(res.id, u32::max_value());
     assert_eq!(res.body, ResponseBody::Error(ErrorKind::Io));
@@ -411,7 +430,9 @@ fn u32_max_val_with_valid_request_fails() {
 
         buf
     };
-    let res = minter.raw_request(&mut create_uninit_state(), buf);
+    let res = minter
+        .raw_request(&mut create_uninit_state().0, buf)
+        .unwrap();
 
     let expected = net::Response {
         id: u32::max_value(),
@@ -436,7 +457,9 @@ fn response_id_matches_request() {
 
         buf
     };
-    let res = minter.raw_request(&mut create_uninit_state(), buf);
+    let res = minter
+        .raw_request(&mut create_uninit_state().0, buf)
+        .unwrap();
 
     assert!(!res.body.is_err());
 
@@ -453,7 +476,10 @@ fn response_id_matches_request() {
     assert_eq!(res, expected);
 }
 
-fn create_uninit_state() -> WsState {
-    let (tx, _) = futures::sync::mpsc::unbounded();
-    WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx)
+fn create_uninit_state() -> (WsState, futures::sync::mpsc::UnboundedReceiver<Message>) {
+    let (tx, rx) = futures::sync::mpsc::unbounded();
+    (
+        WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx),
+        rx,
+    )
 }
