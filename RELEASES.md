@@ -11,10 +11,13 @@ simplifies documenting any changes.
 - Remove GetBlockHeader net API from the network protocol.
 - Add GetFullBlock net API to allow filtering all blocks and allow retrieving
   full blocks when necessary.
+- Add GetBlockRange net API to stream back a range of blocks to the client. This
+  is more efficient than naively looping GetBlock requests to the server.
 
 ### Breaking changes
 
 - The network protocol message type constants have been changed.
+- Clients must support streaming responses from the GetBlockRange network API.
 
 # Version 0.1.0 (2019-11-14)
 

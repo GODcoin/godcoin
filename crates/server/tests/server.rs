@@ -1,9 +1,17 @@
+use futures::prelude::*;
 use godcoin::{
     constants,
     prelude::{net::ErrorKind, *},
 };
 use godcoin_server::WsState;
-use std::net::SocketAddr;
+use std::{
+    io::Cursor,
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 use tokio_tungstenite::tungstenite::Message;
 
 mod common;
@@ -344,6 +352,152 @@ fn get_full_block() {
     let res = minter.request(RequestBody::GetFullBlock(2)).unwrap();
     assert!(res.is_err());
     assert_eq!(res, ResponseBody::Error(ErrorKind::InvalidHeight));
+}
+
+#[test]
+fn get_block_range_unfiltered() {
+    let mut runtime = tokio::runtime::Runtime::new().unwrap();
+    let (tx, rx) = futures::sync::oneshot::channel();
+
+    runtime.spawn(futures::lazy(move || {
+        let minter = TestMinter::new();
+        let (mut state, rx) = create_uninit_state();
+        for _ in 0..100 {
+            minter.produce_block().unwrap();
+        }
+        assert_eq!(minter.chain().get_chain_height(), 101);
+
+        let res = minter.send_request(
+            &mut state,
+            net::Request {
+                id: 123,
+                body: RequestBody::GetBlockRange(0, 100),
+            },
+        );
+        assert_eq!(res, None);
+
+        let height = Arc::new(AtomicU64::new(0));
+        rx.map(move |msg| {
+            let msg = match msg {
+                Message::Binary(msg) => msg,
+                _ => panic!("Expected binary response"),
+            };
+            let mut cur = Cursor::<&[u8]>::new(&msg);
+            net::Response::deserialize(&mut cur).unwrap()
+        })
+        .for_each({
+            let height = Arc::clone(&height);
+            move |msg: net::Response| {
+                assert_eq!(msg.id, 123);
+
+                match msg.body {
+                    ResponseBody::GetBlock(block) => {
+                        let height = height.fetch_add(1, Ordering::SeqCst);
+                        assert!(height <= 100);
+                        match block {
+                            FilteredBlock::Block(block) => {
+                                assert_eq!(block.height(), height);
+                            }
+                            _ => panic!("Expected a full block"),
+                        }
+                    }
+                    ResponseBody::GetBlockRange => {
+                        assert_eq!(height.load(Ordering::Acquire), 101);
+                    }
+                    _ => panic!("Expected GetBlock response"),
+                };
+
+                Ok(())
+            }
+        })
+        .and_then(move |()| {
+            assert_eq!(height.load(Ordering::Acquire), 101);
+            tx.send(()).unwrap();
+            Ok(())
+        })
+    }));
+
+    runtime.block_on(rx).unwrap();
+}
+
+#[test]
+fn get_block_range_filter_all() {
+    let mut runtime = tokio::runtime::Runtime::new().unwrap();
+    let (tx, rx) = futures::sync::oneshot::channel();
+
+    runtime.spawn(futures::lazy(move || {
+        let minter = TestMinter::new();
+        let (mut state, rx) = create_uninit_state();
+        for _ in 0..100 {
+            minter.produce_block().unwrap();
+        }
+        assert_eq!(minter.chain().get_chain_height(), 101);
+
+        let res = minter
+            .send_request(
+                &mut state,
+                net::Request {
+                    id: 0,
+                    body: RequestBody::SetBlockFilter(BlockFilter::new()),
+                },
+            )
+            .unwrap()
+            .body;
+        assert_eq!(res, ResponseBody::SetBlockFilter);
+
+        let res = minter.send_request(
+            &mut state,
+            net::Request {
+                id: 123,
+                body: RequestBody::GetBlockRange(0, 100),
+            },
+        );
+        assert_eq!(res, None);
+
+        let height = Arc::new(AtomicU64::new(0));
+        rx.map(move |msg| {
+            let msg = match msg {
+                Message::Binary(msg) => msg,
+                _ => panic!("Expected binary response"),
+            };
+            let mut cur = Cursor::<&[u8]>::new(&msg);
+            net::Response::deserialize(&mut cur).unwrap()
+        })
+        .for_each({
+            let height = Arc::clone(&height);
+            move |msg: net::Response| {
+                assert_eq!(msg.id, 123);
+
+                match msg.body {
+                    ResponseBody::GetBlock(block) => {
+                        let height = height.fetch_add(1, Ordering::SeqCst);
+                        assert!(height <= 100);
+                        match block {
+                            FilteredBlock::Header((header, _)) => match header {
+                                BlockHeader::V0(header) => {
+                                    assert_eq!(header.height, height);
+                                }
+                            },
+                            _ => panic!("Expected a partial block"),
+                        }
+                    }
+                    ResponseBody::GetBlockRange => {
+                        assert_eq!(height.load(Ordering::Acquire), 101);
+                    }
+                    _ => panic!("Expected GetBlock response"),
+                };
+
+                Ok(())
+            }
+        })
+        .and_then(move |()| {
+            assert_eq!(height.load(Ordering::Acquire), 101);
+            tx.send(()).unwrap();
+            Ok(())
+        })
+    }));
+
+    runtime.block_on(rx).unwrap();
 }
 
 #[test]

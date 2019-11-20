@@ -67,7 +67,8 @@ pub enum BodyType {
     GetProperties = 0x20,
     GetBlock = 0x21,
     GetFullBlock = 0x22,
-    GetAddressInfo = 0x23,
+    GetBlockRange = 0x23,
+    GetAddressInfo = 0x24,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -78,8 +79,9 @@ pub enum RequestBody {
     Subscribe,
     Unsubscribe,
     GetProperties,
-    GetBlock(u64),     // height
-    GetFullBlock(u64), // height
+    GetBlock(u64),           // height
+    GetFullBlock(u64),       // height
+    GetBlockRange(u64, u64), // min height, max height
     GetAddressInfo(ScriptHash),
 }
 
@@ -92,7 +94,7 @@ impl RequestBody {
                 tx.serialize(buf);
             }
             Self::SetBlockFilter(filter) => {
-                buf.reserve_exact(1 + filter.len() * mem::size_of::<ScriptHash>());
+                buf.reserve_exact(1 + (filter.len() * mem::size_of::<ScriptHash>()));
                 buf.push(BodyType::SetBlockFilter as u8);
                 buf.push(filter.len() as u8);
                 for addr in filter {
@@ -112,6 +114,12 @@ impl RequestBody {
                 buf.reserve_exact(9);
                 buf.push(BodyType::GetFullBlock as u8);
                 buf.push_u64(*height);
+            }
+            Self::GetBlockRange(min_height, max_height) => {
+                buf.reserve_exact(1 + (2 * mem::size_of::<u64>()));
+                buf.push(BodyType::GetBlockRange as u8);
+                buf.push_u64(*min_height);
+                buf.push_u64(*max_height);
             }
             Self::GetAddressInfo(addr) => {
                 buf.reserve_exact(33);
@@ -149,6 +157,11 @@ impl RequestBody {
                 let height = cursor.take_u64()?;
                 Ok(Self::GetFullBlock(height))
             }
+            t if t == BodyType::GetBlockRange as u8 => {
+                let min_height = cursor.take_u64()?;
+                let max_height = cursor.take_u64()?;
+                Ok(Self::GetBlockRange(min_height, max_height))
+            }
             t if t == BodyType::GetAddressInfo as u8 => {
                 let addr = ScriptHash(cursor.take_digest()?);
                 Ok(Self::GetAddressInfo(addr))
@@ -172,6 +185,7 @@ pub enum ResponseBody {
     GetProperties(Properties),
     GetBlock(FilteredBlock),
     GetFullBlock(Arc<Block>),
+    GetBlockRange,
     GetAddressInfo(AddressInfo),
 }
 
@@ -227,6 +241,7 @@ impl ResponseBody {
                 buf.push(BodyType::GetFullBlock as u8);
                 block.serialize(buf);
             }
+            Self::GetBlockRange => buf.push(BodyType::GetBlockRange as u8),
             Self::GetAddressInfo(info) => {
                 buf.reserve_exact(1 + (mem::size_of::<Asset>() * 3));
                 buf.push(BodyType::GetAddressInfo as u8);
@@ -301,6 +316,7 @@ impl ResponseBody {
                     .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
                 Ok(Self::GetFullBlock(Arc::new(block)))
             }
+            t if t == BodyType::GetBlockRange as u8 => Ok(Self::GetBlockRange),
             t if t == BodyType::GetAddressInfo as u8 => {
                 let net_fee = cursor.take_asset()?;
                 let addr_fee = cursor.take_asset()?;

@@ -5,6 +5,7 @@ use std::{io::Cursor, net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::{net::TcpListener, prelude::*};
 use tokio_tungstenite::tungstenite::{protocol, Message};
 
+mod block_range;
 mod forever;
 pub mod minter;
 pub mod pool;
@@ -14,6 +15,7 @@ pub mod prelude {
     pub use super::pool::SubscriptionPool;
 }
 
+use block_range::AsyncBlockRange;
 use prelude::*;
 
 pub struct ServerOpts {
@@ -221,6 +223,49 @@ fn handle_request(data: &ServerData, state: &mut WsState, req: Request) -> Optio
             Some(block) => ResponseBody::GetFullBlock(block),
             None => ResponseBody::Error(ErrorKind::InvalidHeight),
         },
+        RequestBody::GetBlockRange(min_height, max_height) => {
+            let range = AsyncBlockRange::try_new(Arc::clone(&data.chain), min_height, max_height);
+            match range {
+                Some(mut range) => {
+                    if let Some(filter) = state.filter() {
+                        range.set_filter(Some(filter.clone()));
+                    }
+
+                    let peer_addr = state.addr.clone();
+                    let tx = state.tx.clone();
+                    let id = req.id;
+                    tokio::spawn(range.for_each({
+                        let tx = state.tx.clone();
+                        move |block| {
+                            let msg = Response {
+                                id,
+                                body: ResponseBody::GetBlock(block),
+                            };
+
+                            let mut buf = Vec::with_capacity(65536);
+                            msg.serialize(&mut buf);
+                            tx.unbounded_send(Message::Binary(buf)).map_err(|_| {
+                                error!("[{}] Failed to send block update during async block range get", peer_addr);
+                            })
+                        }
+                    }).and_then(move |()| {
+                        let msg = Response {
+                            id,
+                            body: ResponseBody::GetBlockRange,
+                        };
+
+                        let mut buf = Vec::with_capacity(32);
+                        msg.serialize(&mut buf);
+                        tx.unbounded_send(Message::Binary(buf)).map_err(|_| {
+                            error!("[{}] Failed to send block range finalizer", peer_addr);
+                        })
+                    }));
+
+                    return None;
+                }
+                None => ResponseBody::Error(ErrorKind::InvalidHeight),
+            }
+        }
         RequestBody::GetAddressInfo(addr) => {
             let res = data.minter.get_addr_info(&addr);
             match res {
