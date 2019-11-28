@@ -242,29 +242,39 @@ fn handle_request(data: &ServerData, state: &mut WsState, req: Request) -> Optio
                     let tx = state.sender();
                     let id = req.id;
 
-                    tokio::spawn(range.map(move |block| {
-                        let msg = Response {
-                            id,
-                            body: ResponseBody::GetBlock(block),
-                        };
+                    tokio::spawn(
+                        range
+                            .map(move |block| {
+                                let msg = Response {
+                                    id,
+                                    body: ResponseBody::GetBlock(block),
+                                };
 
-                        let mut buf = Vec::with_capacity(65536);
-                        msg.serialize(&mut buf);
-                        Message::Binary(buf)
-                    }).forward(tx.clone().sink_map_err(move |_| {
-                        error!("[{}] Failed to send block range update", peer_addr);
-                    })).and_then(move |_| {
-                        let msg = Response {
-                            id,
-                            body: ResponseBody::GetBlockRange,
-                        };
+                                let mut buf = Vec::with_capacity(65536);
+                                msg.serialize(&mut buf);
+                                Message::Binary(buf)
+                            })
+                            .forward(tx.clone().sink_map_err(move |_| {
+                                error!("[{}] Failed to send block range update", peer_addr);
+                            }))
+                            .and_then(move |_| {
+                                let msg = Response {
+                                    id,
+                                    body: ResponseBody::GetBlockRange,
+                                };
 
-                        let mut buf = Vec::with_capacity(32);
-                        msg.serialize(&mut buf);
-                        tx.send(Message::Binary(buf)).map(|_sink| ()).map_err(move |_| {
-                            error!("[{}] Failed to send block range finalizer", peer_addr);
-                        })
-                    }));
+                                let mut buf = Vec::with_capacity(32);
+                                msg.serialize(&mut buf);
+                                tx.send(Message::Binary(buf))
+                                    .map(|_sink| ())
+                                    .map_err(move |_| {
+                                        error!(
+                                            "[{}] Failed to send block range finalizer",
+                                            peer_addr
+                                        );
+                                    })
+                            }),
+                    );
 
                     return None;
                 }
