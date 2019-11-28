@@ -102,9 +102,8 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                         move |msg| {
                             let res = process_message(&data, &mut state, msg);
                             if let Some(res) = res {
-                                let peer_addr = peer_addr.clone();
                                 future::Either::A(tx.clone().send(res).then(move |res| {
-                                    if let Err(_) = res {
+                                    if res.is_err() {
                                         error!("[{}] Failed to send message", peer_addr);
                                     }
                                     Ok(())
