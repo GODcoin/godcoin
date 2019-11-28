@@ -128,7 +128,7 @@ impl TestMinter {
     }
 
     pub fn request(&self, body: RequestBody) -> Option<ResponseBody> {
-        let (tx, _) = futures::sync::mpsc::unbounded();
+        let (tx, _) = futures::sync::mpsc::channel(8);
         let mut state = WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx);
         let res = self.send_request(&mut state, net::Request { id: 0, body })?;
         Some(res.body)

@@ -13,6 +13,7 @@ simplifies documenting any changes.
   full blocks when necessary.
 - Add GetBlockRange net API to stream back a range of blocks to the client. This
   is more efficient than naively looping GetBlock requests to the server.
+- Use a bounded sender when sending network messages for back pressure control
 
 ### Breaking changes
 

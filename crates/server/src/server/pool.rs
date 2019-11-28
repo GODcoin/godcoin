@@ -1,4 +1,4 @@
-use futures::sync::mpsc::UnboundedSender;
+use futures::{sync::mpsc::Sender, Future, Sink};
 use godcoin::{net::Response, prelude::*};
 use parking_lot::RwLock;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
@@ -6,7 +6,7 @@ use tokio_tungstenite::tungstenite::Message;
 
 #[derive(Clone)]
 pub struct SubscriptionPool {
-    clients: Arc<RwLock<HashMap<SocketAddr, UnboundedSender<Message>>>>,
+    clients: Arc<RwLock<HashMap<SocketAddr, Sender<Message>>>>,
 }
 
 impl SubscriptionPool {
@@ -18,7 +18,7 @@ impl SubscriptionPool {
     }
 
     #[inline]
-    pub fn insert(&self, addr: SocketAddr, tx: UnboundedSender<Message>) {
+    pub fn insert(&self, addr: SocketAddr, tx: Sender<Message>) {
         self.clients.write().insert(addr, tx);
     }
 
@@ -42,7 +42,13 @@ impl SubscriptionPool {
         for client in clients.values() {
             // Errors only occur when the other end is dropped, it is the pool managers responsibility to remove any
             // disconnected clients
-            let _ = client.unbounded_send(msg.clone());
+            tokio::spawn(
+                client
+                    .clone()
+                    .send(msg.clone())
+                    .map(|_sink| ())
+                    .map_err(|_| ()),
+            );
         }
     }
 }

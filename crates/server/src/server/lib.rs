@@ -1,4 +1,4 @@
-use futures::sync::mpsc::{self, UnboundedSender};
+use futures::sync::mpsc::{self, Sender};
 use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
 use log::{error, info, warn};
 use std::{io::Cursor, net::SocketAddr, path::PathBuf, sync::Arc};
@@ -93,7 +93,7 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                 .and_then(move |ws| {
                     info!("[{}] Connection opened", peer_addr);
 
-                    let (tx, rx) = mpsc::unbounded();
+                    let (tx, rx) = mpsc::channel(32);
                     let (sink, stream) = ws.split();
                     let mut state = WsState::new(peer_addr, tx.clone());
 
@@ -102,9 +102,16 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                         move |msg| {
                             let res = process_message(&data, &mut state, msg);
                             if let Some(res) = res {
-                                tx.unbounded_send(res).unwrap();
+                                let peer_addr = peer_addr.clone();
+                                future::Either::A(tx.clone().send(res).then(move |res| {
+                                    if let Err(_) = res {
+                                        error!("[{}] Failed to send message", peer_addr);
+                                    }
+                                    Ok(())
+                                }))
+                            } else {
+                                future::Either::B(future::ok(()))
                             }
-                            Ok(())
                         }
                     });
                     let ws_writer = rx.forward(sink.sink_map_err(move |e| {
@@ -231,24 +238,22 @@ fn handle_request(data: &ServerData, state: &mut WsState, req: Request) -> Optio
                         range.set_filter(Some(filter.clone()));
                     }
 
-                    let peer_addr = state.addr.clone();
-                    let tx = state.tx.clone();
+                    let peer_addr = state.addr();
+                    let tx = state.sender();
                     let id = req.id;
-                    tokio::spawn(range.for_each({
-                        let tx = state.tx.clone();
-                        move |block| {
-                            let msg = Response {
-                                id,
-                                body: ResponseBody::GetBlock(block),
-                            };
 
-                            let mut buf = Vec::with_capacity(65536);
-                            msg.serialize(&mut buf);
-                            tx.unbounded_send(Message::Binary(buf)).map_err(|_| {
-                                error!("[{}] Failed to send block update during async block range get", peer_addr);
-                            })
-                        }
-                    }).and_then(move |()| {
+                    tokio::spawn(range.map(move |block| {
+                        let msg = Response {
+                            id,
+                            body: ResponseBody::GetBlock(block),
+                        };
+
+                        let mut buf = Vec::with_capacity(65536);
+                        msg.serialize(&mut buf);
+                        Message::Binary(buf)
+                    }).forward(tx.clone().sink_map_err(move |_| {
+                        error!("[{}] Failed to send block range update", peer_addr);
+                    })).and_then(move |_| {
                         let msg = Response {
                             id,
                             body: ResponseBody::GetBlockRange,
@@ -256,7 +261,7 @@ fn handle_request(data: &ServerData, state: &mut WsState, req: Request) -> Optio
 
                         let mut buf = Vec::with_capacity(32);
                         msg.serialize(&mut buf);
-                        tx.unbounded_send(Message::Binary(buf)).map_err(|_| {
+                        tx.send(Message::Binary(buf)).map(|_sink| ()).map_err(move |_| {
                             error!("[{}] Failed to send block range finalizer", peer_addr);
                         })
                     }));
@@ -279,12 +284,12 @@ fn handle_request(data: &ServerData, state: &mut WsState, req: Request) -> Optio
 pub struct WsState {
     filter: Option<BlockFilter>,
     addr: SocketAddr,
-    tx: UnboundedSender<Message>,
+    tx: Sender<Message>,
 }
 
 impl WsState {
     #[inline]
-    pub fn new(addr: SocketAddr, tx: UnboundedSender<Message>) -> Self {
+    pub fn new(addr: SocketAddr, tx: Sender<Message>) -> Self {
         Self {
             filter: None,
             addr,
@@ -303,7 +308,7 @@ impl WsState {
     }
 
     #[inline]
-    pub fn sender(&self) -> UnboundedSender<Message> {
+    pub fn sender(&self) -> Sender<Message> {
         self.tx.clone()
     }
 }

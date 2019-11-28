@@ -630,8 +630,8 @@ fn response_id_matches_request() {
     assert_eq!(res, expected);
 }
 
-fn create_uninit_state() -> (WsState, futures::sync::mpsc::UnboundedReceiver<Message>) {
-    let (tx, rx) = futures::sync::mpsc::unbounded();
+fn create_uninit_state() -> (WsState, futures::sync::mpsc::Receiver<Message>) {
+    let (tx, rx) = futures::sync::mpsc::channel(8);
     (
         WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx),
         rx,
