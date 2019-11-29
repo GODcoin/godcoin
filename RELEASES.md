@@ -3,7 +3,10 @@
 All crates must have the same version number when creating a release. This
 simplifies documenting any changes.
 
-# Unreleased
+# Version 0.2.0 (2019-11-29)
+
+This release improves the networking protocol and allows eliminating an
+unnecessary round-trip RPC call when synchronizing blocks.
 
 - Network protocol supports setting the block filter with an empty hash set to
   retrieve only block headers.
@@ -13,7 +16,7 @@ simplifies documenting any changes.
   full blocks when necessary.
 - Add GetBlockRange net API to stream back a range of blocks to the client. This
   is more efficient than naively looping GetBlock requests to the server.
-- Use a bounded sender when sending network messages for back pressure control
+- Use a bounded sender when sending network messages for back pressure control.
 
 ### Breaking changes
 
