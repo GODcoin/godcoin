@@ -3,6 +3,11 @@
 All crates must have the same version number when creating a release. This
 simplifies documenting any changes.
 
+# Unreleased
+
+- Configure the max message send queue in the WebSocket handler for back
+  pressure control.
+
 # Version 0.2.0 (2019-11-29)
 
 This release improves the networking protocol and allows eliminating an

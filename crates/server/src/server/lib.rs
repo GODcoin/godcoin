@@ -88,8 +88,16 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
     tokio::spawn(incoming.for_each(move |stream| {
         let peer_addr = stream.peer_addr().unwrap();
         let data = Arc::clone(&data);
+        let config = Some(protocol::WebSocketConfig {
+            // # of protocol Message's
+            max_send_queue: Some(16),
+            // 64 MiB
+            max_message_size: Some(64 << 20),
+            // 16 MiB
+            max_frame_size: Some(16 << 20),
+        });
         tokio::spawn(
-            tokio_tungstenite::accept_async(stream)
+            tokio_tungstenite::accept_async_with_config(stream, config)
                 .and_then(move |ws| {
                     info!("[{}] Connection opened", peer_addr);
 
