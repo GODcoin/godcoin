@@ -5,6 +5,9 @@ simplifies documenting any changes.
 
 # Version 0.2.1 (2019-12-03)
 
+Fixes a memory issue when retrieving block ranges by ensuring that the network
+handler can't queue an infinite amount of messages.
+
 - Configure the max message send queue in the WebSocket handler for back
   pressure control.
 
