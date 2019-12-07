@@ -1,8 +1,17 @@
 use futures::sync::mpsc::{self, Sender};
 use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
 use log::{error, info, warn};
-use std::{io::Cursor, net::SocketAddr, path::PathBuf, sync::Arc};
-use tokio::{net::TcpListener, prelude::*};
+use std::{
+    io::Cursor,
+    net::SocketAddr,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+use tokio::{net::TcpListener, prelude::*, timer::Interval};
 use tokio_tungstenite::tungstenite::{protocol, Message};
 
 mod block_range;
@@ -104,9 +113,11 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                     let (tx, rx) = mpsc::channel(32);
                     let (sink, stream) = ws.split();
                     let mut state = WsState::new(peer_addr, tx.clone());
+                    let needs_pong = state.needs_pong();
 
                     let ws_reader = stream.for_each({
                         let data = Arc::clone(&data);
+                        let tx = tx.clone();
                         move |msg| {
                             let res = process_message(&data, &mut state, msg);
                             if let Some(res) = res {
@@ -125,9 +136,11 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                         error!("[{}] Sink send error: {:?}", peer_addr, e);
                     }));
 
-                    let conn = ws_reader
-                        .map_err(|_| ())
-                        .select(ws_writer.map(|_| ()).map_err(|_| ()));
+                    let heartbeat_interval = Interval::new_interval(Duration::from_secs(20))
+                        .take_while(move |_| Ok(!needs_pong.swap(true, Ordering::AcqRel)))
+                        .for_each(move |_| tx.clone().send(Message::Ping(vec![])).then(|_| Ok(())));
+
+                    let conn = ws_reader.select2(ws_writer).select2(heartbeat_interval);
                     tokio::spawn(conn.then(move |_| {
                         info!("[{}] Connection closed", peer_addr);
                         // Remove block subscriptions if there are any
@@ -148,6 +161,8 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
 pub fn process_message(data: &ServerData, state: &mut WsState, msg: Message) -> Option<Message> {
     match msg {
         Message::Binary(buf) => {
+            state.set_needs_pong(false);
+
             let mut cur = Cursor::<&[u8]>::new(&buf);
             let res = match Request::deserialize(&mut cur) {
                 Ok(req) => {
@@ -187,6 +202,14 @@ pub fn process_message(data: &ServerData, state: &mut WsState, msg: Message) -> 
             code: protocol::frame::coding::CloseCode::Unsupported,
             reason: "text is not supported".into(),
         }))),
+        Message::Ping(_) => {
+            state.set_needs_pong(false);
+            None
+        }
+        Message::Pong(_) => {
+            state.set_needs_pong(false);
+            None
+        }
         _ => None,
     }
 }
@@ -302,6 +325,7 @@ pub struct WsState {
     filter: Option<BlockFilter>,
     addr: SocketAddr,
     tx: Sender<Message>,
+    needs_pong: Arc<AtomicBool>,
 }
 
 impl WsState {
@@ -311,7 +335,18 @@ impl WsState {
             filter: None,
             addr,
             tx,
+            needs_pong: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    #[inline]
+    pub fn needs_pong(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.needs_pong)
+    }
+
+    #[inline]
+    pub fn set_needs_pong(&self, flag: bool) {
+        self.needs_pong.store(flag, Ordering::Release);
     }
 
     #[inline]

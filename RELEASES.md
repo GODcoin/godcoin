@@ -3,6 +3,10 @@
 All crates must have the same version number when creating a release. This
 simplifies documenting any changes.
 
+# Unreleased
+
+- Send heartbeat pings to clients to detect dead connections and close them.
+
 # Version 0.2.1 (2019-12-03)
 
 Fixes a memory issue when retrieving block ranges by ensuring that the network
