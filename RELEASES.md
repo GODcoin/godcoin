@@ -6,6 +6,8 @@ simplifies documenting any changes.
 # Unreleased
 
 - Send heartbeat pings to clients to detect dead connections and close them.
+- The wallet will now explicitly check for errors and responses before returning
+  when sending a request.
 
 ### Breaking Changes
 
