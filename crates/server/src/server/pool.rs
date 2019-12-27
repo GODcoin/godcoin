@@ -1,5 +1,5 @@
 use futures::{sync::mpsc::Sender, Future, Sink};
-use godcoin::{net::Response, prelude::*};
+use godcoin::prelude::*;
 use parking_lot::RwLock;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio_tungstenite::tungstenite::Message;
@@ -27,12 +27,12 @@ impl SubscriptionPool {
         self.clients.write().remove(&addr);
     }
 
-    pub fn broadcast(&self, msg: ResponseBody) {
+    pub fn broadcast(&self, msg: rpc::Response) {
         let msg = {
             let mut buf = Vec::with_capacity(65536);
-            let res = Response {
+            let res = Msg {
                 id: u32::max_value(),
-                body: msg.clone(),
+                body: Body::Response(msg.clone()),
             };
             res.serialize(&mut buf);
             Message::Binary(buf)

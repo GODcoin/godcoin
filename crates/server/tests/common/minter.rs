@@ -3,7 +3,7 @@ use godcoin::{
     blockchain::{GenesisBlockInfo, ReindexOpts},
     prelude::*,
 };
-use godcoin_server::{prelude::*, process_message, ServerData, WsState};
+use godcoin_server::{prelude::*, process_ws_message, ServerData, WsState};
 use sodiumoxide::randombytes;
 use std::{
     env, fs,
@@ -127,31 +127,41 @@ impl TestMinter {
         self.0.minter.force_produce_block(true)
     }
 
-    pub fn request(&self, body: RequestBody) -> Option<ResponseBody> {
+    pub fn send_req(&self, req: rpc::Request) -> Option<Result<rpc::Response, net::ErrorKind>> {
         let (tx, _) = futures::sync::mpsc::channel(8);
         let mut state = WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx);
-        let res = self.send_request(&mut state, net::Request { id: 0, body })?;
-        Some(res.body)
+        let msg = self.send_msg(
+            &mut state,
+            Msg {
+                id: 0,
+                body: Body::Request(req),
+            },
+        )?;
+        match msg.body {
+            Body::Error(e) => Some(Err(e)),
+            Body::Request(_) => panic!("Expected rpc response"),
+            Body::Response(res) => Some(Ok(res)),
+        }
     }
 
-    pub fn send_request(&self, state: &mut WsState, req: net::Request) -> Option<net::Response> {
+    pub fn send_msg(&self, state: &mut WsState, msg: Msg) -> Option<Msg> {
         let mut buf = Vec::with_capacity(1_048_576);
-        req.serialize(&mut buf);
-        self.raw_request(state, buf)
+        msg.serialize(&mut buf);
+        self.send_bin_msg(state, buf)
     }
 
-    pub fn raw_request(&self, state: &mut WsState, req_bytes: Vec<u8>) -> Option<net::Response> {
+    pub fn send_bin_msg(&self, state: &mut WsState, bytes: Vec<u8>) -> Option<Msg> {
         assert!(
             self.3,
             "attempting to send a request to an unindexed minter"
         );
 
-        let res = match process_message(&self.0, state, Message::Binary(req_bytes))? {
+        let res = match process_ws_message(&self.0, state, Message::Binary(bytes))? {
             Message::Binary(res) => res,
             _ => panic!("Expected binary response"),
         };
         let mut cur = Cursor::<&[u8]>::new(&res);
-        Some(net::Response::deserialize(&mut cur).unwrap())
+        Some(Msg::deserialize(&mut cur).unwrap())
     }
 }
 

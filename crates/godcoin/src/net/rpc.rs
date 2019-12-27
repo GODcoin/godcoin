@@ -1,59 +1,12 @@
-use crate::{
-    prelude::{verify::TxErr, *},
-    serializer::*,
-};
+use crate::{prelude::*, serializer::*};
 use std::{
     io::{self, Cursor, Error},
     mem,
     sync::Arc,
 };
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Request {
-    /// Max value is reserved for subscription updates or deserialization errors that occur during request processing.
-    /// When a request is received with a reserved id, an IO error is returned regardless if the request is valid.
-    pub id: u32,
-    pub body: RequestBody,
-}
-
-impl Request {
-    pub fn serialize(&self, buf: &mut Vec<u8>) {
-        buf.push_u32(self.id);
-        self.body.serialize(buf);
-    }
-
-    pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
-        let id = cursor.take_u32()?;
-        let body = RequestBody::deserialize(cursor)?;
-        Ok(Self { id, body })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Response {
-    /// Max value represents a subscription update or an IO error during processing the request.
-    pub id: u32,
-    pub body: ResponseBody,
-}
-
-impl Response {
-    pub fn serialize(&self, buf: &mut Vec<u8>) {
-        buf.push_u32(self.id);
-        self.body.serialize(buf);
-    }
-
-    pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
-        let id = cursor.take_u32()?;
-        let body = ResponseBody::deserialize(cursor)?;
-        Ok(Self { id, body })
-    }
-}
-
 #[repr(u8)]
-pub enum BodyType {
-    // Returned to clients when an error occurred processing a request
-    Error = 0x01,
-
+pub enum RpcType {
     // Operations that can update the connection or blockchain state
     Broadcast = 0x10,
     SetBlockFilter = 0x11,
@@ -72,7 +25,7 @@ pub enum BodyType {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum RequestBody {
+pub enum Request {
     Broadcast(TxVariant),
     SetBlockFilter(BlockFilter),
     ClearBlockFilter,
@@ -85,45 +38,45 @@ pub enum RequestBody {
     GetAddressInfo(ScriptHash),
 }
 
-impl RequestBody {
+impl Request {
     pub fn serialize(&self, buf: &mut Vec<u8>) {
         match self {
             Self::Broadcast(tx) => {
                 buf.reserve_exact(4096);
-                buf.push(BodyType::Broadcast as u8);
+                buf.push(RpcType::Broadcast as u8);
                 tx.serialize(buf);
             }
             Self::SetBlockFilter(filter) => {
                 buf.reserve_exact(1 + (filter.len() * mem::size_of::<ScriptHash>()));
-                buf.push(BodyType::SetBlockFilter as u8);
+                buf.push(RpcType::SetBlockFilter as u8);
                 buf.push(filter.len() as u8);
                 for addr in filter {
                     buf.push_digest(&addr.0);
                 }
             }
-            Self::ClearBlockFilter => buf.push(BodyType::ClearBlockFilter as u8),
-            Self::Subscribe => buf.push(BodyType::Subscribe as u8),
-            Self::Unsubscribe => buf.push(BodyType::Unsubscribe as u8),
-            Self::GetProperties => buf.push(BodyType::GetProperties as u8),
+            Self::ClearBlockFilter => buf.push(RpcType::ClearBlockFilter as u8),
+            Self::Subscribe => buf.push(RpcType::Subscribe as u8),
+            Self::Unsubscribe => buf.push(RpcType::Unsubscribe as u8),
+            Self::GetProperties => buf.push(RpcType::GetProperties as u8),
             Self::GetBlock(height) => {
                 buf.reserve_exact(9);
-                buf.push(BodyType::GetBlock as u8);
+                buf.push(RpcType::GetBlock as u8);
                 buf.push_u64(*height);
             }
             Self::GetFullBlock(height) => {
                 buf.reserve_exact(9);
-                buf.push(BodyType::GetFullBlock as u8);
+                buf.push(RpcType::GetFullBlock as u8);
                 buf.push_u64(*height);
             }
             Self::GetBlockRange(min_height, max_height) => {
                 buf.reserve_exact(1 + (2 * mem::size_of::<u64>()));
-                buf.push(BodyType::GetBlockRange as u8);
+                buf.push(RpcType::GetBlockRange as u8);
                 buf.push_u64(*min_height);
                 buf.push_u64(*max_height);
             }
             Self::GetAddressInfo(addr) => {
                 buf.reserve_exact(33);
-                buf.push(BodyType::GetAddressInfo as u8);
+                buf.push(RpcType::GetAddressInfo as u8);
                 buf.push_digest(&addr.0);
             }
         }
@@ -132,12 +85,12 @@ impl RequestBody {
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
         let tag = cursor.take_u8()?;
         match tag {
-            t if t == BodyType::Broadcast as u8 => {
+            t if t == RpcType::Broadcast as u8 => {
                 let tx = TxVariant::deserialize(cursor)
                     .ok_or_else(|| Error::new(io::ErrorKind::InvalidData, "failed to decode tx"))?;
                 Ok(Self::Broadcast(tx))
             }
-            t if t == BodyType::SetBlockFilter as u8 => {
+            t if t == RpcType::SetBlockFilter as u8 => {
                 let addr_len = usize::from(cursor.take_u8()?);
                 let mut filter = BlockFilter::new();
                 for _ in 0..addr_len {
@@ -145,38 +98,37 @@ impl RequestBody {
                 }
                 Ok(Self::SetBlockFilter(filter))
             }
-            t if t == BodyType::ClearBlockFilter as u8 => Ok(Self::ClearBlockFilter),
-            t if t == BodyType::Subscribe as u8 => Ok(Self::Subscribe),
-            t if t == BodyType::Unsubscribe as u8 => Ok(Self::Unsubscribe),
-            t if t == BodyType::GetProperties as u8 => Ok(Self::GetProperties),
-            t if t == BodyType::GetBlock as u8 => {
+            t if t == RpcType::ClearBlockFilter as u8 => Ok(Self::ClearBlockFilter),
+            t if t == RpcType::Subscribe as u8 => Ok(Self::Subscribe),
+            t if t == RpcType::Unsubscribe as u8 => Ok(Self::Unsubscribe),
+            t if t == RpcType::GetProperties as u8 => Ok(Self::GetProperties),
+            t if t == RpcType::GetBlock as u8 => {
                 let height = cursor.take_u64()?;
                 Ok(Self::GetBlock(height))
             }
-            t if t == BodyType::GetFullBlock as u8 => {
+            t if t == RpcType::GetFullBlock as u8 => {
                 let height = cursor.take_u64()?;
                 Ok(Self::GetFullBlock(height))
             }
-            t if t == BodyType::GetBlockRange as u8 => {
+            t if t == RpcType::GetBlockRange as u8 => {
                 let min_height = cursor.take_u64()?;
                 let max_height = cursor.take_u64()?;
                 Ok(Self::GetBlockRange(min_height, max_height))
             }
-            t if t == BodyType::GetAddressInfo as u8 => {
+            t if t == RpcType::GetAddressInfo as u8 => {
                 let addr = ScriptHash(cursor.take_digest()?);
                 Ok(Self::GetAddressInfo(addr))
             }
             _ => Err(Error::new(
                 io::ErrorKind::InvalidData,
-                "invalid msg request",
+                "invalid rpc request",
             )),
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum ResponseBody {
-    Error(ErrorKind),
+pub enum Response {
     Broadcast,
     SetBlockFilter,
     ClearBlockFilter,
@@ -189,29 +141,17 @@ pub enum ResponseBody {
     GetAddressInfo(AddressInfo),
 }
 
-impl ResponseBody {
-    pub fn is_err(&self) -> bool {
-        match self {
-            Self::Error(..) => true,
-            _ => false,
-        }
-    }
-
+impl Response {
     pub fn serialize(&self, buf: &mut Vec<u8>) {
         match self {
-            Self::Error(err) => {
-                buf.reserve_exact(2048);
-                buf.push(BodyType::Error as u8);
-                err.serialize(buf);
-            }
-            Self::Broadcast => buf.push(BodyType::Broadcast as u8),
-            Self::SetBlockFilter => buf.push(BodyType::SetBlockFilter as u8),
-            Self::ClearBlockFilter => buf.push(BodyType::ClearBlockFilter as u8),
-            Self::Subscribe => buf.push(BodyType::Subscribe as u8),
-            Self::Unsubscribe => buf.push(BodyType::Unsubscribe as u8),
+            Self::Broadcast => buf.push(RpcType::Broadcast as u8),
+            Self::SetBlockFilter => buf.push(RpcType::SetBlockFilter as u8),
+            Self::ClearBlockFilter => buf.push(RpcType::ClearBlockFilter as u8),
+            Self::Subscribe => buf.push(RpcType::Subscribe as u8),
+            Self::Unsubscribe => buf.push(RpcType::Unsubscribe as u8),
             Self::GetProperties(props) => {
                 buf.reserve_exact(4096 + mem::size_of::<Properties>());
-                buf.push(BodyType::GetProperties as u8);
+                buf.push(RpcType::GetProperties as u8);
                 buf.push_u64(props.height);
                 {
                     let mut tx_buf = Vec::with_capacity(4096);
@@ -223,7 +163,7 @@ impl ResponseBody {
             }
             Self::GetBlock(block) => {
                 buf.reserve_exact(1_048_576);
-                buf.push(BodyType::GetBlock as u8);
+                buf.push(RpcType::GetBlock as u8);
                 match block {
                     FilteredBlock::Header((header, signer)) => {
                         buf.push(0);
@@ -238,13 +178,13 @@ impl ResponseBody {
             }
             Self::GetFullBlock(block) => {
                 buf.reserve_exact(1_048_576);
-                buf.push(BodyType::GetFullBlock as u8);
+                buf.push(RpcType::GetFullBlock as u8);
                 block.serialize(buf);
             }
-            Self::GetBlockRange => buf.push(BodyType::GetBlockRange as u8),
+            Self::GetBlockRange => buf.push(RpcType::GetBlockRange as u8),
             Self::GetAddressInfo(info) => {
                 buf.reserve_exact(1 + (mem::size_of::<Asset>() * 3));
-                buf.push(BodyType::GetAddressInfo as u8);
+                buf.push(RpcType::GetAddressInfo as u8);
                 buf.push_asset(info.net_fee);
                 buf.push_asset(info.addr_fee);
                 buf.push_asset(info.balance);
@@ -255,16 +195,12 @@ impl ResponseBody {
     pub fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
         let tag = cursor.take_u8()?;
         match tag {
-            t if t == BodyType::Error as u8 => {
-                let err = ErrorKind::deserialize(cursor)?;
-                Ok(Self::Error(err))
-            }
-            t if t == BodyType::Broadcast as u8 => Ok(Self::Broadcast),
-            t if t == BodyType::SetBlockFilter as u8 => Ok(Self::SetBlockFilter),
-            t if t == BodyType::ClearBlockFilter as u8 => Ok(Self::ClearBlockFilter),
-            t if t == BodyType::Subscribe as u8 => Ok(Self::Subscribe),
-            t if t == BodyType::Unsubscribe as u8 => Ok(Self::Unsubscribe),
-            t if t == BodyType::GetProperties as u8 => {
+            t if t == RpcType::Broadcast as u8 => Ok(Self::Broadcast),
+            t if t == RpcType::SetBlockFilter as u8 => Ok(Self::SetBlockFilter),
+            t if t == RpcType::ClearBlockFilter as u8 => Ok(Self::ClearBlockFilter),
+            t if t == RpcType::Subscribe as u8 => Ok(Self::Subscribe),
+            t if t == RpcType::Unsubscribe as u8 => Ok(Self::Unsubscribe),
+            t if t == RpcType::GetProperties as u8 => {
                 let height = cursor.take_u64()?;
                 let owner = {
                     let tx = TxVariant::deserialize(cursor).ok_or_else(|| {
@@ -291,7 +227,7 @@ impl ResponseBody {
                     token_supply,
                 }))
             }
-            t if t == BodyType::GetBlock as u8 => {
+            t if t == RpcType::GetBlock as u8 => {
                 let filtered_type = cursor.take_u8()?;
                 match filtered_type {
                     0 => {
@@ -311,13 +247,13 @@ impl ResponseBody {
                     )),
                 }
             }
-            t if t == BodyType::GetFullBlock as u8 => {
+            t if t == RpcType::GetFullBlock as u8 => {
                 let block = Block::deserialize(cursor)
                     .ok_or_else(|| Error::from(io::ErrorKind::UnexpectedEof))?;
                 Ok(Self::GetFullBlock(Arc::new(block)))
             }
-            t if t == BodyType::GetBlockRange as u8 => Ok(Self::GetBlockRange),
-            t if t == BodyType::GetAddressInfo as u8 => {
+            t if t == RpcType::GetBlockRange as u8 => Ok(Self::GetBlockRange),
+            t if t == RpcType::GetAddressInfo as u8 => {
                 let net_fee = cursor.take_asset()?;
                 let addr_fee = cursor.take_asset()?;
                 let balance = cursor.take_asset()?;
@@ -329,49 +265,8 @@ impl ResponseBody {
             }
             _ => Err(Error::new(
                 io::ErrorKind::InvalidData,
-                "invalid msg response",
+                "invalid rpc response",
             )),
         }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum ErrorKind {
-    Io,
-    BytesRemaining,
-    InvalidRequest,
-    InvalidHeight,
-    TxValidation(TxErr),
-}
-
-impl ErrorKind {
-    fn serialize(self, buf: &mut Vec<u8>) {
-        match self {
-            Self::Io => buf.push(0x00),
-            Self::BytesRemaining => buf.push(0x01),
-            Self::InvalidRequest => buf.push(0x02),
-            Self::InvalidHeight => buf.push(0x03),
-            Self::TxValidation(err) => {
-                buf.push(0x04);
-                err.serialize(buf);
-            }
-        }
-    }
-
-    fn deserialize(cursor: &mut Cursor<&[u8]>) -> io::Result<Self> {
-        let tag = cursor.take_u8()?;
-        Ok(match tag {
-            0x00 => Self::Io,
-            0x01 => Self::BytesRemaining,
-            0x02 => Self::InvalidRequest,
-            0x03 => Self::InvalidHeight,
-            0x04 => Self::TxValidation(TxErr::deserialize(cursor)?),
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "failed to deserialize ErrorKind",
-                ))
-            }
-        })
     }
 }

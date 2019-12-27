@@ -60,8 +60,8 @@ fn reindexed_blockchain() {
 
     {
         // Broadcast the tx
-        let res = minter.request(RequestBody::Broadcast(tx.clone()));
-        assert_eq!(res, Some(ResponseBody::Broadcast));
+        let res = minter.send_req(rpc::Request::Broadcast(tx.clone()));
+        assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
         minter.produce_block().unwrap();
     }
 
@@ -111,12 +111,9 @@ fn reindexed_blockchain() {
     assert_eq!(cur_bal, from_bal.checked_sub(amount));
 
     // Test to ensure that after a reindex the tx cannot be rebroadcasted
-    let res = minter.request(RequestBody::Broadcast(tx.clone()));
+    let res = minter.send_req(rpc::Request::Broadcast(tx.clone()));
 
-    assert_eq!(
-        res,
-        Some(ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxDupe)))
-    );
+    assert_eq!(res, Some(Err(ErrorKind::TxValidation(TxErr::TxDupe))));
 }
 
 #[test]
@@ -134,15 +131,13 @@ fn tx_dupe() {
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
     tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-    let res = minter.request(RequestBody::Broadcast(tx.clone())).unwrap();
-    assert!(!res.is_err(), format!("{:?}", res));
+    let res = minter
+        .send_req(rpc::Request::Broadcast(tx.clone()))
+        .unwrap();
+    assert_eq!(res, Ok(rpc::Response::Broadcast));
 
-    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
-    assert!(res.is_err());
-    assert_eq!(
-        res,
-        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxDupe))
-    );
+    let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
+    assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::TxDupe)));
 }
 
 #[test]
@@ -161,12 +156,8 @@ fn tx_expired() {
         script: minter.genesis_info().script.clone(),
     }));
 
-    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
-    assert!(res.is_err());
-    assert_eq!(
-        res,
-        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxExpired))
-    );
+    let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
+    assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::TxExpired)));
 }
 
 #[test]
@@ -183,12 +174,8 @@ fn tx_far_in_the_future() {
         script: minter.genesis_info().script.clone(),
     }));
 
-    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
-    assert!(res.is_err());
-    assert_eq!(
-        res,
-        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxExpired))
-    );
+    let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
+    assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::TxExpired)));
 }
 
 #[test]
@@ -204,12 +191,8 @@ fn tx_script_too_large_err() {
         script: Script::new((0..=constants::MAX_SCRIPT_BYTE_SIZE).map(|_| 0).collect()),
     }));
 
-    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
-    assert!(res.is_err());
-    assert_eq!(
-        res,
-        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TxTooLarge))
-    );
+    let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
+    assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::TxTooLarge)));
 }
 
 #[test]
@@ -226,10 +209,6 @@ fn tx_too_many_signatures_err() {
     }));
     (0..=constants::MAX_TX_SIGNATURES).for_each(|_| tx.append_sign(&KeyPair::gen()));
 
-    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
-    assert!(res.is_err());
-    assert_eq!(
-        res,
-        ResponseBody::Error(ErrorKind::TxValidation(TxErr::TooManySignatures))
-    );
+    let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
+    assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::TooManySignatures)));
 }

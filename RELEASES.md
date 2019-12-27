@@ -7,6 +7,12 @@ simplifies documenting any changes.
 
 - Send heartbeat pings to clients to detect dead connections and close them.
 
+### Breaking Changes
+
+- The network binary protocol now has a body type signifying the type of
+  message. By decoupling from RPC, we can now send generic messages that don't
+  expect a response.
+
 # Version 0.2.1 (2019-12-03)
 
 Fixes a memory issue when retrieving block ranges by ensuring that the network

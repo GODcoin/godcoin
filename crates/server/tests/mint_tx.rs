@@ -85,8 +85,8 @@ fn mint_tx_updates_balances() {
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
     tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-    let res = minter.request(RequestBody::Broadcast(tx));
-    assert_eq!(res, Some(ResponseBody::Broadcast));
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
+    assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
     minter.produce_block().unwrap();
 
     let chain = minter.chain();

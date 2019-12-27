@@ -33,32 +33,31 @@ fn successful_broadcast() {
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
     tx.append_sign(&minter.genesis_info().wallet_keys[0]);
 
-    let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
-    assert_eq!(res, ResponseBody::Broadcast);
+    let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
+    assert_eq!(res, Ok(rpc::Response::Broadcast));
 }
 
 #[test]
 fn get_properties() {
     let minter = TestMinter::new();
-    let res = minter.request(RequestBody::GetProperties).unwrap();
+    let res = minter.send_req(rpc::Request::GetProperties).unwrap();
     let chain_props = minter.chain().get_properties();
-    assert!(!res.is_err());
-    assert_eq!(res, ResponseBody::GetProperties(chain_props));
+    assert_eq!(res, Ok(rpc::Response::GetProperties(chain_props)));
 }
 
 #[test]
 fn get_block_unfiltered() {
     let minter = TestMinter::new();
-    let res = minter.request(RequestBody::GetBlock(0)).unwrap();
 
-    assert!(!res.is_err());
-
+    let res = minter.send_req(rpc::Request::GetBlock(0)).unwrap();
     let other = minter.chain().get_block(0).unwrap();
-    assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(other)));
+    assert_eq!(
+        res,
+        Ok(rpc::Response::GetBlock(FilteredBlock::Block(other)))
+    );
 
-    let res = minter.request(RequestBody::GetBlock(2)).unwrap();
-    assert!(res.is_err());
-    assert_eq!(res, ResponseBody::Error(ErrorKind::InvalidHeight));
+    let res = minter.send_req(rpc::Request::GetBlock(2)).unwrap();
+    assert_eq!(res, Err(ErrorKind::InvalidHeight));
 }
 
 #[test]
@@ -69,33 +68,34 @@ fn get_block_filtered_with_addresses() {
     let mut filter = BlockFilter::new();
     filter.insert((&minter.genesis_info().script).into());
     let res = minter
-        .send_request(
+        .send_msg(
             &mut state,
-            net::Request {
+            Msg {
                 id: 0,
-                body: RequestBody::SetBlockFilter(filter.clone()),
+                body: Body::Request(rpc::Request::SetBlockFilter(filter.clone())),
             },
         )
         .unwrap()
         .body;
-    assert_eq!(res, ResponseBody::SetBlockFilter);
-    assert!(!res.is_err());
-
+    assert_eq!(res, Body::Response(rpc::Response::SetBlockFilter));
     assert_eq!(state.filter(), Some(&filter));
 
     {
         let block = minter.chain().get_block(1).unwrap();
         let res = minter
-            .send_request(
+            .send_msg(
                 &mut state,
-                net::Request {
+                Msg {
                     id: 0,
-                    body: RequestBody::GetBlock(1),
+                    body: Body::Request(rpc::Request::GetBlock(1)),
                 },
             )
             .unwrap()
             .body;
-        assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(block)));
+        assert_eq!(
+            res,
+            Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block)))
+        );
     }
 
     {
@@ -115,8 +115,8 @@ fn get_block_filtered_with_addresses() {
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
             tx
         };
-        let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
-        assert_eq!(res, ResponseBody::Broadcast);
+        let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
+        assert_eq!(res, Ok(rpc::Response::Broadcast));
         // Produce block 3, should not be filtered
         minter.produce_block().unwrap();
     }
@@ -124,11 +124,11 @@ fn get_block_filtered_with_addresses() {
     {
         let block = minter.chain().get_block(2).unwrap();
         let res = minter
-            .send_request(
+            .send_msg(
                 &mut state,
-                net::Request {
+                Msg {
                     id: 0,
-                    body: RequestBody::GetBlock(2),
+                    body: Body::Request(rpc::Request::GetBlock(2)),
                 },
             )
             .unwrap()
@@ -137,23 +137,29 @@ fn get_block_filtered_with_addresses() {
         let signer = block.signer().unwrap().clone();
         assert_eq!(
             res,
-            ResponseBody::GetBlock(FilteredBlock::Header((block.header(), signer)))
+            Body::Response(rpc::Response::GetBlock(FilteredBlock::Header((
+                block.header(),
+                signer
+            ))))
         );
     }
 
     {
         let block = minter.chain().get_block(3).unwrap();
         let res = minter
-            .send_request(
+            .send_msg(
                 &mut state,
-                net::Request {
+                Msg {
                     id: 0,
-                    body: RequestBody::GetBlock(3),
+                    body: Body::Request(rpc::Request::GetBlock(3)),
                 },
             )
             .unwrap()
             .body;
-        assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(block)));
+        assert_eq!(
+            res,
+            Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block)))
+        );
     }
 }
 
@@ -166,32 +172,34 @@ fn get_block_filtered_all() {
         // Unfiltered
         let block = minter.chain().get_block(1).unwrap();
         let res = minter
-            .send_request(
+            .send_msg(
                 &mut state,
-                net::Request {
+                Msg {
                     id: 0,
-                    body: RequestBody::GetBlock(1),
+                    body: Body::Request(rpc::Request::GetBlock(1)),
                 },
             )
             .unwrap()
             .body;
-        assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(block)));
+        assert_eq!(
+            res,
+            Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block)))
+        );
     }
 
     // Empty filter means filter everything
     let filter = BlockFilter::new();
     let res = minter
-        .send_request(
+        .send_msg(
             &mut state,
-            net::Request {
+            Msg {
                 id: 0,
-                body: RequestBody::SetBlockFilter(filter.clone()),
+                body: Body::Request(rpc::Request::SetBlockFilter(filter.clone())),
             },
         )
         .unwrap()
         .body;
-    assert_eq!(res, ResponseBody::SetBlockFilter);
-    assert!(!res.is_err());
+    assert_eq!(res, Body::Response(rpc::Response::SetBlockFilter));
 
     assert_eq!(state.filter(), Some(&filter));
 
@@ -199,11 +207,11 @@ fn get_block_filtered_all() {
         // Filtered
         let block = minter.chain().get_block(1).unwrap();
         let res = minter
-            .send_request(
+            .send_msg(
                 &mut state,
-                net::Request {
+                Msg {
                     id: 0,
-                    body: RequestBody::GetBlock(1),
+                    body: Body::Request(rpc::Request::GetBlock(1)),
                 },
             )
             .unwrap()
@@ -211,7 +219,10 @@ fn get_block_filtered_all() {
         let signer = block.signer().unwrap().clone();
         assert_eq!(
             res,
-            ResponseBody::GetBlock(FilteredBlock::Header((block.header(), signer)))
+            Body::Response(rpc::Response::GetBlock(FilteredBlock::Header((
+                block.header(),
+                signer
+            ))))
         );
     }
 }
@@ -224,29 +235,27 @@ fn clear_block_filter() {
     // Empty filter means filter everything
     let filter = BlockFilter::new();
     let res = minter
-        .send_request(
+        .send_msg(
             &mut state,
-            net::Request {
+            Msg {
                 id: 0,
-                body: RequestBody::SetBlockFilter(filter.clone()),
+                body: Body::Request(rpc::Request::SetBlockFilter(filter.clone())),
             },
         )
         .unwrap()
         .body;
-    assert_eq!(res, ResponseBody::SetBlockFilter);
-    assert!(!res.is_err());
-
+    assert_eq!(res, Body::Response(rpc::Response::SetBlockFilter));
     assert_eq!(state.filter(), Some(&filter));
 
     {
         // Filtered
         let block = minter.chain().get_block(1).unwrap();
         let res = minter
-            .send_request(
+            .send_msg(
                 &mut state,
-                net::Request {
+                Msg {
                     id: 0,
-                    body: RequestBody::GetBlock(1),
+                    body: Body::Request(rpc::Request::GetBlock(1)),
                 },
             )
             .unwrap()
@@ -254,37 +263,42 @@ fn clear_block_filter() {
         let signer = block.signer().unwrap().clone();
         assert_eq!(
             res,
-            ResponseBody::GetBlock(FilteredBlock::Header((block.header(), signer)))
+            Body::Response(rpc::Response::GetBlock(FilteredBlock::Header((
+                block.header(),
+                signer
+            ))))
         );
     }
 
     let res = minter
-        .send_request(
+        .send_msg(
             &mut state,
-            net::Request {
+            Msg {
                 id: 0,
-                body: RequestBody::ClearBlockFilter,
+                body: Body::Request(rpc::Request::ClearBlockFilter),
             },
         )
         .unwrap()
         .body;
-    assert_eq!(res, ResponseBody::ClearBlockFilter);
-    assert!(!res.is_err());
+    assert_eq!(res, Body::Response(rpc::Response::ClearBlockFilter));
 
     {
         // Unfiltered
         let block = minter.chain().get_block(1).unwrap();
         let res = minter
-            .send_request(
+            .send_msg(
                 &mut state,
-                net::Request {
+                Msg {
                     id: 0,
-                    body: RequestBody::GetBlock(1),
+                    body: Body::Request(rpc::Request::GetBlock(1)),
                 },
             )
             .unwrap()
             .body;
-        assert_eq!(res, ResponseBody::GetBlock(FilteredBlock::Block(block)));
+        assert_eq!(
+            res,
+            Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block)))
+        );
     }
 }
 
@@ -297,17 +311,16 @@ fn get_full_block() {
         // Empty filter means filter everything
         let filter = BlockFilter::new();
         let res = minter
-            .send_request(
+            .send_msg(
                 &mut state,
-                net::Request {
+                Msg {
                     id: 0,
-                    body: RequestBody::SetBlockFilter(filter.clone()),
+                    body: Body::Request(rpc::Request::SetBlockFilter(filter.clone())),
                 },
             )
             .unwrap()
             .body;
-        assert_eq!(res, ResponseBody::SetBlockFilter);
-        assert!(!res.is_err());
+        assert_eq!(res, Body::Response(rpc::Response::SetBlockFilter));
 
         assert_eq!(state.filter(), Some(&filter));
     }
@@ -316,11 +329,11 @@ fn get_full_block() {
         // Filtered
         let block = minter.chain().get_block(1).unwrap();
         let res = minter
-            .send_request(
+            .send_msg(
                 &mut state,
-                net::Request {
+                Msg {
                     id: 0,
-                    body: RequestBody::GetBlock(1),
+                    body: Body::Request(rpc::Request::GetBlock(1)),
                 },
             )
             .unwrap()
@@ -328,30 +341,32 @@ fn get_full_block() {
         let signer = block.signer().unwrap().clone();
         assert_eq!(
             res,
-            ResponseBody::GetBlock(FilteredBlock::Header((block.header(), signer)))
+            Body::Response(rpc::Response::GetBlock(FilteredBlock::Header((
+                block.header(),
+                signer
+            ))))
         );
     }
 
     {
         // Full block
         let res = minter
-            .send_request(
+            .send_msg(
                 &mut state,
-                net::Request {
+                Msg {
                     id: 0,
-                    body: RequestBody::GetFullBlock(1),
+                    body: Body::Request(rpc::Request::GetFullBlock(1)),
                 },
             )
             .unwrap()
             .body;
         let other = minter.chain().get_block(1).unwrap();
-        assert_eq!(res, ResponseBody::GetFullBlock(other));
+        assert_eq!(res, Body::Response(rpc::Response::GetFullBlock(other)));
     }
 
     // Invalid height
-    let res = minter.request(RequestBody::GetFullBlock(2)).unwrap();
-    assert!(res.is_err());
-    assert_eq!(res, ResponseBody::Error(ErrorKind::InvalidHeight));
+    let res = minter.send_req(rpc::Request::GetFullBlock(2)).unwrap();
+    assert_eq!(res, Err(ErrorKind::InvalidHeight));
 }
 
 #[test]
@@ -367,11 +382,11 @@ fn get_block_range_unfiltered() {
         }
         assert_eq!(minter.chain().get_chain_height(), 101);
 
-        let res = minter.send_request(
+        let res = minter.send_msg(
             &mut state,
-            net::Request {
+            Msg {
                 id: 123,
-                body: RequestBody::GetBlockRange(0, 100),
+                body: Body::Request(rpc::Request::GetBlockRange(0, 100)),
             },
         );
         assert_eq!(res, None);
@@ -383,15 +398,15 @@ fn get_block_range_unfiltered() {
                 _ => panic!("Expected binary response"),
             };
             let mut cur = Cursor::<&[u8]>::new(&msg);
-            net::Response::deserialize(&mut cur).unwrap()
+            Msg::deserialize(&mut cur).unwrap()
         })
         .for_each({
             let height = Arc::clone(&height);
-            move |msg: net::Response| {
+            move |msg: Msg| {
                 assert_eq!(msg.id, 123);
 
                 match msg.body {
-                    ResponseBody::GetBlock(block) => {
+                    Body::Response(rpc::Response::GetBlock(block)) => {
                         let height = height.fetch_add(1, Ordering::SeqCst);
                         assert!(height <= 100);
                         match block {
@@ -401,10 +416,10 @@ fn get_block_range_unfiltered() {
                             _ => panic!("Expected a full block"),
                         }
                     }
-                    ResponseBody::GetBlockRange => {
+                    Body::Response(rpc::Response::GetBlockRange) => {
                         assert_eq!(height.load(Ordering::Acquire), 101);
                     }
-                    _ => panic!("Expected GetBlock response"),
+                    unexp @ _ => panic!("Expected GetBlock response: {:?}", unexp),
                 };
 
                 Ok(())
@@ -434,22 +449,22 @@ fn get_block_range_filter_all() {
         assert_eq!(minter.chain().get_chain_height(), 101);
 
         let res = minter
-            .send_request(
+            .send_msg(
                 &mut state,
-                net::Request {
+                Msg {
                     id: 0,
-                    body: RequestBody::SetBlockFilter(BlockFilter::new()),
+                    body: Body::Request(rpc::Request::SetBlockFilter(BlockFilter::new())),
                 },
             )
             .unwrap()
             .body;
-        assert_eq!(res, ResponseBody::SetBlockFilter);
+        assert_eq!(res, Body::Response(rpc::Response::SetBlockFilter));
 
-        let res = minter.send_request(
+        let res = minter.send_msg(
             &mut state,
-            net::Request {
+            Msg {
                 id: 123,
-                body: RequestBody::GetBlockRange(0, 100),
+                body: Body::Request(rpc::Request::GetBlockRange(0, 100)),
             },
         );
         assert_eq!(res, None);
@@ -461,15 +476,15 @@ fn get_block_range_filter_all() {
                 _ => panic!("Expected binary response"),
             };
             let mut cur = Cursor::<&[u8]>::new(&msg);
-            net::Response::deserialize(&mut cur).unwrap()
+            Msg::deserialize(&mut cur).unwrap()
         })
         .for_each({
             let height = Arc::clone(&height);
-            move |msg: net::Response| {
+            move |msg: Msg| {
                 assert_eq!(msg.id, 123);
 
                 match msg.body {
-                    ResponseBody::GetBlock(block) => {
+                    Body::Response(rpc::Response::GetBlock(block)) => {
                         let height = height.fetch_add(1, Ordering::SeqCst);
                         assert!(height <= 100);
                         match block {
@@ -481,7 +496,7 @@ fn get_block_range_filter_all() {
                             _ => panic!("Expected a partial block"),
                         }
                     }
-                    ResponseBody::GetBlockRange => {
+                    Body::Response(rpc::Response::GetBlockRange) => {
                         assert_eq!(height.load(Ordering::Acquire), 101);
                     }
                     _ => panic!("Expected GetBlock response"),
@@ -504,16 +519,15 @@ fn get_block_range_filter_all() {
 fn get_address_info() {
     let minter = TestMinter::new();
     let addr = (&minter.genesis_info().script).into();
-    let res = minter.request(RequestBody::GetAddressInfo(addr)).unwrap();
-    assert!(!res.is_err());
+    let res = minter.send_req(rpc::Request::GetAddressInfo(addr)).unwrap();
 
-    let expected = ResponseBody::GetAddressInfo(AddressInfo {
+    let expected = Ok(rpc::Response::GetAddressInfo(AddressInfo {
         net_fee: constants::GRAEL_FEE_MIN,
         addr_fee: constants::GRAEL_FEE_MIN
             .checked_mul(constants::GRAEL_FEE_MULT)
             .unwrap(),
         balance: get_asset("1000.00000 GRAEL"),
-    });
+    }));
     assert_eq!(res, expected);
 }
 
@@ -522,9 +536,9 @@ fn error_with_bytes_remaining() {
     let minter = TestMinter::new();
 
     let buf = {
-        let req = net::Request {
+        let req = Msg {
             id: 123456789,
-            body: RequestBody::GetBlock(0),
+            body: Body::Request(rpc::Request::GetBlock(0)),
         };
         let mut buf = Vec::with_capacity(4096);
         req.serialize(&mut buf);
@@ -536,11 +550,10 @@ fn error_with_bytes_remaining() {
     };
 
     let res = minter
-        .raw_request(&mut create_uninit_state().0, buf)
+        .send_bin_msg(&mut create_uninit_state().0, buf)
         .unwrap();
-    assert!(res.body.is_err());
     assert_eq!(res.id, 123456789);
-    assert_eq!(res.body, ResponseBody::Error(ErrorKind::BytesRemaining));
+    assert_eq!(res.body, Body::Error(ErrorKind::BytesRemaining));
 }
 
 #[test]
@@ -548,9 +561,9 @@ fn eof_returns_max_u32_id() {
     let minter = TestMinter::new();
 
     let buf = {
-        let req = net::Request {
+        let req = Msg {
             id: 123456789,
-            body: RequestBody::GetBlock(0),
+            body: Body::Request(rpc::Request::GetBlock(0)),
         };
         let mut buf = Vec::with_capacity(4096);
         req.serialize(&mut buf);
@@ -562,11 +575,10 @@ fn eof_returns_max_u32_id() {
     };
 
     let res = minter
-        .raw_request(&mut create_uninit_state().0, buf)
+        .send_bin_msg(&mut create_uninit_state().0, buf)
         .unwrap();
-    assert!(res.body.is_err());
     assert_eq!(res.id, u32::max_value());
-    assert_eq!(res.body, ResponseBody::Error(ErrorKind::Io));
+    assert_eq!(res.body, Body::Error(ErrorKind::Io));
 }
 
 #[test]
@@ -575,9 +587,9 @@ fn u32_max_val_with_valid_request_fails() {
     let addr = (&minter.genesis_info().script).into();
 
     let buf = {
-        let req = net::Request {
+        let req = Msg {
             id: u32::max_value(),
-            body: RequestBody::GetAddressInfo(addr),
+            body: Body::Request(rpc::Request::GetAddressInfo(addr)),
         };
         let mut buf = Vec::with_capacity(4096);
         req.serialize(&mut buf);
@@ -585,15 +597,14 @@ fn u32_max_val_with_valid_request_fails() {
         buf
     };
     let res = minter
-        .raw_request(&mut create_uninit_state().0, buf)
+        .send_bin_msg(&mut create_uninit_state().0, buf)
         .unwrap();
 
-    let expected = net::Response {
+    let expected = Msg {
         id: u32::max_value(),
-        body: ResponseBody::Error(ErrorKind::Io),
+        body: Body::Error(ErrorKind::Io),
     };
     assert_eq!(res, expected);
-    assert!(res.body.is_err());
 }
 
 #[test]
@@ -602,9 +613,9 @@ fn response_id_matches_request() {
     let addr = (&minter.genesis_info().script).into();
 
     let buf = {
-        let req = net::Request {
+        let req = Msg {
             id: 123456789,
-            body: RequestBody::GetAddressInfo(addr),
+            body: Body::Request(rpc::Request::GetAddressInfo(addr)),
         };
         let mut buf = Vec::with_capacity(4096);
         req.serialize(&mut buf);
@@ -612,20 +623,18 @@ fn response_id_matches_request() {
         buf
     };
     let res = minter
-        .raw_request(&mut create_uninit_state().0, buf)
+        .send_bin_msg(&mut create_uninit_state().0, buf)
         .unwrap();
 
-    assert!(!res.body.is_err());
-
-    let expected = net::Response {
+    let expected = Msg {
         id: 123456789,
-        body: ResponseBody::GetAddressInfo(AddressInfo {
+        body: Body::Response(rpc::Response::GetAddressInfo(AddressInfo {
             net_fee: constants::GRAEL_FEE_MIN,
             addr_fee: constants::GRAEL_FEE_MIN
                 .checked_mul(constants::GRAEL_FEE_MULT)
                 .unwrap(),
             balance: get_asset("1000.00000 GRAEL"),
-        }),
+        })),
     };
     assert_eq!(res, expected);
 }

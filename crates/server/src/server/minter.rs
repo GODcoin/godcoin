@@ -130,7 +130,7 @@ impl Minter {
         );
 
         self.client_pool
-            .broadcast(ResponseBody::GetBlock(FilteredBlock::Block(Arc::new(
+            .broadcast(rpc::Response::GetBlock(FilteredBlock::Block(Arc::new(
                 block,
             ))));
         Ok(())

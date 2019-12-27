@@ -30,7 +30,7 @@ pub mod prelude {
     pub use super::crypto::{
         KeyPair, PrivateKey, PublicKey, ScriptHash, SigPair, Wif, WifError, WifErrorKind,
     };
-    pub use super::net::{self, RequestBody, ResponseBody};
+    pub use super::net::{self, rpc, Body, Msg};
     pub use super::script::{self, OpFrame, Script, ScriptEngine};
     pub use super::tx::{
         MintTx, OwnerTx, RewardTx, TransferTx, Tx, TxId, TxPool, TxPrecompData, TxVariant,

@@ -22,9 +22,10 @@ fn owner_tx_minter_key_change() {
         tx
     };
 
-    let res = minter.request(RequestBody::Broadcast(tx.clone())).unwrap();
-    assert!(!res.is_err(), format!("{:?}", res));
-    assert_eq!(res, ResponseBody::Broadcast);
+    let res = minter
+        .send_req(rpc::Request::Broadcast(tx.clone()))
+        .unwrap();
+    assert_eq!(res, Ok(rpc::Response::Broadcast));
     minter.produce_block().unwrap();
 
     let owner = minter.chain().get_owner();
@@ -52,9 +53,10 @@ fn owner_tx_deny_mint_tokens() {
         tx
     };
 
-    let res = minter.request(RequestBody::Broadcast(tx.clone())).unwrap();
-    assert!(!res.is_err(), format!("{:?}", res));
-    assert_eq!(res, ResponseBody::Broadcast);
+    let res = minter
+        .send_req(rpc::Request::Broadcast(tx.clone()))
+        .unwrap();
+    assert_eq!(res, Ok(rpc::Response::Broadcast));
     minter.produce_block().unwrap();
 
     let owner = minter.chain().get_owner();
@@ -72,10 +74,10 @@ fn owner_tx_deny_mint_tokens() {
     }));
     tx.append_sign(&wallet_key);
 
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
     assert_eq!(
         res,
-        Some(ResponseBody::Error(net::ErrorKind::TxValidation(
+        Some(Err(net::ErrorKind::TxValidation(
             verify::TxErr::ScriptHashMismatch
         )))
     );
@@ -98,9 +100,10 @@ fn owner_tx_accept_mint_tokens() {
         tx
     };
 
-    let res = minter.request(RequestBody::Broadcast(tx.clone())).unwrap();
-    assert!(!res.is_err(), format!("{:?}", res));
-    assert_eq!(res, ResponseBody::Broadcast);
+    let res = minter
+        .send_req(rpc::Request::Broadcast(tx.clone()))
+        .unwrap();
+    assert_eq!(res, Ok(rpc::Response::Broadcast));
     minter.produce_block().unwrap();
 
     let owner = minter.chain().get_owner();
@@ -116,8 +119,8 @@ fn owner_tx_accept_mint_tokens() {
         script: wallet_key.0.clone().into(),
     }));
     tx.append_sign(&wallet_key);
-    let res = minter.request(RequestBody::Broadcast(tx));
-    assert_eq!(res, Some(ResponseBody::Broadcast));
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
+    assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
     minter.produce_block().unwrap();
 
     let chain = minter.chain();

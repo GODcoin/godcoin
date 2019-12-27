@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 use tokio::{net::TcpListener, prelude::*, timer::Interval};
-use tokio_tungstenite::tungstenite::{protocol, Message};
+use tokio_tungstenite::tungstenite::{protocol, Message as WsMessage};
 
 mod block_range;
 mod forever;
@@ -119,7 +119,7 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                         let data = Arc::clone(&data);
                         let tx = tx.clone();
                         move |msg| {
-                            let res = process_message(&data, &mut state, msg);
+                            let res = process_ws_message(&data, &mut state, msg);
                             if let Some(res) = res {
                                 future::Either::A(tx.clone().send(res).then(move |res| {
                                     if res.is_err() {
@@ -138,7 +138,9 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
 
                     let heartbeat_interval = Interval::new_interval(Duration::from_secs(20))
                         .take_while(move |_| Ok(!needs_pong.swap(true, Ordering::AcqRel)))
-                        .for_each(move |_| tx.clone().send(Message::Ping(vec![])).then(|_| Ok(())));
+                        .for_each(move |_| {
+                            tx.clone().send(WsMessage::Ping(vec![])).then(|_| Ok(()))
+                        });
 
                     let conn = ws_reader.select2(ws_writer).select2(heartbeat_interval);
                     tokio::spawn(conn.then(move |_| {
@@ -158,55 +160,59 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
     }));
 }
 
-pub fn process_message(data: &ServerData, state: &mut WsState, msg: Message) -> Option<Message> {
+pub fn process_ws_message(
+    data: &ServerData,
+    state: &mut WsState,
+    msg: WsMessage,
+) -> Option<WsMessage> {
     match msg {
-        Message::Binary(buf) => {
+        WsMessage::Binary(buf) => {
             state.set_needs_pong(false);
 
             let mut cur = Cursor::<&[u8]>::new(&buf);
-            let res = match Request::deserialize(&mut cur) {
-                Ok(req) => {
-                    let id = req.id;
+            let msg = match Msg::deserialize(&mut cur) {
+                Ok(msg) => {
+                    let id = msg.id;
                     if id == u32::max_value() {
                         // Max value is reserved
-                        Response {
+                        Msg {
                             id: u32::max_value(),
-                            body: ResponseBody::Error(ErrorKind::Io),
+                            body: Body::Error(ErrorKind::Io),
                         }
                     } else if cur.position() != buf.len() as u64 {
-                        Response {
+                        Msg {
                             id,
-                            body: ResponseBody::Error(ErrorKind::BytesRemaining),
+                            body: Body::Error(ErrorKind::BytesRemaining),
                         }
                     } else {
-                        match handle_request(data, state, req) {
-                            Some(res) => Response { id, body: res },
+                        match handle_protocol_message(data, state, msg) {
+                            Some(body) => Msg { id, body },
                             None => return None,
                         }
                     }
                 }
                 Err(e) => {
                     error!("Error occurred during deserialization: {:?}", e);
-                    Response {
+                    Msg {
                         id: u32::max_value(),
-                        body: ResponseBody::Error(ErrorKind::Io),
+                        body: Body::Error(ErrorKind::Io),
                     }
                 }
             };
 
             let mut buf = Vec::with_capacity(65536);
-            res.serialize(&mut buf);
-            Some(Message::Binary(buf))
+            msg.serialize(&mut buf);
+            Some(WsMessage::Binary(buf))
         }
-        Message::Text(_) => Some(Message::Close(Some(protocol::CloseFrame {
+        WsMessage::Text(_) => Some(WsMessage::Close(Some(protocol::CloseFrame {
             code: protocol::frame::coding::CloseCode::Unsupported,
             reason: "text is not supported".into(),
         }))),
-        Message::Ping(_) => {
+        WsMessage::Ping(_) => {
             state.set_needs_pong(false);
             None
         }
-        Message::Pong(_) => {
+        WsMessage::Pong(_) => {
             state.set_needs_pong(false);
             None
         }
@@ -214,53 +220,80 @@ pub fn process_message(data: &ServerData, state: &mut WsState, msg: Message) -> 
     }
 }
 
-fn handle_request(data: &ServerData, state: &mut WsState, req: Request) -> Option<ResponseBody> {
-    Some(match req.body {
-        RequestBody::Broadcast(tx) => {
+fn handle_protocol_message(data: &ServerData, state: &mut WsState, msg: Msg) -> Option<Body> {
+    match msg.body {
+        Body::Error(e) => {
+            warn!(
+                "[{}] Received error message from client: {:?}",
+                state.addr(),
+                e
+            );
+            None
+        }
+        Body::Request(req) => handle_rpc_request(data, state, msg.id, req),
+        Body::Response(res) => {
+            warn!(
+                "[{}] Unexpected response from client: {:?}",
+                state.addr(),
+                res
+            );
+            None
+        }
+    }
+}
+
+fn handle_rpc_request(
+    data: &ServerData,
+    state: &mut WsState,
+    id: u32,
+    req: rpc::Request,
+) -> Option<Body> {
+    Some(match req {
+        rpc::Request::Broadcast(tx) => {
             let res = data.minter.push_tx(tx);
             match res {
-                Ok(_) => ResponseBody::Broadcast,
-                Err(e) => ResponseBody::Error(ErrorKind::TxValidation(e)),
+                Ok(_) => Body::Response(rpc::Response::Broadcast),
+                Err(e) => Body::Error(ErrorKind::TxValidation(e)),
             }
         }
-        RequestBody::SetBlockFilter(filter) => {
+        rpc::Request::SetBlockFilter(filter) => {
             if filter.len() > 16 {
-                return Some(ResponseBody::Error(ErrorKind::InvalidRequest));
+                return Some(Body::Error(ErrorKind::InvalidRequest));
             }
             state.filter = Some(filter);
-            ResponseBody::SetBlockFilter
+            Body::Response(rpc::Response::SetBlockFilter)
         }
-        RequestBody::ClearBlockFilter => {
+        rpc::Request::ClearBlockFilter => {
             state.filter = None;
-            ResponseBody::ClearBlockFilter
+            Body::Response(rpc::Response::ClearBlockFilter)
         }
-        RequestBody::Subscribe => {
+        rpc::Request::Subscribe => {
             data.sub_pool.insert(state.addr(), state.sender());
-            ResponseBody::Subscribe
+            Body::Response(rpc::Response::Subscribe)
         }
-        RequestBody::Unsubscribe => {
+        rpc::Request::Unsubscribe => {
             data.sub_pool.remove(state.addr());
-            ResponseBody::Unsubscribe
+            Body::Response(rpc::Response::Unsubscribe)
         }
-        RequestBody::GetProperties => {
+        rpc::Request::GetProperties => {
             let props = data.chain.get_properties();
-            ResponseBody::GetProperties(props)
+            Body::Response(rpc::Response::GetProperties(props))
         }
-        RequestBody::GetBlock(height) => match &state.filter {
+        rpc::Request::GetBlock(height) => match &state.filter {
             Some(filter) => match data.chain.get_filtered_block(height, filter) {
-                Some(block) => ResponseBody::GetBlock(block),
-                None => ResponseBody::Error(ErrorKind::InvalidHeight),
+                Some(block) => Body::Response(rpc::Response::GetBlock(block)),
+                None => Body::Error(ErrorKind::InvalidHeight),
             },
             None => match data.chain.get_block(height) {
-                Some(block) => ResponseBody::GetBlock(FilteredBlock::Block(block)),
-                None => ResponseBody::Error(ErrorKind::InvalidHeight),
+                Some(block) => Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block))),
+                None => Body::Error(ErrorKind::InvalidHeight),
             },
         },
-        RequestBody::GetFullBlock(height) => match data.chain.get_block(height) {
-            Some(block) => ResponseBody::GetFullBlock(block),
-            None => ResponseBody::Error(ErrorKind::InvalidHeight),
+        rpc::Request::GetFullBlock(height) => match data.chain.get_block(height) {
+            Some(block) => Body::Response(rpc::Response::GetFullBlock(block)),
+            None => Body::Error(ErrorKind::InvalidHeight),
         },
-        RequestBody::GetBlockRange(min_height, max_height) => {
+        rpc::Request::GetBlockRange(min_height, max_height) => {
             let range = AsyncBlockRange::try_new(Arc::clone(&data.chain), min_height, max_height);
             match range {
                 Some(mut range) => {
@@ -270,32 +303,30 @@ fn handle_request(data: &ServerData, state: &mut WsState, req: Request) -> Optio
 
                     let peer_addr = state.addr();
                     let tx = state.sender();
-                    let id = req.id;
-
                     tokio::spawn(
                         range
                             .map(move |block| {
-                                let msg = Response {
+                                let msg = Msg {
                                     id,
-                                    body: ResponseBody::GetBlock(block),
+                                    body: Body::Response(rpc::Response::GetBlock(block)),
                                 };
 
                                 let mut buf = Vec::with_capacity(65536);
                                 msg.serialize(&mut buf);
-                                Message::Binary(buf)
+                                WsMessage::Binary(buf)
                             })
                             .forward(tx.clone().sink_map_err(move |_| {
                                 error!("[{}] Failed to send block range update", peer_addr);
                             }))
                             .and_then(move |_| {
-                                let msg = Response {
+                                let msg = Msg {
                                     id,
-                                    body: ResponseBody::GetBlockRange,
+                                    body: Body::Response(rpc::Response::GetBlockRange),
                                 };
 
                                 let mut buf = Vec::with_capacity(32);
                                 msg.serialize(&mut buf);
-                                tx.send(Message::Binary(buf))
+                                tx.send(WsMessage::Binary(buf))
                                     .map(|_sink| ())
                                     .map_err(move |_| {
                                         error!(
@@ -308,14 +339,14 @@ fn handle_request(data: &ServerData, state: &mut WsState, req: Request) -> Optio
 
                     return None;
                 }
-                None => ResponseBody::Error(ErrorKind::InvalidHeight),
+                None => Body::Error(ErrorKind::InvalidHeight),
             }
         }
-        RequestBody::GetAddressInfo(addr) => {
+        rpc::Request::GetAddressInfo(addr) => {
             let res = data.minter.get_addr_info(&addr);
             match res {
-                Ok(info) => ResponseBody::GetAddressInfo(info),
-                Err(e) => ResponseBody::Error(ErrorKind::TxValidation(e)),
+                Ok(info) => Body::Response(rpc::Response::GetAddressInfo(info)),
+                Err(e) => Body::Error(ErrorKind::TxValidation(e)),
             }
         }
     })
@@ -324,13 +355,13 @@ fn handle_request(data: &ServerData, state: &mut WsState, req: Request) -> Optio
 pub struct WsState {
     filter: Option<BlockFilter>,
     addr: SocketAddr,
-    tx: Sender<Message>,
+    tx: Sender<WsMessage>,
     needs_pong: Arc<AtomicBool>,
 }
 
 impl WsState {
     #[inline]
-    pub fn new(addr: SocketAddr, tx: Sender<Message>) -> Self {
+    pub fn new(addr: SocketAddr, tx: Sender<WsMessage>) -> Self {
         Self {
             filter: None,
             addr,
@@ -360,7 +391,7 @@ impl WsState {
     }
 
     #[inline]
-    pub fn sender(&self) -> Sender<Message> {
+    pub fn sender(&self) -> Sender<WsMessage> {
         self.tx.clone()
     }
 }

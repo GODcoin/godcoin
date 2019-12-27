@@ -173,7 +173,7 @@ pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), Stri
         TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?
     };
 
-    send_print_rpc_req(wallet, RequestBody::Broadcast(tx));
+    send_print_rpc_req(wallet, rpc::Request::Broadcast(tx));
     Ok(())
 }
 
@@ -189,16 +189,15 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
     let amount = args[2].parse().map_err(|_| "Failed to parse grael asset")?;
     let script: Script = hex_to_bytes!(args[3])?.into();
 
-    let res = send_rpc_req(wallet, RequestBody::GetProperties)?;
-    let owner = match res {
-        ResponseBody::GetProperties(props) => props,
-        _ => return Err("wallet not unlocked".to_owned()),
-    }
-    .owner;
+    let res = send_rpc_req(wallet, rpc::Request::GetProperties)?;
+    let owner = match res.body {
+        Body::Response(rpc::Response::GetProperties(props)) => props.owner,
+        _ => return Err("Failed to get blockchain properties".to_owned()),
+    };
     let owner_wallet = match owner.as_ref() {
         TxVariant::V0(owner) => match owner {
             TxVariantV0::OwnerTx(owner) => &owner.wallet,
-            _ => unreachable!(),
+            _ => unreachable!("blockchain properties must be an owner tx"),
         },
     };
 
@@ -283,7 +282,7 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
 }
 
 pub fn get_properties(wallet: &mut Wallet, _args: &mut Vec<String>) -> Result<(), String> {
-    send_print_rpc_req(wallet, RequestBody::GetProperties);
+    send_print_rpc_req(wallet, rpc::Request::GetProperties);
     Ok(())
 }
 
@@ -293,6 +292,6 @@ pub fn get_block(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), Stri
         .parse()
         .map_err(|_| "Failed to parse height argument".to_owned())?;
 
-    send_print_rpc_req(wallet, RequestBody::GetBlock(height));
+    send_print_rpc_req(wallet, rpc::Request::GetBlock(height));
     Ok(())
 }

@@ -26,8 +26,8 @@ fn transfer_from_minter() {
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
         tx
     };
-    let res = minter.request(RequestBody::Broadcast(tx));
-    assert_eq!(res, Some(ResponseBody::Broadcast));
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
+    assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
     minter.produce_block().unwrap();
 
     let chain = minter.chain();
@@ -61,9 +61,9 @@ fn transfer_from_user() {
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);
             tx
         };
-        minter.request(RequestBody::Broadcast(tx))
+        minter.send_req(rpc::Request::Broadcast(tx))
     };
-    assert_eq!(res, Some(ResponseBody::Broadcast));
+    assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
 
     let tx = {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
@@ -77,8 +77,8 @@ fn transfer_from_user() {
         tx.append_sign(&user_1_addr);
         tx
     };
-    let res = minter.request(RequestBody::Broadcast(tx));
-    assert_eq!(res, Some(ResponseBody::Broadcast));
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
+    assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
     minter.produce_block().unwrap();
 
     let user_1_bal = minter.chain().get_balance(&user_1_addr.0.into(), &[]);
@@ -113,10 +113,10 @@ fn insufficient_balance_caused_by_fee() {
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
         tx
     };
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
     assert_eq!(
         res,
-        Some(ResponseBody::Error(net::ErrorKind::TxValidation(
+        Some(Err(net::ErrorKind::TxValidation(
             verify::TxErr::InsufficientBalance
         )))
     );
@@ -154,10 +154,10 @@ fn insufficient_fee() {
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
         tx
     };
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
     assert_eq!(
         res,
-        Some(ResponseBody::Error(net::ErrorKind::TxValidation(
+        Some(Err(net::ErrorKind::TxValidation(
             verify::TxErr::InvalidFeeAmount
         )))
     );
@@ -182,10 +182,10 @@ fn insufficient_balance_caused_by_amt() {
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
         tx
     };
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
     assert_eq!(
         res,
-        Some(ResponseBody::Error(net::ErrorKind::TxValidation(
+        Some(Err(net::ErrorKind::TxValidation(
             verify::TxErr::InsufficientBalance
         )))
     );
@@ -220,12 +220,10 @@ fn memo_too_large() {
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
         tx
     };
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
     assert_eq!(
         res,
-        Some(ResponseBody::Error(net::ErrorKind::TxValidation(
-            verify::TxErr::TxTooLarge
-        )))
+        Some(Err(net::ErrorKind::TxValidation(verify::TxErr::TxTooLarge)))
     );
     minter.produce_block().unwrap();
 
@@ -261,12 +259,10 @@ fn script_too_large() {
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
         tx
     };
-    let res = minter.request(RequestBody::Broadcast(tx));
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
     assert_eq!(
         res,
-        Some(ResponseBody::Error(net::ErrorKind::TxValidation(
-            verify::TxErr::TxTooLarge
-        )))
+        Some(Err(net::ErrorKind::TxValidation(verify::TxErr::TxTooLarge)))
     );
 }
 
@@ -276,11 +272,11 @@ fn tx_addr_dynamic_fee_increase_in_pool() {
     let from_addr = ScriptHash::from(&minter.genesis_info().script);
 
     let res = minter
-        .request(RequestBody::GetAddressInfo(from_addr.clone()))
+        .send_req(rpc::Request::GetAddressInfo(from_addr.clone()))
         .unwrap();
     let addr_info = match res {
-        ResponseBody::GetAddressInfo(info) => info,
-        _ => panic!("Expected GetAddressInfo response"),
+        Ok(rpc::Response::GetAddressInfo(info)) => info,
+        unexp @ _ => panic!("Expected GetAddressInfo response: {:?}", unexp),
     };
 
     let tx = {
@@ -296,16 +292,16 @@ fn tx_addr_dynamic_fee_increase_in_pool() {
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
         tx
     };
-    let res = minter.request(RequestBody::Broadcast(tx));
-    assert_eq!(res, Some(ResponseBody::Broadcast));
+    let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
+    assert_eq!(res, Ok(rpc::Response::Broadcast));
 
     let res = minter
-        .request(RequestBody::GetAddressInfo(from_addr.clone()))
+        .send_req(rpc::Request::GetAddressInfo(from_addr.clone()))
         .unwrap();
     let old_addr_info = addr_info;
     let addr_info = match res {
-        ResponseBody::GetAddressInfo(info) => info,
-        _ => panic!("Expected GetAddressInfo response"),
+        Ok(rpc::Response::GetAddressInfo(info)) => info,
+        unexp @ _ => panic!("Expected GetAddressInfo response: {:?}", unexp),
     };
 
     assert!(addr_info.addr_fee > old_addr_info.addr_fee);
@@ -319,11 +315,11 @@ fn tx_addr_dynamic_fee_increase_in_pool() {
 
     minter.produce_block().unwrap();
     let res = minter
-        .request(RequestBody::GetAddressInfo(from_addr))
+        .send_req(rpc::Request::GetAddressInfo(from_addr))
         .unwrap();
     let addr_info = match res {
-        ResponseBody::GetAddressInfo(info) => info,
-        _ => panic!("Expected GetAddressInfo response"),
+        Ok(rpc::Response::GetAddressInfo(info)) => info,
+        unexp @ _ => panic!("Expected GetAddressInfo response: {:?}", unexp),
     };
     assert_eq!(addr_info.addr_fee, expected_fee);
 }
@@ -335,11 +331,11 @@ fn tx_addr_dynamic_fee_increase() {
 
     for num in 1..10 {
         let res = minter
-            .request(RequestBody::GetAddressInfo(from_addr.clone()))
+            .send_req(rpc::Request::GetAddressInfo(from_addr.clone()))
             .unwrap();
         let addr_info = match res {
-            ResponseBody::GetAddressInfo(info) => info,
-            _ => panic!("Expected GetAddressInfo response"),
+            Ok(rpc::Response::GetAddressInfo(info)) => info,
+            unexp @ _ => panic!("Expected GetAddressInfo response: {:?}", unexp),
         };
 
         let expected_fee = GRAEL_FEE_MIN
@@ -361,9 +357,8 @@ fn tx_addr_dynamic_fee_increase() {
             tx
         };
 
-        let res = minter.request(RequestBody::Broadcast(tx)).unwrap();
-        assert!(!res.is_err());
-        assert_eq!(res, ResponseBody::Broadcast);
+        let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
+        assert_eq!(res, Ok(rpc::Response::Broadcast));
         minter.produce_block().unwrap();
     }
 
@@ -372,11 +367,11 @@ fn tx_addr_dynamic_fee_increase() {
     }
 
     let res = minter
-        .request(RequestBody::GetAddressInfo(from_addr.clone()))
+        .send_req(rpc::Request::GetAddressInfo(from_addr.clone()))
         .unwrap();
     let addr_info = match res {
-        ResponseBody::GetAddressInfo(info) => info,
-        _ => panic!("Expected GetAddressInfo response"),
+        Ok(rpc::Response::GetAddressInfo(info)) => info,
+        unexp @ _ => panic!("Expected GetAddressInfo response: {:?}", unexp),
     };
 
     // Test the delta reset for address fees
@@ -405,19 +400,19 @@ fn net_fee_dynamic_increase() {
             tx
         };
 
-        let req = RequestBody::Broadcast(tx);
-        let res = minter.request(req.clone()).unwrap();
-        let exp = ResponseBody::Error(net::ErrorKind::TxValidation(
+        let req = rpc::Request::Broadcast(tx);
+        let res = minter.send_req(req.clone()).unwrap();
+        let exp = Err(net::ErrorKind::TxValidation(
             verify::TxErr::InvalidFeeAmount,
         ));
         if res == exp {
             for _ in 0..=FEE_RESET_WINDOW {
                 minter.produce_block().unwrap();
             }
-            let res = minter.request(req).unwrap();
-            assert_eq!(res, ResponseBody::Broadcast);
+            let res = minter.send_req(req).unwrap();
+            assert_eq!(res, Ok(rpc::Response::Broadcast));
         } else {
-            assert_eq!(res, ResponseBody::Broadcast);
+            assert_eq!(res, Ok(rpc::Response::Broadcast));
         }
     }
 
@@ -436,8 +431,8 @@ fn net_fee_dynamic_increase() {
             tx
         };
 
-        let res = minter.request(RequestBody::Broadcast(tx));
-        assert_eq!(res, Some(ResponseBody::Broadcast));
+        let res = minter.send_req(rpc::Request::Broadcast(tx));
+        assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
     }
 
     // Ensure the network fee gets updated
@@ -446,10 +441,10 @@ fn net_fee_dynamic_increase() {
     }
 
     {
-        let res = minter.request(RequestBody::GetProperties).unwrap();
+        let res = minter.send_req(rpc::Request::GetProperties).unwrap();
         let props = match res {
-            ResponseBody::GetProperties(props) => props,
-            _ => panic!("Expected GetProperties response"),
+            Ok(rpc::Response::GetProperties(props)) => props,
+            unexp @ _ => panic!("Expected GetProperties response: {:?}", unexp),
         };
 
         let chain = minter.chain();

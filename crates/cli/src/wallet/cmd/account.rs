@@ -60,7 +60,7 @@ pub fn get_addr_info(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
             .map_err(|e| format!("Invalid account or key: {:?}", e))?,
     };
 
-    send_print_rpc_req(wallet, RequestBody::GetAddressInfo(script_hash));
+    send_print_rpc_req(wallet, rpc::Request::GetAddressInfo(script_hash));
     Ok(())
 }
 
