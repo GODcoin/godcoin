@@ -115,15 +115,27 @@ pub fn send_rpc_req(wallet: &mut Wallet, body: rpc::Request) -> Result<Msg, Stri
         ws
     };
     ws.write_message(Message::Binary(buf)).unwrap();
+    ws.write_pending().unwrap();
 
     let msg = loop {
         let msg = ws.read_message().unwrap();
         match msg {
             Message::Binary(res) => {
                 let mut cursor = Cursor::<&[u8]>::new(&res);
-                let msg = Msg::deserialize(&mut cursor).map_err(|e| format!("Failed to deserialize response: {}", e))?;
+                let msg = Msg::deserialize(&mut cursor)
+                    .map_err(|e| format!("Failed to deserialize response: {}", e))?;
                 match msg.body {
                     Body::Error(_) | Body::Response(_) => break msg,
+                    Body::Ping(nonce) => {
+                        let msg = Msg {
+                            id: msg.id,
+                            body: Body::Pong(nonce),
+                        };
+                        let mut buf = Vec::with_capacity(16);
+                        msg.serialize(&mut buf);
+                        ws.write_message(Message::Binary(buf)).unwrap();
+                        ws.write_pending().unwrap();
+                    }
                     _ => continue,
                 }
             }

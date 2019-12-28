@@ -532,6 +532,27 @@ fn get_address_info() {
 }
 
 #[test]
+fn receives_pong_after_ping() {
+    let minter = TestMinter::new();
+    let (mut state, _) = create_uninit_state();
+
+    let res = minter.send_msg(
+        &mut state,
+        Msg {
+            id: u32::max_value(),
+            body: Body::Ping(123),
+        },
+    );
+    assert_eq!(
+        res,
+        Some(Msg {
+            id: u32::max_value(),
+            body: Body::Pong(123),
+        })
+    );
+}
+
+#[test]
 fn error_with_bytes_remaining() {
     let minter = TestMinter::new();
 
@@ -579,32 +600,6 @@ fn eof_returns_max_u32_id() {
         .unwrap();
     assert_eq!(res.id, u32::max_value());
     assert_eq!(res.body, Body::Error(ErrorKind::Io));
-}
-
-#[test]
-fn u32_max_val_with_valid_request_fails() {
-    let minter = TestMinter::new();
-    let addr = (&minter.genesis_info().script).into();
-
-    let buf = {
-        let req = Msg {
-            id: u32::max_value(),
-            body: Body::Request(rpc::Request::GetAddressInfo(addr)),
-        };
-        let mut buf = Vec::with_capacity(4096);
-        req.serialize(&mut buf);
-
-        buf
-    };
-    let res = minter
-        .send_bin_msg(&mut create_uninit_state().0, buf)
-        .unwrap();
-
-    let expected = Msg {
-        id: u32::max_value(),
-        body: Body::Error(ErrorKind::Io),
-    };
-    assert_eq!(res, expected);
 }
 
 #[test]

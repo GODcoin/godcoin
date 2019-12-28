@@ -139,8 +139,8 @@ impl TestMinter {
         )?;
         match msg.body {
             Body::Error(e) => Some(Err(e)),
-            Body::Request(_) => panic!("Expected rpc response"),
             Body::Response(res) => Some(Ok(res)),
+            _ => panic!("Expected rpc response"),
         }
     }
 

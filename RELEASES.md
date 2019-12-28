@@ -6,8 +6,11 @@ simplifies documenting any changes.
 # Unreleased
 
 - Send heartbeat pings to clients to detect dead connections and close them.
+  Pings are implemented at the application protocol level (i.e not WebSockets).
 - The wallet will now explicitly check for errors and responses before returning
   when sending a request.
+- Max value ID requests will no longer respond with an IO error. However,
+  applications may misbehave as this is the reserved ID for general messages.
 
 ### Breaking Changes
 

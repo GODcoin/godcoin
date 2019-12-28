@@ -5,8 +5,8 @@ use std::io::{self, Cursor, Error};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Msg {
-    /// Max value is reserved for subscription updates or deserialization errors that occur during request processing.
-    /// When a request is received with a reserved id, an IO error is returned regardless if the request is valid.
+    /// Max value is reserved for subscription updates or other generic messages. Using max value for RPC requests may
+    /// cause your application to misbehave. Requests always expect a response and should use a proper id.
     pub id: u32,
     pub body: Body,
 }
@@ -27,6 +27,16 @@ impl Msg {
                 buf.push(BodyType::Response as u8);
                 res.serialize(buf);
             }
+            Body::Ping(nonce) => {
+                buf.reserve_exact(9);
+                buf.push(BodyType::Ping as u8);
+                buf.push_u64(*nonce);
+            }
+            Body::Pong(nonce) => {
+                buf.reserve_exact(9);
+                buf.push(BodyType::Pong as u8);
+                buf.push_u64(*nonce);
+            }
         }
     }
 
@@ -38,6 +48,8 @@ impl Msg {
             t if t == BodyType::Response as u8 => {
                 Body::Response(rpc::Response::deserialize(cursor)?)
             }
+            t if t == BodyType::Ping as u8 => Body::Ping(cursor.take_u64()?),
+            t if t == BodyType::Pong as u8 => Body::Pong(cursor.take_u64()?),
             _ => return Err(Error::new(io::ErrorKind::InvalidData, "invalid msg type")),
         };
         Ok(Self { id, body })
@@ -53,6 +65,10 @@ pub enum BodyType {
     Request = 0x01,
     // RPC response
     Response = 0x02,
+    // Ping is used to test whether a connection is alive
+    Ping = 0x03,
+    // Pong is used to confirm a connection is alive
+    Pong = 0x04,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -60,6 +76,8 @@ pub enum Body {
     Error(ErrorKind),
     Request(rpc::Request),
     Response(rpc::Response),
+    Ping(u64), // Nonce
+    Pong(u64), // Nonce
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

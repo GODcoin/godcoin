@@ -1,5 +1,5 @@
 use futures::sync::mpsc::{self, Sender};
-use godcoin::{blockchain::ReindexOpts, net::*, prelude::*};
+use godcoin::{blockchain::ReindexOpts, get_epoch_ms, net::*, prelude::*};
 use log::{error, info, warn};
 use std::{
     io::Cursor,
@@ -139,7 +139,14 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                     let heartbeat_interval = Interval::new_interval(Duration::from_secs(20))
                         .take_while(move |_| Ok(!needs_pong.swap(true, Ordering::AcqRel)))
                         .for_each(move |_| {
-                            tx.clone().send(WsMessage::Ping(vec![])).then(|_| Ok(()))
+                            let msg = Msg {
+                                id: u32::max_value(),
+                                body: Body::Ping(get_epoch_ms()),
+                            };
+
+                            let mut buf = Vec::with_capacity(16);
+                            msg.serialize(&mut buf);
+                            tx.clone().send(WsMessage::Binary(buf)).then(|_| Ok(()))
                         });
 
                     let conn = ws_reader.select2(ws_writer).select2(heartbeat_interval);
@@ -173,13 +180,7 @@ pub fn process_ws_message(
             let msg = match Msg::deserialize(&mut cur) {
                 Ok(msg) => {
                     let id = msg.id;
-                    if id == u32::max_value() {
-                        // Max value is reserved
-                        Msg {
-                            id: u32::max_value(),
-                            body: Body::Error(ErrorKind::Io),
-                        }
-                    } else if cur.position() != buf.len() as u64 {
+                    if cur.position() != buf.len() as u64 {
                         Msg {
                             id,
                             body: Body::Error(ErrorKind::BytesRemaining),
@@ -208,14 +209,6 @@ pub fn process_ws_message(
             code: protocol::frame::coding::CloseCode::Unsupported,
             reason: "text is not supported".into(),
         }))),
-        WsMessage::Ping(_) => {
-            state.set_needs_pong(false);
-            None
-        }
-        WsMessage::Pong(_) => {
-            state.set_needs_pong(false);
-            None
-        }
         _ => None,
     }
 }
@@ -237,6 +230,12 @@ fn handle_protocol_message(data: &ServerData, state: &mut WsState, msg: Msg) -> 
                 state.addr(),
                 res
             );
+            None
+        }
+        Body::Ping(nonce) => Some(Body::Pong(nonce)),
+        Body::Pong(_) => {
+            // We don't need to update the `needs_pong` state as it has already been updated when the message was
+            // deserialized
             None
         }
     }
