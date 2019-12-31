@@ -1,6 +1,6 @@
 use futures::sync::mpsc::{self, Sender};
 use godcoin::{blockchain::ReindexOpts, get_epoch_ms, net::*, prelude::*};
-use log::{error, info, warn, debug};
+use log::{debug, error, info, warn};
 use std::{
     io::Cursor,
     net::SocketAddr,
