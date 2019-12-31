@@ -3,7 +3,7 @@
 All crates must have the same version number when creating a release. This
 simplifies documenting any changes.
 
-# Unreleased
+# Version 0.3.0 (2019-12-31)
 
 - Send heartbeat pings to clients to detect dead connections and close them.
   Pings are implemented at the application protocol level (i.e not WebSockets).
