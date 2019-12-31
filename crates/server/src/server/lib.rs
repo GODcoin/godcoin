@@ -1,6 +1,6 @@
 use futures::sync::mpsc::{self, Sender};
 use godcoin::{blockchain::ReindexOpts, get_epoch_ms, net::*, prelude::*};
-use log::{error, info, warn};
+use log::{error, info, warn, debug};
 use std::{
     io::Cursor,
     net::SocketAddr,
@@ -139,10 +139,12 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                     let heartbeat_interval = Interval::new_interval(Duration::from_secs(20))
                         .take_while(move |_| Ok(!needs_pong.swap(true, Ordering::AcqRel)))
                         .for_each(move |_| {
+                            let nonce = get_epoch_ms();
                             let msg = Msg {
                                 id: u32::max_value(),
-                                body: Body::Ping(get_epoch_ms()),
+                                body: Body::Ping(nonce),
                             };
+                            debug!("[{}] Sending ping: {}", peer_addr, nonce);
 
                             let mut buf = Vec::with_capacity(16);
                             msg.serialize(&mut buf);
@@ -232,8 +234,12 @@ fn handle_protocol_message(data: &ServerData, state: &mut WsState, msg: Msg) -> 
             );
             None
         }
-        Body::Ping(nonce) => Some(Body::Pong(nonce)),
-        Body::Pong(_) => {
+        Body::Ping(nonce) => {
+            debug!("[{}] Received ping: {}", state.addr(), nonce);
+            Some(Body::Pong(nonce))
+        }
+        Body::Pong(nonce) => {
+            debug!("[{}] Received pong: {}", state.addr(), nonce);
             // We don't need to update the `needs_pong` state as it has already been updated when the message was
             // deserialized
             None
