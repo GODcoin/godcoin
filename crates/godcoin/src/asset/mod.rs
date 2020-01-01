@@ -97,10 +97,12 @@ impl fmt::Debug for Asset {
 }
 
 impl ToString for Asset {
+    #[allow(clippy::comparison_chain)]
     fn to_string(&self) -> String {
         let mut s = self.amount.to_string();
         {
             let len = s.len();
+            // See std::core::cmp for the most optimal comparisons
             if len < MAX_PRECISION as usize {
                 let start = if self.amount < 0 { 1 } else { 0 };
                 let diff = MAX_PRECISION as usize - len + start;

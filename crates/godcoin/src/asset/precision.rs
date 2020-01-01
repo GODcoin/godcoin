@@ -83,17 +83,10 @@ macro_rules! create_decimal_fn {
 create_decimal_fn!(i64, set_decimals_i64, DECIMAL_MULT_I64);
 create_decimal_fn!(i128, set_decimals_i128, DECIMAL_MULT_I128);
 
+#[allow(clippy::comparison_chain)]
 pub fn set_decimals_big(num: &BigInt, orig_dec: u16, new_dec: u16) -> BigInt {
-    if orig_dec > new_dec {
-        let delta = (orig_dec - new_dec) as usize;
-        if delta < DECIMAL_MULT_I64.len() {
-            num / DECIMAL_MULT_I64[delta]
-        } else {
-            let mut rep = String::from("1");
-            rep.push_str(&"0".repeat(delta));
-            num / rep.parse::<BigInt>().unwrap()
-        }
-    } else if orig_dec < new_dec {
+    // See std::core::cmp for the most optimal comparisons
+    if orig_dec < new_dec {
         let delta = (new_dec - orig_dec) as usize;
         if delta < DECIMAL_MULT_I64.len() {
             num * DECIMAL_MULT_I64[delta]
@@ -102,7 +95,16 @@ pub fn set_decimals_big(num: &BigInt, orig_dec: u16, new_dec: u16) -> BigInt {
             rep.push_str(&"0".repeat(delta));
             num * rep.parse::<BigInt>().unwrap()
         }
-    } else {
+    } else if orig_dec == new_dec {
         num.clone()
+    } else {
+        let delta = (orig_dec - new_dec) as usize;
+        if delta < DECIMAL_MULT_I64.len() {
+            num / DECIMAL_MULT_I64[delta]
+        } else {
+            let mut rep = String::from("1");
+            rep.push_str(&"0".repeat(delta));
+            num / rep.parse::<BigInt>().unwrap()
+        }
     }
 }
