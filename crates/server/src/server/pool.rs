@@ -32,7 +32,7 @@ impl SubscriptionPool {
             let mut buf = Vec::with_capacity(65536);
             let res = Msg {
                 id: u32::max_value(),
-                body: Body::Response(msg.clone()),
+                body: Body::Response(msg),
             };
             res.serialize(&mut buf);
             Message::Binary(buf)

@@ -1,6 +1,6 @@
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
-use std::{fmt, str::FromStr};
+use std::{cmp::Ordering, fmt, str::FromStr};
 
 mod precision;
 use self::precision::*;
@@ -101,15 +101,19 @@ impl ToString for Asset {
         let mut s = self.amount.to_string();
         {
             let len = s.len();
-            if len < MAX_PRECISION as usize {
-                let start = if self.amount < 0 { 1 } else { 0 };
-                let diff = MAX_PRECISION as usize - len + start;
-                s.insert_str(start, "0.");
-                s.insert_str(start + 2, &"0".repeat(diff));
-            } else if len == MAX_PRECISION as usize {
-                s.insert_str(0, "0.");
-            } else {
-                s.insert(len - (MAX_PRECISION as usize), '.');
+            match len.cmp(&(MAX_PRECISION as usize)) {
+                Ordering::Greater => {
+                    s.insert(len - (MAX_PRECISION as usize), '.');
+                }
+                Ordering::Less => {
+                    let start = if self.amount < 0 { 1 } else { 0 };
+                    let diff = MAX_PRECISION as usize - len + start;
+                    s.insert_str(start, "0.");
+                    s.insert_str(start + 2, &"0".repeat(diff));
+                }
+                Ordering::Equal => {
+                    s.insert_str(0, "0.");
+                }
             }
         }
         s.push_str(" GRAEL");
