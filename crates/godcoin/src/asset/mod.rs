@@ -8,6 +8,8 @@ use self::precision::*;
 pub mod error;
 pub use self::error::*;
 
+pub const ASSET_SYMBOL: &str = "GRAEL";
+
 pub const MAX_STR_LEN: usize = 26;
 pub const MAX_PRECISION: u8 = 5;
 
@@ -114,7 +116,8 @@ impl ToString for Asset {
                 s.insert(len - (MAX_PRECISION as usize), '.');
             }
         }
-        s.push_str(" GRAEL");
+        s.push(' ');
+        s.push_str(ASSET_SYMBOL);
         s
     }
 }
@@ -179,7 +182,7 @@ impl FromStr for Asset {
 
         match split.next() {
             Some(x) => {
-                if x != "GRAEL" {
+                if x != ASSET_SYMBOL {
                     return Err(AssetError {
                         kind: AssetErrorKind::InvalidAssetType,
                     });
