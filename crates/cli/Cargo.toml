@@ -17,6 +17,10 @@ publish = false
 name = "godcoin"
 path = "src/main.rs"
 
+[features]
+default = []
+testnet = ["godcoin/testnet"]
+
 [dependencies]
 dirs = "2.0.2"
 env_logger = "0.7.1"

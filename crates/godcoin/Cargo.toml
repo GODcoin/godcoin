@@ -11,6 +11,10 @@ description = """
 GODcoin core blockchain library.
 """
 
+[features]
+default = []
+testnet = []
+
 [dependencies]
 bs58 = "0.3.0"
 bytes = "0.4.12"
