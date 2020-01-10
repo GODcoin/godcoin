@@ -40,12 +40,12 @@ fn reindexed_blockchain() {
     let from_addr = ScriptHash::from(&minter.genesis_info().script);
     let from_bal = minter.chain().get_balance(&from_addr, &[]).unwrap();
     let to_addr = KeyPair::gen();
-    let amount = get_asset("1.00000 GRAEL");
+    let amount = get_asset("1.00000 TEST");
 
     // Create a tx we expect to be reindexed
     let tx = {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
-            base: create_tx_header("1.00000 GRAEL"),
+            base: create_tx_header("1.00000 TEST"),
             from: from_addr.clone(),
             to: (&to_addr.0).into(),
             amount,
@@ -120,9 +120,9 @@ fn reindexed_blockchain() {
 fn tx_dupe() {
     let minter = TestMinter::new();
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-        base: create_tx_header("0.00000 GRAEL"),
+        base: create_tx_header("0.00000 TEST"),
         to: (&minter.genesis_info().script).into(),
-        amount: get_asset("10.00000 GRAEL"),
+        amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
         script: minter.genesis_info().script.clone(),
@@ -148,9 +148,9 @@ fn tx_expired() {
     let time = godcoin::get_epoch_ms();
 
     let tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-        base: create_tx_header_with_ts("0.00000 GRAEL", time + TX_EXPIRY_TIME),
+        base: create_tx_header_with_ts("0.00000 TEST", time + TX_EXPIRY_TIME),
         to: (&minter.genesis_info().script).into(),
-        amount: get_asset("10.00000 GRAEL"),
+        amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
         script: minter.genesis_info().script.clone(),
@@ -166,9 +166,9 @@ fn tx_far_in_the_future() {
     let time = godcoin::get_epoch_ms();
 
     let tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-        base: create_tx_header_with_ts("0.00000 GRAEL", time + 4000),
+        base: create_tx_header_with_ts("0.00000 TEST", time + 4000),
         to: (&minter.genesis_info().script).into(),
-        amount: get_asset("10.00000 GRAEL"),
+        amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
         script: minter.genesis_info().script.clone(),
@@ -183,9 +183,9 @@ fn tx_script_too_large_err() {
     let minter = TestMinter::new();
 
     let tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-        base: create_tx_header("0.00000 GRAEL"),
+        base: create_tx_header("0.00000 TEST"),
         to: (&minter.genesis_info().script).into(),
-        amount: get_asset("10.00000 GRAEL"),
+        amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
         script: Script::new((0..=constants::MAX_SCRIPT_BYTE_SIZE).map(|_| 0).collect()),
@@ -200,9 +200,9 @@ fn tx_too_many_signatures_err() {
     let minter = TestMinter::new();
 
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-        base: create_tx_header("0.00000 GRAEL"),
+        base: create_tx_header("0.00000 TEST"),
         to: (&minter.genesis_info().script).into(),
-        amount: get_asset("10.00000 GRAEL"),
+        amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
         script: Script::new(vec![]),

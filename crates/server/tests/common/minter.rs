@@ -41,9 +41,9 @@ impl TestMinter {
                 let mut txs = Vec::with_capacity(1);
 
                 let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-                    base: create_tx_header("0.00000 GRAEL"),
+                    base: create_tx_header("0.00000 TEST"),
                     to: (&info.script).into(),
-                    amount: "1000.00000 GRAEL".parse().unwrap(),
+                    amount: "1000.00000 TEST".parse().unwrap(),
                     attachment: vec![1, 2, 3],
                     attachment_name: "".to_owned(),
                     script: info.script.clone(),
@@ -55,7 +55,7 @@ impl TestMinter {
 
                 txs.push(TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
                     base: Tx {
-                        fee: "0.00000 GRAEL".parse().unwrap(),
+                        fee: "0.00000 TEST".parse().unwrap(),
                         timestamp: 0,
                         signature_pairs: Vec::new(),
                     },

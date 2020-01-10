@@ -579,7 +579,7 @@ mod tests {
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: Tx {
                     timestamp: 1500000000,
-                    fee: "1.00000 GRAEL".parse().unwrap(),
+                    fee: "1.00000 TEST".parse().unwrap(),
                     signature_pairs: vec![SigPair {
                         // Test valid key with invalid signature
                         pub_key: key_3.0.clone(),
@@ -588,7 +588,7 @@ mod tests {
                 },
                 from: key_1.clone().0.into(),
                 to: to.clone().0.into(),
-                amount: "10.00000 GRAEL".parse().unwrap(),
+                amount: "10.00000 TEST".parse().unwrap(),
                 script: script.clone(),
                 memo: vec![],
             }));
@@ -827,12 +827,12 @@ mod tests {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: Tx {
                 timestamp: 1500000000,
-                fee: "1.00000 GRAEL".parse().unwrap(),
+                fee: "1.00000 TEST".parse().unwrap(),
                 signature_pairs: vec![],
             },
             from: to.clone().0.into(),
             to: to.clone().0.into(),
-            amount: "10.00000 GRAEL".parse().unwrap(),
+            amount: "10.00000 TEST".parse().unwrap(),
             script: script.clone(),
             memo: vec![],
         }));

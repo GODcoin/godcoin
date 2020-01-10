@@ -22,9 +22,9 @@ fn successful_broadcast() {
     let minter = TestMinter::new();
 
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-        base: create_tx_header("0.00000 GRAEL"),
+        base: create_tx_header("0.00000 TEST"),
         to: (&minter.genesis_info().script).into(),
-        amount: get_asset("10.00000 GRAEL"),
+        amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
         script: minter.genesis_info().script.clone(),
@@ -104,10 +104,10 @@ fn get_block_filtered_with_addresses() {
 
         let tx = {
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
-                base: create_tx_header("1.00000 GRAEL"),
+                base: create_tx_header("1.00000 TEST"),
                 from: (&minter.genesis_info().script).into(),
                 to: (&KeyPair::gen().0).into(),
-                amount: get_asset("1.00000 GRAEL"),
+                amount: get_asset("1.00000 TEST"),
                 memo: vec![],
                 script: minter.genesis_info().script.clone(),
             }));
@@ -526,7 +526,7 @@ fn get_address_info() {
         addr_fee: constants::GRAEL_FEE_MIN
             .checked_mul(constants::GRAEL_FEE_MULT)
             .unwrap(),
-        balance: get_asset("1000.00000 GRAEL"),
+        balance: get_asset("1000.00000 TEST"),
     }));
     assert_eq!(res, expected);
 }
@@ -628,7 +628,7 @@ fn response_id_matches_request() {
             addr_fee: constants::GRAEL_FEE_MIN
                 .checked_mul(constants::GRAEL_FEE_MULT)
                 .unwrap(),
-            balance: get_asset("1000.00000 GRAEL"),
+            balance: get_asset("1000.00000 TEST"),
         })),
     };
     assert_eq!(res, expected);

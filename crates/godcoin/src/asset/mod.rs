@@ -8,7 +8,11 @@ use self::precision::*;
 pub mod error;
 pub use self::error::*;
 
+#[cfg(not(any(test, feature = "testnet")))]
 pub const ASSET_SYMBOL: &str = "GRAEL";
+
+#[cfg(any(test, feature = "testnet"))]
+pub const ASSET_SYMBOL: &str = "TEST";
 
 pub const MAX_STR_LEN: usize = 26;
 pub const MAX_PRECISION: u8 = 5;
@@ -209,13 +213,13 @@ mod tests {
             assert_eq!(asset.amount.to_string(), amount);
         };
 
-        c(get_asset("1.00000 GRAEL"), "100000");
-        c(get_asset("-1.00000 GRAEL"), "-100000");
-        c(get_asset(".10000 GRAEL"), "10000");
-        c(get_asset("-.10000 GRAEL"), "-10000");
-        c(get_asset("0.10000 GRAEL"), "10000");
-        c(get_asset("0.00000 GRAEL"), "0");
-        c(get_asset("-0.00000 GRAEL"), "0");
+        c(get_asset("1.00000 TEST"), "100000");
+        c(get_asset("-1.00000 TEST"), "-100000");
+        c(get_asset(".10000 TEST"), "10000");
+        c(get_asset("-.10000 TEST"), "-10000");
+        c(get_asset("0.10000 TEST"), "10000");
+        c(get_asset("0.00000 TEST"), "0");
+        c(get_asset("-0.00000 TEST"), "0");
     }
 
     #[test]
@@ -223,42 +227,42 @@ mod tests {
         let c = |asset: Asset, s: &str| {
             assert_eq!(asset.to_string(), s);
         };
-        c(get_asset("1.00001 GRAEL"), "1.00001 GRAEL");
-        c(get_asset("0.00001 GRAEL"), "0.00001 GRAEL");
-        c(get_asset("0.00010 GRAEL"), "0.00010 GRAEL");
-        c(get_asset("-0.00001 GRAEL"), "-0.00001 GRAEL");
-        c(get_asset(".00001 GRAEL"), "0.00001 GRAEL");
-        c(get_asset(".10000 GRAEL"), "0.10000 GRAEL");
-        c(get_asset("1.00000 GRAEL"), "1.00000 GRAEL");
+        c(get_asset("1.00001 TEST"), "1.00001 TEST");
+        c(get_asset("0.00001 TEST"), "0.00001 TEST");
+        c(get_asset("0.00010 TEST"), "0.00010 TEST");
+        c(get_asset("-0.00001 TEST"), "-0.00001 TEST");
+        c(get_asset(".00001 TEST"), "0.00001 TEST");
+        c(get_asset(".10000 TEST"), "0.10000 TEST");
+        c(get_asset("1.00000 TEST"), "1.00000 TEST");
     }
 
     #[test]
     fn fail_parsing_invalid_input() {
         let c = |asset: &str, err: AssetErrorKind| {
             let e = Asset::from_str(asset).err().unwrap();
-            assert_eq!(e.kind, err);
+            assert_eq!(e.kind, err, "Asset: {}", asset);
         };
 
-        c("1b10.00000 GRAEL", AssetErrorKind::InvalidAmount);
-        c("a100.00000 GRAEL", AssetErrorKind::InvalidAmount);
-        c("100.0000a GRAEL", AssetErrorKind::InvalidAmount);
+        c("1b10.00000 TEST", AssetErrorKind::InvalidAmount);
+        c("a100.00000 TEST", AssetErrorKind::InvalidAmount);
+        c("100.0000a TEST", AssetErrorKind::InvalidAmount);
 
-        c("1 GRAEL", AssetErrorKind::InvalidFormat);
-        c("1. GRAEL", AssetErrorKind::InvalidFormat);
-        c(".1 GRAEL", AssetErrorKind::InvalidFormat);
-        c("-.1 GRAEL", AssetErrorKind::InvalidFormat);
-        c("0.1 GRAEL", AssetErrorKind::InvalidFormat);
-        c("1.0 GRAEL", AssetErrorKind::InvalidFormat);
-        c("0 GRAEL", AssetErrorKind::InvalidFormat);
-        c("-0.0 GRAEL", AssetErrorKind::InvalidFormat);
-        c("-1.0 GRAEL", AssetErrorKind::InvalidFormat);
+        c("1 TEST", AssetErrorKind::InvalidFormat);
+        c("1. TEST", AssetErrorKind::InvalidFormat);
+        c(".1 TEST", AssetErrorKind::InvalidFormat);
+        c("-.1 TEST", AssetErrorKind::InvalidFormat);
+        c("0.1 TEST", AssetErrorKind::InvalidFormat);
+        c("1.0 TEST", AssetErrorKind::InvalidFormat);
+        c("0 TEST", AssetErrorKind::InvalidFormat);
+        c("-0.0 TEST", AssetErrorKind::InvalidFormat);
+        c("-1.0 TEST", AssetErrorKind::InvalidFormat);
 
-        c("123456789012345678901 GRAEL", AssetErrorKind::StrTooLarge);
-        c("1.000000 GRAEL", AssetErrorKind::InvalidFormat);
+        c("1234567890123456789012 TEST", AssetErrorKind::StrTooLarge);
+        c("1.000000 TEST", AssetErrorKind::InvalidFormat);
         c("1.0000", AssetErrorKind::InvalidFormat);
 
-        c("1.00000 GRAEL a", AssetErrorKind::InvalidAssetType);
-        c("1.00000 grael", AssetErrorKind::InvalidAssetType);
+        c("1.00000 TEST a", AssetErrorKind::InvalidAssetType);
+        c("1.00000 test", AssetErrorKind::InvalidAssetType);
     }
 
     #[test]
@@ -267,71 +271,71 @@ mod tests {
             assert_eq!(asset.to_string(), amount);
         };
 
-        let a = get_asset("123.45600 GRAEL");
+        let a = get_asset("123.45600 TEST");
         c(
-            a.checked_add(get_asset("2.00000 GRAEL")).unwrap(),
-            "125.45600 GRAEL",
+            a.checked_add(get_asset("2.00000 TEST")).unwrap(),
+            "125.45600 TEST",
         );
         c(
-            a.checked_add(get_asset("-2.00000 GRAEL")).unwrap(),
-            "121.45600 GRAEL",
+            a.checked_add(get_asset("-2.00000 TEST")).unwrap(),
+            "121.45600 TEST",
         );
         c(
-            a.checked_add(get_asset(".00001 GRAEL")).unwrap(),
-            "123.45601 GRAEL",
+            a.checked_add(get_asset(".00001 TEST")).unwrap(),
+            "123.45601 TEST",
         );
         c(
-            a.checked_sub(get_asset("2.00000 GRAEL")).unwrap(),
-            "121.45600 GRAEL",
+            a.checked_sub(get_asset("2.00000 TEST")).unwrap(),
+            "121.45600 TEST",
         );
         c(
-            a.checked_sub(get_asset("-2.00000 GRAEL")).unwrap(),
-            "125.45600 GRAEL",
+            a.checked_sub(get_asset("-2.00000 TEST")).unwrap(),
+            "125.45600 TEST",
         );
         c(
-            a.checked_mul(get_asset("100000.11111 GRAEL")).unwrap(),
-            "12345613.71719 GRAEL",
+            a.checked_mul(get_asset("100000.11111 TEST")).unwrap(),
+            "12345613.71719 TEST",
         );
         c(
-            a.checked_mul(get_asset("-100000.11111 GRAEL")).unwrap(),
-            "-12345613.71719 GRAEL",
+            a.checked_mul(get_asset("-100000.11111 TEST")).unwrap(),
+            "-12345613.71719 TEST",
         );
         c(
-            a.checked_div(get_asset("23.00000 GRAEL")).unwrap(),
-            "5.36765 GRAEL",
+            a.checked_div(get_asset("23.00000 TEST")).unwrap(),
+            "5.36765 TEST",
         );
         c(
-            a.checked_div(get_asset("-23.00000 GRAEL")).unwrap(),
-            "-5.36765 GRAEL",
+            a.checked_div(get_asset("-23.00000 TEST")).unwrap(),
+            "-5.36765 TEST",
         );
-        c(a.checked_pow(2).unwrap(), "15241.38393 GRAEL");
-        c(a.checked_pow(3).unwrap(), "1881640.29520 GRAEL");
-        c(a, "123.45600 GRAEL");
+        c(a.checked_pow(2).unwrap(), "15241.38393 TEST");
+        c(a.checked_pow(3).unwrap(), "1881640.29520 TEST");
+        c(a, "123.45600 TEST");
 
         c(
-            get_asset("1.00020 GRAEL").checked_pow(1000).unwrap(),
-            "1.22137 GRAEL",
+            get_asset("1.00020 TEST").checked_pow(1000).unwrap(),
+            "1.22137 TEST",
         );
         c(
-            get_asset("10.00000 GRAEL")
-                .checked_div(get_asset("2.00000 GRAEL"))
+            get_asset("10.00000 TEST")
+                .checked_div(get_asset("2.00000 TEST"))
                 .unwrap(),
-            "5.00000 GRAEL",
+            "5.00000 TEST",
         );
         c(
-            get_asset("5.00000 GRAEL")
-                .checked_div(get_asset("10.00000 GRAEL"))
+            get_asset("5.00000 TEST")
+                .checked_div(get_asset("10.00000 TEST"))
                 .unwrap(),
-            "0.50000 GRAEL",
+            "0.50000 TEST",
         );
 
-        assert!(a.checked_div(get_asset("0.00000 GRAEL")).is_none());
+        assert!(a.checked_div(get_asset("0.00000 TEST")).is_none());
     }
 
     #[test]
     fn invalid_arithmetic() {
-        let a = get_asset("10.00000 GRAEL");
-        let b = get_asset("92233720368547.75807 GRAEL");
+        let a = get_asset("10.00000 TEST");
+        let b = get_asset("92233720368547.75807 TEST");
 
         assert_eq!(a.checked_add(b), None);
         assert_eq!(a.checked_mul(Asset::new(-1)).unwrap().checked_sub(b), None);
