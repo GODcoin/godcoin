@@ -18,6 +18,7 @@ simplifies documenting any changes.
   broadcasted at any time up until the expiry. Previously, users would have to
   broadcast a transaction at an exact time for acceptance, which isn't practical
   when dealing with multiple signing parties.
+- All times now deal with seconds instead of milliseconds.
 
 # Version 0.3.0 (2019-12-31)
 

@@ -87,7 +87,7 @@ impl Blockchain {
 
         info!("Rebuilding tx expiry index");
         let manager = index::TxManager::new(self.indexer());
-        let current_time = crate::get_epoch_ms();
+        let current_time = crate::get_epoch_time();
         // Iterate in reverse from head to genesis block
         for height in (0..=self.get_chain_height()).rev() {
             let block = store.get(height).unwrap();
@@ -508,11 +508,11 @@ impl Blockchain {
 
     pub fn create_genesis_block(&self, minter_key: KeyPair) -> GenesisBlockInfo {
         let info = GenesisBlockInfo::new(minter_key);
-        let timestamp = crate::get_epoch_ms();
+        let timestamp = crate::get_epoch_time();
 
         let owner_tx = TxVariant::V0(TxVariantV0::OwnerTx(OwnerTx {
             base: Tx {
-                expiry: timestamp + 1000,
+                expiry: timestamp + 1,
                 fee: Asset::default(),
                 signature_pairs: Vec::new(),
             },

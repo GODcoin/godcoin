@@ -183,7 +183,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
         let expiry: u64 = args[1]
             .parse()
             .map_err(|_| "Failed to parse expiry ms".to_owned())?;
-        godcoin::get_epoch_ms() + expiry
+        godcoin::get_epoch_time() + expiry
     };
 
     let amount = args[2].parse().map_err(|_| "Failed to parse grael asset")?;
@@ -246,7 +246,7 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
         let expiry: u64 = args[1]
             .parse()
             .map_err(|_| "Failed to parse expiry ms".to_owned())?;
-        godcoin::get_epoch_ms() + expiry
+        godcoin::get_epoch_time() + expiry
     };
 
     let from_script = Script::new(hex_to_bytes!(args[2])?);

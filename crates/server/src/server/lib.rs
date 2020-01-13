@@ -1,5 +1,5 @@
 use futures::sync::mpsc::{self, Sender};
-use godcoin::{blockchain::ReindexOpts, get_epoch_ms, net::*, prelude::*};
+use godcoin::{blockchain::ReindexOpts, get_epoch_time, net::*, prelude::*};
 use log::{debug, error, info, warn};
 use std::{
     io::Cursor,
@@ -139,7 +139,7 @@ fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
                     let heartbeat_interval = Interval::new_interval(Duration::from_secs(20))
                         .take_while(move |_| Ok(!needs_pong.swap(true, Ordering::AcqRel)))
                         .for_each(move |_| {
-                            let nonce = get_epoch_ms();
+                            let nonce = get_epoch_time();
                             let msg = Msg {
                                 id: u32::max_value(),
                                 body: Body::Ping(nonce),

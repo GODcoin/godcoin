@@ -143,7 +143,7 @@ fn tx_dupe() {
 #[test]
 fn tx_expired() {
     let minter = TestMinter::new();
-    let expiry = godcoin::get_epoch_ms();
+    let expiry = godcoin::get_epoch_time();
 
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: create_tx_header_with_expiry("0.00000 TEST", expiry),
@@ -161,7 +161,7 @@ fn tx_expired() {
 
     match &mut tx {
         TxVariant::V0(ref mut tx) => {
-            tx.expiry = expiry - 1000;
+            tx.expiry = expiry - 1;
         }
     }
     let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
@@ -171,12 +171,12 @@ fn tx_expired() {
 #[test]
 fn tx_expiry_far_in_the_future() {
     let minter = TestMinter::new();
-    let expiry = godcoin::get_epoch_ms();
+    let expiry = godcoin::get_epoch_time();
 
     let tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: create_tx_header_with_expiry(
             "0.00000 TEST",
-            expiry + constants::TX_MAX_EXPIRY_TIME + 1000,
+            expiry + constants::TX_MAX_EXPIRY_TIME + 1,
         ),
         to: (&minter.genesis_info().script).into(),
         amount: get_asset("10.00000 TEST"),

@@ -653,7 +653,7 @@ mod tests {
     #[test]
     fn tx_eq() {
         let tx_a = Tx {
-            expiry: 1000,
+            expiry: 1,
             fee: get_asset("10.00000 TEST"),
             signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
         };
@@ -686,7 +686,7 @@ mod tests {
     fn transfer_tx_eq() {
         let tx_a = TransferTx {
             base: Tx {
-                expiry: 1000,
+                expiry: 1,
                 fee: get_asset("10.00000 TEST"),
                 signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
             },
@@ -733,7 +733,7 @@ mod tests {
     fn precomp_data_sig_split() {
         let tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: Tx {
-                expiry: 1000,
+                expiry: 1,
                 fee: get_asset("10.00000 TEST"),
                 signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
             },

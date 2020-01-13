@@ -14,11 +14,11 @@ pub fn init() -> Result<(), ()> {
     sodiumoxide::init()
 }
 
-pub fn get_epoch_ms() -> u64 {
+pub fn get_epoch_time() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_millis() as u64
+        .as_secs()
 }
 
 pub mod prelude {

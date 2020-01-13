@@ -17,7 +17,7 @@ const KEY_CHAIN_HEIGHT: &[u8] = b"chain_height";
 const KEY_TOKEN_SUPPLY: &[u8] = b"token_supply";
 const KEY_INDEX_STATUS: &[u8] = b"index_status";
 
-pub const TX_EXPIRY_ADJUSTMENT: u64 = 30000;
+const TX_EXPIRY_ADJUSTMENT: u64 = 30;
 
 pub struct Indexer {
     db: DB,
@@ -268,7 +268,7 @@ impl TxManager {
         let db = &self.indexer.db;
         let cf = db.cf_handle(CF_TX_EXPIRY).unwrap();
         // Pretend to be slightly in the past in case system time adjusts in the future.
-        let current_time = crate::get_epoch_ms() - TX_EXPIRY_ADJUSTMENT;
+        let current_time = crate::get_epoch_time() - TX_EXPIRY_ADJUSTMENT;
 
         let mut batch = rocksdb::WriteBatch::default();
         for (key, value) in db.iterator_cf(cf, IteratorMode::Start).unwrap() {
@@ -321,7 +321,7 @@ mod tests {
     fn tx_manager() {
         run_test(|indexer| {
             let id = TxId::from_digest(Digest::from_slice(&[0u8; 32]).unwrap());
-            let expiry = crate::get_epoch_ms();
+            let expiry = crate::get_epoch_time();
             let manager = TxManager::new(Arc::clone(&indexer));
             assert!(!manager.has(&id));
             manager.insert(&id, expiry);
@@ -331,7 +331,7 @@ mod tests {
             indexer.db.delete_cf(cf, &id).unwrap();
             assert!(!manager.has(&id));
 
-            manager.insert(&id, expiry - TX_EXPIRY_ADJUSTMENT + 100);
+            manager.insert(&id, expiry - TX_EXPIRY_ADJUSTMENT + 1);
             manager.purge_expired();
             // The transaction has expired, but we give additional time before purging it.
             assert!(manager.has(&id));
@@ -339,7 +339,7 @@ mod tests {
             let cf = indexer.db.cf_handle(CF_TX_EXPIRY).unwrap();
             indexer.db.delete_cf(cf, &id).unwrap();
             assert!(!manager.has(&id));
-            manager.insert(&id, expiry - TX_EXPIRY_ADJUSTMENT - 100);
+            manager.insert(&id, expiry - TX_EXPIRY_ADJUSTMENT - 1);
             assert!(manager.has(&id));
             manager.purge_expired();
             // Test that the expiry is completely over

@@ -193,7 +193,7 @@ impl BlockV0 {
         let previous_hash = self.calc_header_hash();
         let height = self.header.height + 1;
         let tx_merkle_root = calc_tx_merkle_root(&txs);
-        let timestamp = crate::get_epoch_ms();
+        let timestamp = crate::get_epoch_time();
         Block::V0(BlockV0 {
             header: BlockHeaderV0 {
                 previous_hash,

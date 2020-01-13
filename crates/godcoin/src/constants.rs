@@ -8,8 +8,8 @@ pub const GRAEL_FEE_NET_MULT: Asset = Asset::new(101_500);
 pub const NETWORK_FEE_AVG_WINDOW: u64 = 10;
 pub const FEE_RESET_WINDOW: usize = 4;
 
-pub const TX_MAX_EXPIRY_TIME: u64 = 1000 * 60 * 60 * 24 * 30;
-pub const BLOCK_PROD_TIME: u64 = 3000;
+pub const TX_MAX_EXPIRY_TIME: u64 = 60 * 60 * 24 * 30;
+pub const BLOCK_PROD_TIME: u64 = 3;
 
 pub const MAX_MEMO_BYTE_SIZE: usize = 1024;
 pub const MAX_SCRIPT_BYTE_SIZE: usize = 2048;

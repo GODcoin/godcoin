@@ -1,5 +1,5 @@
 use crate::SubscriptionPool;
-use godcoin::prelude::*;
+use godcoin::{constants::BLOCK_PROD_TIME, prelude::*};
 use log::{info, warn};
 use parking_lot::Mutex;
 use std::{
@@ -40,7 +40,7 @@ impl Minter {
     }
 
     pub fn start_production_loop(self) {
-        let dur = Duration::from_secs(3);
+        let dur = Duration::from_secs(BLOCK_PROD_TIME);
         tokio::spawn(
             Delay::new(Instant::now() + dur)
                 .and_then(move |_| {

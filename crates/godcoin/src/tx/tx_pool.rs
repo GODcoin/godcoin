@@ -29,7 +29,7 @@ impl TxPool {
     }
 
     pub fn push(&mut self, data: TxPrecompData, skip_flags: SkipFlags) -> Result<(), TxErr> {
-        let current_time = crate::get_epoch_ms();
+        let current_time = crate::get_epoch_time();
 
         let expiry = data.tx().expiry();
         if expiry <= current_time || expiry - current_time > TX_MAX_EXPIRY_TIME {
