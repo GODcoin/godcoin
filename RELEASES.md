@@ -3,6 +3,22 @@
 All crates must have the same version number when creating a release. This
 simplifies documenting any changes.
 
+# Unreleased
+
+- Allow building with the testnet feature flag. Tests are by default built with
+  the testnet feature flag.
+- The testnet feature flag changes the global asset constant symbol to TEST. The
+  recommendation for library authors is to do the same when testing against a
+  testnet.
+
+### Breaking changes
+
+- Transactions no longer have a "timestamp" field in place of a new "expiry"
+  field. This is a quality of life improvement as the transaction can be
+  broadcasted at any time up until the expiry. Previously, users would have to
+  broadcast a transaction at an exact time for acceptance, which isn't practical
+  when dealing with multiple signing parties.
+
 # Version 0.3.0 (2019-12-31)
 
 - Send heartbeat pings to clients to detect dead connections and close them.
