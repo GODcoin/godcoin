@@ -239,8 +239,8 @@ mod tests {
         let keys = KeyPair::gen();
         let transactions = vec![TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
             base: Tx {
+                expiry: 1234567890,
                 fee: Asset::default(),
-                timestamp: 1234567890,
                 signature_pairs: Vec::new(),
             },
             to: keys.0.clone().into(),

@@ -55,8 +55,8 @@ impl TestMinter {
 
                 txs.push(TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
                     base: Tx {
+                        expiry: 0,
                         fee: "0.00000 TEST".parse().unwrap(),
-                        timestamp: 0,
                         signature_pairs: Vec::new(),
                     },
                     to: (&info.script).into(),

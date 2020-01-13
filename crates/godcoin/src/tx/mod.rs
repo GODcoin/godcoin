@@ -129,9 +129,9 @@ impl TxVariant {
     }
 
     #[inline]
-    pub fn timestamp(&self) -> u64 {
+    pub fn expiry(&self) -> u64 {
         match self {
-            TxVariant::V0(tx) => tx.timestamp,
+            TxVariant::V0(tx) => tx.expiry,
         }
     }
 
@@ -286,7 +286,7 @@ impl DerefMut for TxVariantV0 {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tx {
-    pub timestamp: u64,
+    pub expiry: u64,
     pub fee: Asset,
     pub signature_pairs: Vec<SigPair>,
 }
@@ -294,7 +294,7 @@ pub struct Tx {
 impl Tx {
     fn serialize_header(&self, v: &mut Vec<u8>) {
         // The TxType is part of the header and needs to be pushed into the buffer first
-        v.push_u64(self.timestamp);
+        v.push_u64(self.expiry);
         v.push_asset(self.fee);
     }
 
@@ -306,10 +306,10 @@ impl Tx {
             t if t == TxType::TRANSFER as u8 => TxType::TRANSFER,
             _ => return None,
         };
-        let timestamp = cur.take_u64().ok()?;
+        let expiry = cur.take_u64().ok()?;
         let fee = cur.take_asset().ok()?;
         let tx = Tx {
-            timestamp,
+            expiry,
             fee,
             signature_pairs: Vec::new(),
         };
@@ -477,8 +477,8 @@ mod tests {
     };
 
     macro_rules! cmp_base_tx {
-        ($id:ident, $ts:expr, $fee:expr) => {
-            assert_eq!($id.timestamp, $ts);
+        ($id:ident, $expiry:expr, $fee:expr) => {
+            assert_eq!($id.expiry, $expiry);
             assert_eq!($id.fee.to_string(), $fee);
         };
     }
@@ -488,7 +488,7 @@ mod tests {
         let to = crypto::KeyPair::gen();
         let reward_tx = TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
             base: Tx {
-                timestamp: 123,
+                expiry: 123,
                 fee: get_asset("123.00000 TEST"),
                 signature_pairs: vec![],
             },
@@ -509,7 +509,7 @@ mod tests {
         let wallet = crypto::KeyPair::gen();
         let mut owner_tx = TxVariant::V0(TxVariantV0::OwnerTx(OwnerTx {
             base: Tx {
-                timestamp: 1230,
+                expiry: 1230,
                 fee: get_asset("123.00000 TEST"),
                 signature_pairs: vec![],
             },
@@ -538,7 +538,7 @@ mod tests {
         let wallet = crypto::KeyPair::gen();
         let owner_tx = OwnerTx {
             base: Tx {
-                timestamp: 1230,
+                expiry: 1230,
                 fee: get_asset("123.00000 TEST"),
                 signature_pairs: vec![],
             },
@@ -566,7 +566,7 @@ mod tests {
         let wallet = crypto::KeyPair::gen();
         let mint_tx = MintTx {
             base: Tx {
-                timestamp: 1234,
+                expiry: 1234,
                 fee: get_asset("123.00000 TEST"),
                 signature_pairs: vec![],
             },
@@ -596,7 +596,7 @@ mod tests {
         let to = crypto::KeyPair::gen();
         let reward_tx = RewardTx {
             base: Tx {
-                timestamp: 123,
+                expiry: 123,
                 fee: get_asset("123.00000 TEST"),
                 signature_pairs: vec![],
             },
@@ -623,7 +623,7 @@ mod tests {
         let to = crypto::KeyPair::gen();
         let transfer_tx = TransferTx {
             base: Tx {
-                timestamp: 1234567890,
+                expiry: 1234567890,
                 fee: get_asset("1.23000 TEST"),
                 signature_pairs: vec![],
             },
@@ -653,7 +653,7 @@ mod tests {
     #[test]
     fn tx_eq() {
         let tx_a = Tx {
-            timestamp: 1000,
+            expiry: 1000,
             fee: get_asset("10.00000 TEST"),
             signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
         };
@@ -661,7 +661,7 @@ mod tests {
         assert_eq!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.timestamp = tx_b.timestamp + 1;
+        tx_b.expiry = tx_b.expiry + 1;
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
@@ -686,7 +686,7 @@ mod tests {
     fn transfer_tx_eq() {
         let tx_a = TransferTx {
             base: Tx {
-                timestamp: 1000,
+                expiry: 1000,
                 fee: get_asset("10.00000 TEST"),
                 signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
             },
@@ -733,7 +733,7 @@ mod tests {
     fn precomp_data_sig_split() {
         let tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: Tx {
-                timestamp: 1000,
+                expiry: 1000,
                 fee: get_asset("10.00000 TEST"),
                 signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
             },

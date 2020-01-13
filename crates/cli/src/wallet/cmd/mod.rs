@@ -179,11 +179,11 @@ pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), Stri
 
 pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_args!(args, 4);
-    let timestamp: u64 = {
-        let ts: u64 = args[1]
+    let expiry: u64 = {
+        let expiry: u64 = args[1]
             .parse()
-            .map_err(|_| "Failed to parse timestamp offset".to_owned())?;
-        ts + godcoin::get_epoch_ms()
+            .map_err(|_| "Failed to parse expiry ms".to_owned())?;
+        godcoin::get_epoch_ms() + expiry
     };
 
     let amount = args[2].parse().map_err(|_| "Failed to parse grael asset")?;
@@ -222,7 +222,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
 
     let mint_tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: Tx {
-            timestamp,
+            expiry,
             signature_pairs: vec![],
             fee: Asset::new(0),
         },
@@ -242,11 +242,11 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
 pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_args!(args, 6);
 
-    let timestamp: u64 = {
-        let ts: u64 = args[1]
+    let expiry: u64 = {
+        let expiry: u64 = args[1]
             .parse()
-            .map_err(|_| "Failed to parse timestamp offset".to_owned())?;
-        ts + godcoin::get_epoch_ms()
+            .map_err(|_| "Failed to parse expiry ms".to_owned())?;
+        godcoin::get_epoch_ms() + expiry
     };
 
     let from_script = Script::new(hex_to_bytes!(args[2])?);
@@ -263,7 +263,7 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
 
     let transfer_tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
         base: Tx {
-            timestamp,
+            expiry,
             signature_pairs: vec![],
             fee,
         },

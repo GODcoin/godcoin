@@ -142,13 +142,11 @@ fn tx_dupe() {
 
 #[test]
 fn tx_expired() {
-    use godcoin::constants::TX_EXPIRY_TIME;
-
     let minter = TestMinter::new();
-    let time = godcoin::get_epoch_ms();
+    let expiry = godcoin::get_epoch_ms();
 
-    let tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-        base: create_tx_header_with_ts("0.00000 TEST", time + TX_EXPIRY_TIME),
+    let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
+        base: create_tx_header_with_expiry("0.00000 TEST", expiry),
         to: (&minter.genesis_info().script).into(),
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
@@ -156,17 +154,30 @@ fn tx_expired() {
         script: minter.genesis_info().script.clone(),
     }));
 
+    let res = minter
+        .send_req(rpc::Request::Broadcast(tx.clone()))
+        .unwrap();
+    assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::TxExpired)));
+
+    match &mut tx {
+        TxVariant::V0(ref mut tx) => {
+            tx.expiry = expiry - 1000;
+        }
+    }
     let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
     assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::TxExpired)));
 }
 
 #[test]
-fn tx_far_in_the_future() {
+fn tx_expiry_far_in_the_future() {
     let minter = TestMinter::new();
-    let time = godcoin::get_epoch_ms();
+    let expiry = godcoin::get_epoch_ms();
 
     let tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-        base: create_tx_header_with_ts("0.00000 TEST", time + 4000),
+        base: create_tx_header_with_expiry(
+            "0.00000 TEST",
+            expiry + constants::TX_MAX_EXPIRY_TIME + 1000,
+        ),
         to: (&minter.genesis_info().script).into(),
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],

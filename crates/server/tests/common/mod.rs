@@ -8,17 +8,17 @@ pub fn get_asset(grael: &str) -> Asset {
 }
 
 pub fn create_tx_header(fee: &str) -> Tx {
-    let timestamp = godcoin::get_epoch_ms();
+    let expiry = godcoin::get_epoch_ms() + 1000;
     Tx {
-        timestamp,
+        expiry,
         fee: fee.parse().unwrap(),
         signature_pairs: Vec::with_capacity(MAX_TX_SIGNATURES),
     }
 }
 
-pub fn create_tx_header_with_ts(fee: &str, timestamp: u64) -> Tx {
+pub fn create_tx_header_with_expiry(fee: &str, expiry: u64) -> Tx {
     Tx {
-        timestamp,
+        expiry,
         fee: fee.parse().unwrap(),
         signature_pairs: Vec::with_capacity(MAX_TX_SIGNATURES),
     }

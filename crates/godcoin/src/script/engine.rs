@@ -578,7 +578,7 @@ mod tests {
 
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: Tx {
-                    timestamp: 1500000000,
+                    expiry: 1500000000,
                     fee: "1.00000 TEST".parse().unwrap(),
                     signature_pairs: vec![SigPair {
                         // Test valid key with invalid signature
@@ -826,7 +826,7 @@ mod tests {
         let to = KeyPair::gen();
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: Tx {
-                timestamp: 1500000000,
+                expiry: 1500000000,
                 fee: "1.00000 TEST".parse().unwrap(),
                 signature_pairs: vec![],
             },

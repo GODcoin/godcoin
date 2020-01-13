@@ -87,16 +87,20 @@ impl Blockchain {
 
         info!("Rebuilding tx expiry index");
         let manager = index::TxManager::new(self.indexer());
+        let current_time = crate::get_epoch_ms();
+        // Iterate in reverse from head to genesis block
         for height in (0..=self.get_chain_height()).rev() {
-            let sys_time = crate::get_epoch_ms();
             let block = store.get(height).unwrap();
-            // Test a huge timestamp gap to ensure all active txs are indexed
-            if block.timestamp() > sys_time - (TX_EXPIRY_TIME * 2) {
+            if current_time - block.timestamp() <= TX_MAX_EXPIRY_TIME {
                 for tx in block.txs() {
                     let data = TxPrecompData::from_tx(tx);
-                    manager.insert(data.txid(), data.tx().timestamp());
+                    let expiry = data.tx().expiry();
+                    if expiry > current_time {
+                        manager.insert(data.txid(), expiry);
+                    }
                 }
             } else {
+                // Break early as all transactions are guaranteed to be expired.
                 break;
             }
         }
@@ -443,8 +447,8 @@ impl Blockchain {
                         panic!("reward tx must have no fee");
                     } else if !tx.signature_pairs.is_empty() {
                         panic!("reward tx must not be signed");
-                    } else if tx.timestamp != 0 {
-                        panic!("reward tx must have a timestamp of 0");
+                    } else if tx.expiry != 0 {
+                        panic!("reward tx must have an expiry timestamp of 0");
                     }
                 }
                 TxVariantV0::TransferTx(transfer) => {
@@ -508,8 +512,8 @@ impl Blockchain {
 
         let owner_tx = TxVariant::V0(TxVariantV0::OwnerTx(OwnerTx {
             base: Tx {
+                expiry: timestamp + 1000,
                 fee: Asset::default(),
-                timestamp,
                 signature_pairs: Vec::new(),
             },
             minter: info.minter_key.0.clone(),

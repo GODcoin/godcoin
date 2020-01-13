@@ -3,7 +3,6 @@ use std::{collections::HashMap, convert::TryInto, io::Cursor, mem, path::Path, s
 
 use crate::{
     asset::Asset,
-    constants::TX_EXPIRY_TIME,
     crypto::ScriptHash,
     serializer::*,
     tx::{TxId, TxVariant, TxVariantV0},
@@ -18,7 +17,7 @@ const KEY_CHAIN_HEIGHT: &[u8] = b"chain_height";
 const KEY_TOKEN_SUPPLY: &[u8] = b"token_supply";
 const KEY_INDEX_STATUS: &[u8] = b"index_status";
 
-const EXPIRED_TX_REMOVAL: u64 = TX_EXPIRY_TIME + 30000;
+pub const TX_EXPIRY_ADJUSTMENT: u64 = 30000;
 
 pub struct Indexer {
     db: DB,
@@ -259,22 +258,22 @@ impl TxManager {
         self.indexer.db.get_cf(cf, id).unwrap().is_some()
     }
 
-    pub fn insert(&self, id: &TxId, ts: u64) {
+    pub fn insert(&self, id: &TxId, expiry: u64) {
         let db = &self.indexer.db;
         let cf = db.cf_handle(CF_TX_EXPIRY).unwrap();
-        db.put_cf(cf, id, ts.to_be_bytes()).unwrap();
+        db.put_cf(cf, id, expiry.to_be_bytes()).unwrap();
     }
 
     pub fn purge_expired(&self) {
         let db = &self.indexer.db;
         let cf = db.cf_handle(CF_TX_EXPIRY).unwrap();
-        let current_time = crate::get_epoch_ms();
+        // Pretend to be slightly in the past in case system time adjusts in the future.
+        let current_time = crate::get_epoch_ms() - TX_EXPIRY_ADJUSTMENT;
 
         let mut batch = rocksdb::WriteBatch::default();
         for (key, value) in db.iterator_cf(cf, IteratorMode::Start).unwrap() {
-            let ts = u64::from_be_bytes(value.as_ref().try_into().unwrap());
-            // Increase the expiry time for extra assurance if system time slightly adjusts.
-            if ts < current_time - EXPIRED_TX_REMOVAL {
+            let expiry = u64::from_be_bytes(value.as_ref().try_into().unwrap());
+            if expiry < current_time {
                 batch.delete_cf(cf, key).unwrap();
             }
         }
@@ -322,25 +321,25 @@ mod tests {
     fn tx_manager() {
         run_test(|indexer| {
             let id = TxId::from_digest(Digest::from_slice(&[0u8; 32]).unwrap());
-            let ts = crate::get_epoch_ms();
+            let expiry = crate::get_epoch_ms();
             let manager = TxManager::new(Arc::clone(&indexer));
             assert!(!manager.has(&id));
-            manager.insert(&id, ts);
+            manager.insert(&id, expiry);
             assert!(manager.has(&id));
 
             let cf = indexer.db.cf_handle(CF_TX_EXPIRY).unwrap();
             indexer.db.delete_cf(cf, &id).unwrap();
             assert!(!manager.has(&id));
 
-            manager.insert(&id, ts - TX_EXPIRY_TIME);
+            manager.insert(&id, expiry - TX_EXPIRY_ADJUSTMENT + 100);
             manager.purge_expired();
-            // The transaction has expired, but we give an additional second before purging it.
+            // The transaction has expired, but we give additional time before purging it.
             assert!(manager.has(&id));
 
             let cf = indexer.db.cf_handle(CF_TX_EXPIRY).unwrap();
             indexer.db.delete_cf(cf, &id).unwrap();
             assert!(!manager.has(&id));
-            manager.insert(&id, ts - EXPIRED_TX_REMOVAL - 100);
+            manager.insert(&id, expiry - TX_EXPIRY_ADJUSTMENT - 100);
             assert!(manager.has(&id));
             manager.purge_expired();
             // Test that the expiry is completely over

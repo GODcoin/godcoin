@@ -100,8 +100,8 @@ impl Minter {
                 };
                 transactions.push(TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
                     base: Tx {
+                        expiry: 0,
                         fee: Asset::default(),
-                        timestamp: 0,
                         signature_pairs: Vec::new(),
                     },
                     to: wallet_addr,
