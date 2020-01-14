@@ -100,6 +100,7 @@ impl Minter {
                 };
                 transactions.push(TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
                     base: Tx {
+                        nonce: 0,
                         expiry: 0,
                         fee: Asset::default(),
                         signature_pairs: Vec::new(),

@@ -18,6 +18,9 @@ simplifies documenting any changes.
   broadcasted at any time up until the expiry. Previously, users would have to
   broadcast a transaction at an exact time for acceptance, which isn't practical
   when dealing with multiple signing parties.
+- Transactions now have a nonce field. This field must be unique when all other
+  transaction data is the same. In other words, the nonce can be reused whenever
+  other data (e.g. timestamp) chances.
 - All times now deal with seconds instead of milliseconds.
 
 # Version 0.3.0 (2019-12-31)

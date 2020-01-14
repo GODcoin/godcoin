@@ -141,6 +141,68 @@ fn tx_dupe() {
 }
 
 #[test]
+fn tx_no_dupe_with_different_nonce() {
+    let minter = TestMinter::new();
+    let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
+        base: create_tx_header("0.00000 TEST"),
+        to: (&minter.genesis_info().script).into(),
+        amount: get_asset("10.00000 TEST"),
+        attachment: vec![],
+        attachment_name: "".to_owned(),
+        script: minter.genesis_info().script.clone(),
+    }));
+
+    tx.append_sign(&minter.genesis_info().wallet_keys[1]);
+    tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+
+    let res = minter
+        .send_req(rpc::Request::Broadcast(tx.clone()))
+        .unwrap();
+    assert_eq!(res, Ok(rpc::Response::Broadcast));
+
+    match &mut tx {
+        TxVariant::V0(ref mut tx) => {
+            tx.nonce = tx.nonce.wrapping_add(1);
+            tx.signature_pairs = vec![];
+        }
+    }
+    tx.append_sign(&minter.genesis_info().wallet_keys[1]);
+    tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+
+    let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
+    assert_eq!(res, Ok(rpc::Response::Broadcast));
+}
+
+#[test]
+fn tx_sig_validation_err_with_different_nonce() {
+    let minter = TestMinter::new();
+    let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
+        base: create_tx_header("0.00000 TEST"),
+        to: (&minter.genesis_info().script).into(),
+        amount: get_asset("10.00000 TEST"),
+        attachment: vec![],
+        attachment_name: "".to_owned(),
+        script: minter.genesis_info().script.clone(),
+    }));
+
+    tx.append_sign(&minter.genesis_info().wallet_keys[1]);
+    tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+
+    let res = minter
+        .send_req(rpc::Request::Broadcast(tx.clone()))
+        .unwrap();
+    assert_eq!(res, Ok(rpc::Response::Broadcast));
+
+    match &mut tx {
+        TxVariant::V0(ref mut tx) => {
+            tx.nonce = tx.nonce.wrapping_add(1);
+        }
+    }
+    let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
+    assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::ScriptRetFalse)));
+}
+
+#[test]
 fn tx_expired() {
     let minter = TestMinter::new();
     let expiry = godcoin::get_epoch_time();

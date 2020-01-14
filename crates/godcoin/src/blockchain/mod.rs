@@ -512,6 +512,7 @@ impl Blockchain {
 
         let owner_tx = TxVariant::V0(TxVariantV0::OwnerTx(OwnerTx {
             base: Tx {
+                nonce: 0,
                 expiry: timestamp + 1,
                 fee: Asset::default(),
                 signature_pairs: Vec::new(),

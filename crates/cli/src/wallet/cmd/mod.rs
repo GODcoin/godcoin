@@ -179,6 +179,13 @@ pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), Stri
 
 pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_args!(args, 4);
+
+    let nonce: u32 = {
+        let mut nonce = [0; 4];
+        sodiumoxide::randombytes::randombytes_into(&mut nonce);
+        u32::from_ne_bytes(nonce)
+    };
+
     let expiry: u64 = {
         let expiry: u64 = args[1]
             .parse()
@@ -222,9 +229,10 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
 
     let mint_tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: Tx {
+            nonce,
             expiry,
-            signature_pairs: vec![],
             fee: Asset::new(0),
+            signature_pairs: vec![],
         },
         to: owner_wallet.clone(),
         amount,
@@ -241,6 +249,12 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
 
 pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
     check_args!(args, 6);
+
+    let nonce: u32 = {
+        let mut nonce = [0; 4];
+        sodiumoxide::randombytes::randombytes_into(&mut nonce);
+        u32::from_ne_bytes(nonce)
+    };
 
     let expiry: u64 = {
         let expiry: u64 = args[1]
@@ -263,9 +277,10 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
 
     let transfer_tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
         base: Tx {
+            nonce,
             expiry,
-            signature_pairs: vec![],
             fee,
+            signature_pairs: vec![],
         },
         from: ScriptHash::from(&from_script),
         to: to_script,
