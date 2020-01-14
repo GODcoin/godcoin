@@ -70,7 +70,7 @@ impl<'a> TxPrecompData<'a> {
         let sigs_len = 1 + (tx.sigs().len() * (PUBLICKEYBYTES + SIGNATUREBYTES));
         let sig_tx_suffix = bytes.len() - sigs_len;
 
-        let txid = TxId(double_sha256(&bytes));
+        let txid = tx.calc_txid();
         Self {
             tx,
             txid,
@@ -158,6 +158,13 @@ impl TxVariant {
                 TxVariantV0::TransferTx(tx) => Some(&tx.script),
             },
         }
+    }
+
+    #[inline]
+    pub fn calc_txid(&self) -> TxId {
+        let mut buf = Vec::with_capacity(4096);
+        self.serialize_without_sigs(&mut buf);
+        TxId(double_sha256(&buf))
     }
 
     #[inline]
