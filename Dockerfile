@@ -7,9 +7,11 @@ RUN apt-get update && \
         make \
         clang
 
+ARG TESTNET=0
+
 # Copy and build
 COPY . .
-RUN cargo build -p godcoin-server --release
+RUN ./docker/build.sh
 
 ##### Stage 1
 FROM debian:buster-slim
