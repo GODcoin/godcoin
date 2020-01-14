@@ -285,3 +285,77 @@ fn tx_too_many_signatures_err() {
     let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
     assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::TooManySignatures)));
 }
+
+#[test]
+fn tx_with_bad_chain_id() {
+    fn manual_sign(key_pair: &KeyPair, tx: &mut TxVariant, chain_id: [u8; 2]) {
+        use sodiumoxide::crypto::hash::sha256;
+
+        let mut buf = Vec::with_capacity(4096);
+        tx.serialize_without_sigs(&mut buf);
+
+        let first_round = {
+            let mut state = sha256::State::new();
+            state.update(&chain_id);
+            state.update(&buf);
+            state.finalize()
+        };
+
+        let second_round = sha256::hash(first_round.as_ref());
+        let sig = key_pair.sign(second_round.as_ref());
+
+        match tx {
+            TxVariant::V0(ref mut tx) => {
+                tx.signature_pairs.push(sig);
+            }
+        }
+    };
+
+    let minter = TestMinter::new();
+    let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
+        base: create_tx_header("0.00000 TEST"),
+        to: (&minter.genesis_info().script).into(),
+        amount: get_asset("10.00000 TEST"),
+        attachment: vec![],
+        attachment_name: "".to_owned(),
+        script: minter.genesis_info().script.clone(),
+    }));
+
+    {
+        // Test manual signing with the default chain ID to ensure manual_sign is correct
+        manual_sign(
+            &minter.genesis_info().wallet_keys[1],
+            &mut tx,
+            constants::CHAIN_ID,
+        );
+        manual_sign(
+            &minter.genesis_info().wallet_keys[0],
+            &mut tx,
+            constants::CHAIN_ID,
+        );
+
+        let res = minter
+            .send_req(rpc::Request::Broadcast(tx.clone()))
+            .unwrap();
+        assert_eq!(res, Ok(rpc::Response::Broadcast));
+    }
+    {
+        // Test manual signing with incorrect chain ID to ensure these transactions cannot be broadcasted
+        match &mut tx {
+            TxVariant::V0(ref mut tx) => {
+                tx.nonce = tx.nonce.wrapping_add(1);
+                tx.signature_pairs = vec![];
+            }
+        }
+        let mut new_id = [0x00, 0x00];
+        new_id[0] = constants::CHAIN_ID[0].wrapping_add(1);
+        new_id[1] = constants::CHAIN_ID[0].wrapping_add(1);
+        manual_sign(&minter.genesis_info().wallet_keys[1], &mut tx, new_id);
+        manual_sign(&minter.genesis_info().wallet_keys[0], &mut tx, new_id);
+
+        let res = minter
+            .send_req(rpc::Request::Broadcast(tx.clone()))
+            .unwrap();
+        assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::ScriptRetFalse)));
+    }
+}
