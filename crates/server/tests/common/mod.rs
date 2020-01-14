@@ -27,10 +27,9 @@ pub fn create_tx_header_with_expiry(fee: &str, expiry: u64) -> Tx {
 }
 
 pub fn check_sigs(tx: &TxVariant) -> bool {
-    let mut buf = Vec::with_capacity(4096);
-    tx.serialize_without_sigs(&mut buf);
+    let txid = tx.calc_txid();
     for sig_pair in tx.sigs() {
-        if !sig_pair.verify(&buf) {
+        if !sig_pair.verify(txid.as_ref()) {
             return false;
         }
     }

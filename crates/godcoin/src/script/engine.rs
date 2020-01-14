@@ -235,9 +235,8 @@ impl<'a> ScriptEngine<'a> {
             return false;
         }
 
-        let buf = self.data.bytes_without_sigs();
-        let tx = &self.data.tx();
-        let sigs = tx.sigs();
+        let txid = self.data.txid().as_ref();
+        let sigs = self.data.tx().sigs();
 
         let mut valid_threshold = 0;
         let mut key_iter = keys.iter();
@@ -247,7 +246,7 @@ impl<'a> ScriptEngine<'a> {
                     Some(key) => {
                         if key == &pair.pub_key {
                             self.sig_pair_pos += 1;
-                            if key.verify(buf, &pair.signature) {
+                            if key.verify(txid, &pair.signature) {
                                 valid_threshold += 1;
                                 continue 'pair_loop;
                             } else {

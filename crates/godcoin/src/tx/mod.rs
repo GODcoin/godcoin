@@ -1,7 +1,4 @@
-use sodiumoxide::crypto::{
-    hash::sha256,
-    sign::{PUBLICKEYBYTES, SIGNATUREBYTES},
-};
+use sodiumoxide::crypto::hash::sha256;
 use std::{
     borrow::Cow,
     io::Cursor,
@@ -59,8 +56,6 @@ impl AsRef<[u8]> for TxId {
 pub struct TxPrecompData<'a> {
     tx: Cow<'a, TxVariant>,
     txid: TxId,
-    bytes: Vec<u8>,
-    sig_tx_suffix: usize,
 }
 
 impl<'a> TxPrecompData<'a> {
@@ -69,18 +64,8 @@ impl<'a> TxPrecompData<'a> {
         T: Into<Cow<'a, TxVariant>>,
     {
         let tx = tx.into();
-        let mut bytes = Vec::with_capacity(4096);
-        tx.serialize(&mut bytes);
-        let sigs_len = 1 + (tx.sigs().len() * (PUBLICKEYBYTES + SIGNATUREBYTES));
-        let sig_tx_suffix = bytes.len() - sigs_len;
-
         let txid = tx.calc_txid();
-        Self {
-            tx,
-            txid,
-            bytes,
-            sig_tx_suffix,
-        }
+        Self { tx, txid }
     }
 
     #[inline]
@@ -96,16 +81,6 @@ impl<'a> TxPrecompData<'a> {
     #[inline]
     pub fn txid(&self) -> &TxId {
         &self.txid
-    }
-
-    #[inline]
-    pub fn bytes(&self) -> &[u8] {
-        &self.bytes
-    }
-
-    #[inline]
-    pub fn bytes_without_sigs(&self) -> &[u8] {
-        &self.bytes[..self.sig_tx_suffix]
     }
 }
 
@@ -182,9 +157,8 @@ impl TxVariant {
 
     #[inline]
     pub fn sign(&self, key_pair: &KeyPair) -> SigPair {
-        let mut buf = Vec::with_capacity(4096);
-        self.serialize_without_sigs(&mut buf);
-        key_pair.sign(&buf)
+        let hash = self.calc_txid();
+        key_pair.sign(&hash.as_ref())
     }
 
     #[inline]
@@ -788,7 +762,7 @@ mod tests {
     }
 
     #[test]
-    fn precomp_data_sig_split() {
+    fn precomp_data() {
         let tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: Tx {
                 nonce: 123,
@@ -803,9 +777,8 @@ mod tests {
             memo: vec![1, 2, 3],
         }));
 
-        let mut buf = Vec::with_capacity(4096);
-        tx.serialize_without_sigs(&mut buf);
-        assert_eq!(tx.precompute().bytes_without_sigs(), buf.as_slice());
+        let txid = &tx.calc_txid();
+        assert_eq!(tx.precompute().txid(), txid);
     }
 
     fn get_asset(s: &str) -> Asset {

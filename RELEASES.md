@@ -13,6 +13,7 @@ simplifies documenting any changes.
 
 ### Breaking changes
 
+- All times now deal with seconds instead of milliseconds.
 - Transactions no longer have a "timestamp" field in place of a new "expiry"
   field. This is a quality of life improvement as the transaction can be
   broadcasted at any time up until the expiry. Previously, users would have to
@@ -22,7 +23,7 @@ simplifies documenting any changes.
   transaction data is the same. In other words, the nonce can be reused whenever
   other data (e.g. timestamp) chances.
 - TxId hashes now include a chain ID and no longer include signatures.
-- All times now deal with seconds instead of milliseconds.
+- Transactions are now signed using the TxID.
 
 # Version 0.3.0 (2019-12-31)
 
