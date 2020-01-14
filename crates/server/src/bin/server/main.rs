@@ -7,7 +7,7 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
 };
-use tokio::{prelude::*, runtime::Runtime};
+use tokio::{prelude::*, runtime::Builder};
 
 #[derive(Debug, Deserialize)]
 struct Config {
@@ -90,7 +90,10 @@ fn main() {
         None
     };
 
-    let mut rt = Runtime::new().unwrap();
+    let mut rt = Builder::new()
+        .panic_handler(|_| std::process::abort())
+        .build()
+        .unwrap();
 
     let enable_stale_production = config.enable_stale_production;
     rt.spawn(future::lazy(move || {
