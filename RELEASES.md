@@ -21,7 +21,7 @@ simplifies documenting any changes.
 - Transactions now have a nonce field. This field must be unique when all other
   transaction data is the same. In other words, the nonce can be reused whenever
   other data (e.g. timestamp) chances.
-- TxId calculations no longer include signatures
+- TxId hashes now include a chain ID and no longer include signatures.
 - All times now deal with seconds instead of milliseconds.
 
 # Version 0.3.0 (2019-12-31)

@@ -1,4 +1,7 @@
-use sodiumoxide::crypto::sign::{PUBLICKEYBYTES, SIGNATUREBYTES};
+use sodiumoxide::crypto::{
+    hash::sha256,
+    sign::{PUBLICKEYBYTES, SIGNATUREBYTES},
+};
 use std::{
     borrow::Cow,
     io::Cursor,
@@ -7,7 +10,8 @@ use std::{
 
 use crate::{
     asset::Asset,
-    crypto::{double_sha256, Digest, KeyPair, PublicKey, ScriptHash, SigPair},
+    constants::CHAIN_ID,
+    crypto::{Digest, KeyPair, PublicKey, ScriptHash, SigPair},
     script::Script,
     serializer::*,
 };
@@ -164,7 +168,16 @@ impl TxVariant {
     pub fn calc_txid(&self) -> TxId {
         let mut buf = Vec::with_capacity(4096);
         self.serialize_without_sigs(&mut buf);
-        TxId(double_sha256(&buf))
+
+        let first_round = {
+            let mut state = sha256::State::new();
+            state.update(&CHAIN_ID);
+            state.update(&buf);
+            state.finalize()
+        };
+
+        let second_round = sha256::hash(first_round.as_ref());
+        TxId(Digest(second_round))
     }
 
     #[inline]

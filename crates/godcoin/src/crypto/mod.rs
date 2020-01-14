@@ -16,6 +16,7 @@ pub use self::sigpair::*;
 
 macro_rules! impl_wrapper {
     ($name:ident, $wrapper:ty) => {
+        #[repr(transparent)]
         #[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
         pub struct $name(pub $wrapper);
 
