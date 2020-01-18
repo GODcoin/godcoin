@@ -3,8 +3,8 @@ use godcoin::{constants::MAX_TX_SIGNATURES, prelude::*};
 pub mod minter;
 pub use minter::*;
 
-pub fn get_asset(grael: &str) -> Asset {
-    grael.parse().unwrap()
+pub fn get_asset(asset: &str) -> Asset {
+    asset.parse().unwrap()
 }
 
 pub fn create_tx_header(fee: &str) -> Tx {

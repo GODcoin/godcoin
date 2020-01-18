@@ -160,11 +160,11 @@ impl Wallet {
             "Broadcasts a transaction to the network",
         ]);
         cmds.push([
-            "build_mint_tx <expiry> <grael_asset> <owner_script> <attachment_path>",
+            "build_mint_tx <expiry> <asset> <owner_script> <attachment_path>",
             "Builds a mint transaction",
         ]);
         cmds.push([
-            "build_transfer_tx <expiry> <from:script_hex> <to:p2sh> <amount:grael_asset> <fee:grael_asset> <memo>",
+            "build_transfer_tx <expiry> <from:script_hex> <to:p2sh> <amount:asset> <fee:asset> <memo>",
             "Builds a transfer transaction",
         ]);
         cmds.push(["get_properties", "Retrieve global network properties"]);

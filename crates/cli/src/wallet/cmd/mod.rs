@@ -193,7 +193,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
         godcoin::get_epoch_time() + expiry
     };
 
-    let amount = args[2].parse().map_err(|_| "Failed to parse grael asset")?;
+    let amount = args[2].parse().map_err(|_| "Failed to parse asset")?;
     let script: Script = hex_to_bytes!(args[3])?.into();
 
     let res = send_rpc_req(wallet, rpc::Request::GetProperties)?;
@@ -269,10 +269,8 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
 
     let amount = args[4]
         .parse()
-        .map_err(|_| "Failed to parse grael asset amount")?;
-    let fee = args[5]
-        .parse()
-        .map_err(|_| "Failed to parse grael asset fee")?;
+        .map_err(|_| "Failed to parse asset amount")?;
+    let fee = args[5].parse().map_err(|_| "Failed to parse asset fee")?;
     let memo = args[6].as_bytes();
 
     let transfer_tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
