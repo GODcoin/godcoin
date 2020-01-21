@@ -1,5 +1,5 @@
 use crate::{
-    crypto::{double_sha256, Digest, KeyPair, ScriptHash, SigPair},
+    crypto::{double_sha256, Digest, DoubleSha256, KeyPair, ScriptHash, SigPair},
     serializer::*,
     tx::*,
 };
@@ -222,11 +222,14 @@ impl Deref for BlockV0 {
 }
 
 pub fn calc_tx_merkle_root(txs: &[TxVariant]) -> Digest {
-    let mut buf = Vec::with_capacity(4096 * txs.len());
+    let mut hasher = DoubleSha256::new();
+    let mut buf = Vec::with_capacity(4096);
     for tx in txs {
-        tx.serialize(&mut buf)
+        buf.clear();
+        tx.serialize(&mut buf);
+        hasher.update(&buf);
     }
-    double_sha256(&buf)
+    hasher.finalize()
 }
 
 #[cfg(test)]
@@ -247,13 +250,7 @@ mod tests {
             to: keys.0.clone().into(),
             rewards: Asset::default(),
         }))];
-        let tx_merkle_root = {
-            let mut buf = Vec::new();
-            for tx in &transactions {
-                tx.serialize(&mut buf)
-            }
-            double_sha256(&buf)
-        };
+        let tx_merkle_root = calc_tx_merkle_root(&transactions);
         let mut block = Block::V0(BlockV0 {
             header: BlockHeaderV0 {
                 previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
