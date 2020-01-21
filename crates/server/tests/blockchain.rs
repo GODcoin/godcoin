@@ -289,20 +289,16 @@ fn tx_too_many_signatures_err() {
 #[test]
 fn tx_with_bad_chain_id() {
     fn manual_sign(key_pair: &KeyPair, tx: &mut TxVariant, chain_id: [u8; 2]) {
-        use sodiumoxide::crypto::hash::sha256;
-
         let mut buf = Vec::with_capacity(4096);
         tx.serialize_without_sigs(&mut buf);
 
-        let first_round = {
-            let mut state = sha256::State::new();
-            state.update(&chain_id);
-            state.update(&buf);
-            state.finalize()
+        let digest = {
+            let mut hasher = DoubleSha256::new();
+            hasher.update(&chain_id);
+            hasher.update(&buf);
+            hasher.finalize()
         };
-
-        let second_round = sha256::hash(first_round.as_ref());
-        let sig = key_pair.sign(second_round.as_ref());
+        let sig = key_pair.sign(digest.as_ref());
 
         match tx {
             TxVariant::V0(ref mut tx) => {

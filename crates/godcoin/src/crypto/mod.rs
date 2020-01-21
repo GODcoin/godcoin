@@ -59,3 +59,41 @@ impl_wrapper!(Signature, sign::Signature);
 pub fn double_sha256(buf: &[u8]) -> Digest {
     Digest(sha256::hash(sha256::hash(buf).as_ref()))
 }
+
+pub struct DoubleSha256(sha256::State);
+
+impl DoubleSha256 {
+    #[inline]
+    pub fn new() -> Self {
+        DoubleSha256(sha256::State::new())
+    }
+
+    #[inline]
+    pub fn update(&mut self, data: &[u8]) {
+        self.0.update(data);
+    }
+
+    #[inline]
+    pub fn finalize(self) -> Digest {
+        let digest = self.0.finalize();
+        let digest = sha256::hash(digest.as_ref());
+        Digest(digest)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn ensure_double_hash() {
+        let data = &[1, 2, 3, 4, 5];
+        let digest_a = double_sha256(data);
+        let digest_b = {
+            let mut hasher = DoubleSha256::new();
+            hasher.update(data);
+            hasher.finalize()
+        };
+        assert_eq!(digest_a, digest_b);
+    }
+}

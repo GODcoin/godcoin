@@ -1,4 +1,3 @@
-use sodiumoxide::crypto::hash::sha256;
 use std::{
     borrow::Cow,
     io::Cursor,
@@ -8,7 +7,7 @@ use std::{
 use crate::{
     asset::Asset,
     constants::CHAIN_ID,
-    crypto::{Digest, KeyPair, PublicKey, ScriptHash, SigPair},
+    crypto::{Digest, DoubleSha256, KeyPair, PublicKey, ScriptHash, SigPair},
     script::Script,
     serializer::*,
 };
@@ -144,15 +143,13 @@ impl TxVariant {
         let mut buf = Vec::with_capacity(4096);
         self.serialize_without_sigs(&mut buf);
 
-        let first_round = {
-            let mut state = sha256::State::new();
-            state.update(&CHAIN_ID);
-            state.update(&buf);
-            state.finalize()
+        let digest = {
+            let mut hasher = DoubleSha256::new();
+            hasher.update(&CHAIN_ID);
+            hasher.update(&buf);
+            hasher.finalize()
         };
-
-        let second_round = sha256::hash(first_round.as_ref());
-        TxId(Digest(second_round))
+        TxId(digest)
     }
 
     #[inline]

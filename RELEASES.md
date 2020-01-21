@@ -10,6 +10,8 @@ simplifies documenting any changes.
 - The testnet feature flag changes the global asset constant symbol to TEST. The
   recommendation for library authors is to do the same when testing against a
   testnet.
+- Introduce DoubleSha256 API that allows for streaming hash updates, but when
+  finalize is called, a double hash will be performed.
 
 ### Breaking changes
 

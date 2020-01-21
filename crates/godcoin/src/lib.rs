@@ -28,7 +28,8 @@ pub mod prelude {
         BlockV0, Blockchain, FilteredBlock, Properties,
     };
     pub use super::crypto::{
-        KeyPair, PrivateKey, PublicKey, ScriptHash, SigPair, Wif, WifError, WifErrorKind,
+        DoubleSha256, KeyPair, PrivateKey, PublicKey, ScriptHash, SigPair, Wif, WifError,
+        WifErrorKind,
     };
     pub use super::net::{self, rpc, Body, Msg};
     pub use super::script::{self, OpFrame, Script, ScriptEngine};
