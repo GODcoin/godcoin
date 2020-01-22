@@ -124,7 +124,7 @@ impl TestMinter {
         &self.1
     }
 
-    pub fn produce_block(&self) -> Result<(), verify::BlockErr> {
+    pub fn produce_block(&self) -> Result<(), blockchain::BlockErr> {
         self.0.minter.force_produce_block(true)
     }
 

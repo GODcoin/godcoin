@@ -24,7 +24,7 @@ pub fn get_epoch_time() -> u64 {
 pub mod prelude {
     pub use super::asset::{self, Asset, AssetError, AssetErrorKind};
     pub use super::blockchain::{
-        index::IndexStatus, verify, AddressInfo, Block, BlockFilter, BlockHeader, BlockHeaderV0,
+        self, index::IndexStatus, AddressInfo, Block, BlockFilter, BlockHeader, BlockHeaderV0,
         BlockV0, Blockchain, FilteredBlock, Properties,
     };
     pub use super::crypto::{

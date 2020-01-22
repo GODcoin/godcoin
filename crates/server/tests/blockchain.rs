@@ -1,7 +1,7 @@
 use godcoin::{
-    blockchain::index::TxManager,
+    blockchain::{error::TxErr, index::TxManager},
     constants,
-    prelude::{net::ErrorKind, verify::TxErr, *},
+    prelude::{net::ErrorKind, *},
 };
 
 mod common;

@@ -117,7 +117,7 @@ fn insufficient_balance_caused_by_fee() {
     assert_eq!(
         res,
         Some(Err(net::ErrorKind::TxValidation(
-            verify::TxErr::InsufficientBalance
+            blockchain::TxErr::InsufficientBalance
         )))
     );
     minter.produce_block().unwrap();
@@ -158,7 +158,7 @@ fn insufficient_fee() {
     assert_eq!(
         res,
         Some(Err(net::ErrorKind::TxValidation(
-            verify::TxErr::InvalidFeeAmount
+            blockchain::TxErr::InvalidFeeAmount
         )))
     );
 }
@@ -186,7 +186,7 @@ fn insufficient_balance_caused_by_amt() {
     assert_eq!(
         res,
         Some(Err(net::ErrorKind::TxValidation(
-            verify::TxErr::InsufficientBalance
+            blockchain::TxErr::InsufficientBalance
         )))
     );
     minter.produce_block().unwrap();
@@ -223,7 +223,9 @@ fn memo_too_large() {
     let res = minter.send_req(rpc::Request::Broadcast(tx));
     assert_eq!(
         res,
-        Some(Err(net::ErrorKind::TxValidation(verify::TxErr::TxTooLarge)))
+        Some(Err(net::ErrorKind::TxValidation(
+            blockchain::TxErr::TxTooLarge
+        )))
     );
     minter.produce_block().unwrap();
 
@@ -262,7 +264,9 @@ fn script_too_large() {
     let res = minter.send_req(rpc::Request::Broadcast(tx));
     assert_eq!(
         res,
-        Some(Err(net::ErrorKind::TxValidation(verify::TxErr::TxTooLarge)))
+        Some(Err(net::ErrorKind::TxValidation(
+            blockchain::TxErr::TxTooLarge
+        )))
     );
 }
 
@@ -403,7 +407,7 @@ fn net_fee_dynamic_increase() {
         let req = rpc::Request::Broadcast(tx);
         let res = minter.send_req(req.clone()).unwrap();
         let exp = Err(net::ErrorKind::TxValidation(
-            verify::TxErr::InvalidFeeAmount,
+            blockchain::TxErr::InvalidFeeAmount,
         ));
         if res == exp {
             for _ in 0..=FEE_RESET_WINDOW {

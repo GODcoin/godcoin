@@ -33,7 +33,7 @@ fn owner_tx_minter_key_change() {
 
     // Minter key changed, should fail
     let res = minter.produce_block();
-    assert_eq!(res.unwrap_err(), verify::BlockErr::InvalidSignature);
+    assert_eq!(res.unwrap_err(), blockchain::BlockErr::InvalidSignature);
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn owner_tx_deny_mint_tokens() {
     assert_eq!(
         res,
         Some(Err(net::ErrorKind::TxValidation(
-            verify::TxErr::ScriptHashMismatch
+            blockchain::TxErr::ScriptHashMismatch
         )))
     );
 }

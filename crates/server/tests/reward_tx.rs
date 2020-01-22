@@ -16,6 +16,8 @@ fn deny_broadcasted_reward_tx() {
     let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
     assert_eq!(
         res,
-        Err(net::ErrorKind::TxValidation(verify::TxErr::TxProhibited))
+        Err(net::ErrorKind::TxValidation(
+            blockchain::TxErr::TxProhibited
+        ))
     );
 }

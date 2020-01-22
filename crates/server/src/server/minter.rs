@@ -57,12 +57,12 @@ impl Minter {
     pub fn force_produce_block(
         &self,
         force_stale_production: bool,
-    ) -> Result<(), verify::BlockErr> {
+    ) -> Result<(), blockchain::BlockErr> {
         warn!("Forcing produced block...");
         self.produce(force_stale_production)
     }
 
-    fn produce(&self, force_stale_production: bool) -> Result<(), verify::BlockErr> {
+    fn produce(&self, force_stale_production: bool) -> Result<(), blockchain::BlockErr> {
         let mut transactions = self.tx_pool.lock().flush();
         let should_produce =
             if force_stale_production || self.enable_stale_production || !transactions.is_empty() {
@@ -137,14 +137,16 @@ impl Minter {
         Ok(())
     }
 
-    pub fn push_tx(&self, tx: TxVariant) -> Result<(), verify::TxErr> {
-        self.tx_pool.lock().push(tx.precompute(), verify::SKIP_NONE)
+    pub fn push_tx(&self, tx: TxVariant) -> Result<(), blockchain::TxErr> {
+        self.tx_pool
+            .lock()
+            .push(tx.precompute(), blockchain::skip_flags::SKIP_NONE)
     }
 
-    pub fn get_addr_info(&self, addr: &ScriptHash) -> Result<AddressInfo, verify::TxErr> {
+    pub fn get_addr_info(&self, addr: &ScriptHash) -> Result<AddressInfo, blockchain::TxErr> {
         self.tx_pool
             .lock()
             .get_address_info(addr)
-            .ok_or(verify::TxErr::Arithmetic)
+            .ok_or(blockchain::TxErr::Arithmetic)
     }
 }

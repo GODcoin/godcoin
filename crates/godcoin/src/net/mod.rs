@@ -1,6 +1,6 @@
 pub mod rpc;
 
-use crate::{prelude::verify::TxErr, serializer::*};
+use crate::{prelude::blockchain::TxErr, serializer::*};
 use std::io::{self, Cursor, Error};
 
 #[derive(Clone, Debug, PartialEq)]

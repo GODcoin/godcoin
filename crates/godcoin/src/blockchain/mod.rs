@@ -3,18 +3,20 @@ use parking_lot::Mutex;
 use std::{path::Path, sync::Arc};
 
 pub mod block;
+pub mod error;
 pub mod index;
+pub mod skip_flags;
 pub mod store;
-pub mod verify;
 
 pub use self::{
     block::*,
+    error::*,
     index::{IndexStatus, Indexer, WriteBatch},
     store::{BlockStore, ReindexOpts},
-    verify::*,
 };
 
 use crate::{asset::Asset, constants::*, crypto::*, script::*, tx::*};
+use skip_flags::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Properties {
@@ -295,7 +297,7 @@ impl Blockchain {
         Some(bal)
     }
 
-    pub fn insert_block(&self, block: Block) -> Result<(), verify::BlockErr> {
+    pub fn insert_block(&self, block: Block) -> Result<(), BlockErr> {
         static SKIP_FLAGS: SkipFlags = SKIP_NONE | SKIP_REWARD_TX;
         self.verify_block(&block, &self.get_chain_head(), SKIP_FLAGS)?;
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
@@ -313,21 +315,21 @@ impl Blockchain {
         block: &Block,
         prev_block: &Block,
         skip_flags: SkipFlags,
-    ) -> Result<(), verify::BlockErr> {
+    ) -> Result<(), BlockErr> {
         if prev_block.height() + 1 != block.height() {
-            return Err(verify::BlockErr::InvalidBlockHeight);
+            return Err(BlockErr::InvalidBlockHeight);
         } else if !block.verify_tx_merkle_root() {
-            return Err(verify::BlockErr::InvalidMerkleRoot);
+            return Err(BlockErr::InvalidMerkleRoot);
         } else if !block.verify_previous_hash(prev_block) {
-            return Err(verify::BlockErr::InvalidPrevHash);
+            return Err(BlockErr::InvalidPrevHash);
         }
 
-        let block_signer = block.signer().ok_or(verify::BlockErr::InvalidSignature)?;
+        let block_signer = block.signer().ok_or(BlockErr::InvalidSignature)?;
         match self.get_owner() {
             TxVariant::V0(tx) => match tx {
                 TxVariantV0::OwnerTx(owner) => {
                     if block_signer.pub_key != owner.minter {
-                        return Err(verify::BlockErr::InvalidSignature);
+                        return Err(BlockErr::InvalidSignature);
                     }
                 }
                 _ => unreachable!(),
@@ -335,7 +337,7 @@ impl Blockchain {
         }
 
         if !block_signer.verify(block.calc_header_hash().as_ref()) {
-            return Err(verify::BlockErr::InvalidHash);
+            return Err(BlockErr::InvalidSignature);
         }
 
         let block_txs = block.txs();
@@ -344,7 +346,7 @@ impl Blockchain {
             let tx = &block_txs[i];
             let txs = &block_txs[0..i];
             if let Err(e) = self.verify_tx(&TxPrecompData::from_tx(tx), txs, skip_flags) {
-                return Err(verify::BlockErr::Tx(e));
+                return Err(BlockErr::Tx(e));
             }
         }
 

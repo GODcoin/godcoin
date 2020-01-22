@@ -7,7 +7,7 @@ pub use common::*;
 fn mint_tx_verification() {
     let minter = TestMinter::new();
     let chain = minter.chain();
-    let skip_flags = verify::SKIP_NONE;
+    let skip_flags = blockchain::skip_flags::SKIP_NONE;
 
     let create_tx = |fee: &str| {
         let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
@@ -31,7 +31,7 @@ fn mint_tx_verification() {
         chain
             .verify_tx(&tx.precompute(), &[], skip_flags)
             .unwrap_err(),
-        verify::TxErr::InvalidFeeAmount
+        blockchain::TxErr::InvalidFeeAmount
     );
 
     let mut tx = create_tx("0.00000 TEST");
@@ -41,7 +41,7 @@ fn mint_tx_verification() {
         chain
             .verify_tx(&tx.precompute(), &[], skip_flags)
             .unwrap_err(),
-        verify::TxErr::ScriptRetFalse
+        blockchain::TxErr::ScriptRetFalse
     );
 
     let mut tx = create_tx("0.00000 TEST");
@@ -51,7 +51,7 @@ fn mint_tx_verification() {
         chain
             .verify_tx(&tx.precompute(), &[], skip_flags)
             .unwrap_err(),
-        verify::TxErr::ScriptRetFalse
+        blockchain::TxErr::ScriptRetFalse
     );
 
     let mut tx = create_tx("0.00000 TEST");
@@ -65,7 +65,7 @@ fn mint_tx_verification() {
         chain
             .verify_tx(&tx.precompute(), &[], skip_flags)
             .unwrap_err(),
-        verify::TxErr::ScriptRetFalse
+        blockchain::TxErr::ScriptRetFalse
     );
 }
 
