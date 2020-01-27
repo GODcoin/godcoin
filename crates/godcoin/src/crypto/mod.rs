@@ -14,6 +14,8 @@ pub use self::key::*;
 pub use self::script_hash::*;
 pub use self::sigpair::*;
 
+pub const DIGEST_BYTES: usize = sha256::DIGESTBYTES;
+
 macro_rules! impl_wrapper {
     ($name:ident, $wrapper:ty) => {
         #[repr(transparent)]

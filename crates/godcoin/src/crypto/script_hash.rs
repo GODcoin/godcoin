@@ -1,10 +1,12 @@
 use super::*;
-use crate::crypto::{double_sha256, Digest, PublicKey};
+use crate::crypto::{double_sha256, Digest, PublicKey, DIGEST_BYTES};
 use crate::script::Script;
 
 pub const SCRIPT_HASH_BUF_PREFIX: u8 = 0x03;
+pub const SCRIPT_HASH_BYTES: usize = DIGEST_BYTES;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[repr(transparent)]
 pub struct ScriptHash(pub Digest);
 
 impl ScriptHash {
