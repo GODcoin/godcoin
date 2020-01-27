@@ -17,7 +17,7 @@ pub const ASSET_SYMBOL: &str = "TEST";
 pub const MAX_STR_LEN: usize = 26;
 pub const MAX_PRECISION: u8 = 5;
 
-#[derive(Copy, Clone, Default, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Asset {
     pub amount: i64,
 }
