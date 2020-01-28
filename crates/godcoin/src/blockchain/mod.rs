@@ -5,6 +5,7 @@ use std::{path::Path, sync::Arc};
 pub mod block;
 pub mod error;
 pub mod index;
+pub mod receipt;
 pub mod skip_flags;
 pub mod store;
 
@@ -12,6 +13,7 @@ pub use self::{
     block::*,
     error::*,
     index::{IndexStatus, Indexer, WriteBatch},
+    receipt::*,
     store::{BlockStore, ReindexOpts},
 };
 
