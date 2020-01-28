@@ -1,4 +1,7 @@
-use godcoin::{crypto::Signature, prelude::*};
+use godcoin::{
+    crypto::Signature,
+    prelude::{script::EvalErrType, *},
+};
 
 mod common;
 pub use common::*;
@@ -37,22 +40,18 @@ fn mint_tx_verification() {
     let mut tx = create_tx("0.00000 TEST");
     tx.sigs_mut().remove(1);
     assert!(check_sigs(&tx));
-    assert_eq!(
-        chain
-            .verify_tx(&tx.precompute(), &[], skip_flags)
-            .unwrap_err(),
-        blockchain::TxErr::ScriptRetFalse
-    );
+    match chain.verify_tx(&tx.precompute(), &[], skip_flags) {
+        Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrType::ScriptRetFalse),
+        res @ _ => panic!("Assertion failed, got {:?}", res),
+    }
 
     let mut tx = create_tx("0.00000 TEST");
     tx.sigs_mut().clear();
     assert!(check_sigs(&tx));
-    assert_eq!(
-        chain
-            .verify_tx(&tx.precompute(), &[], skip_flags)
-            .unwrap_err(),
-        blockchain::TxErr::ScriptRetFalse
-    );
+    match chain.verify_tx(&tx.precompute(), &[], skip_flags) {
+        Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrType::ScriptRetFalse),
+        res @ _ => panic!("Assertion failed, got {:?}", res),
+    }
 
     let mut tx = create_tx("0.00000 TEST");
     tx.sigs_mut().clear();
@@ -61,12 +60,10 @@ fn mint_tx_verification() {
         signature: Signature::from_slice(&[0; 64]).unwrap(),
     });
     assert!(!check_sigs(&tx));
-    assert_eq!(
-        chain
-            .verify_tx(&tx.precompute(), &[], skip_flags)
-            .unwrap_err(),
-        blockchain::TxErr::ScriptRetFalse
-    );
+    match chain.verify_tx(&tx.precompute(), &[], skip_flags) {
+        Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrType::ScriptRetFalse),
+        res @ _ => panic!("Assertion failed, got {:?}", res),
+    }
 }
 
 #[test]

@@ -403,12 +403,9 @@ impl Blockchain {
                         },
                     }
 
-                    let success = ScriptEngine::new(data, &new_owner.script)
+                    return ScriptEngine::new(data, &new_owner.script)
                         .eval()
-                        .map_err(TxErr::ScriptEval)?;
-                    if !success {
-                        return Err(TxErr::ScriptRetFalse);
-                    }
+                        .map_err(TxErr::ScriptEval);
                 }
                 TxVariantV0::MintTx(mint_tx) => {
                     check_zero_fee!(tx.fee);
@@ -424,11 +421,8 @@ impl Blockchain {
                         },
                     }
 
-                    let success = ScriptEngine::new(data, &mint_tx.script)
-                        .eval()
-                        .map_err(TxErr::ScriptEval)?;
-                    if !success {
-                        return Err(TxErr::ScriptRetFalse);
+                    if let Err(e) = ScriptEngine::new(data, &mint_tx.script).eval() {
+                        return Err(TxErr::ScriptEval(e));
                     }
 
                     // Sanity check to ensure too many new coins can't be minted
@@ -469,11 +463,8 @@ impl Blockchain {
                         return Err(TxErr::ScriptHashMismatch);
                     }
 
-                    let success = ScriptEngine::new(data, &transfer.script)
-                        .eval()
-                        .map_err(TxErr::ScriptEval)?;
-                    if !success {
-                        return Err(TxErr::ScriptRetFalse);
+                    if let Err(e) = ScriptEngine::new(data, &transfer.script).eval() {
+                        return Err(TxErr::ScriptEval(e));
                     }
 
                     let bal = info

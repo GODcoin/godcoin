@@ -17,7 +17,6 @@ pub enum BlockErr {
 pub enum TxErr {
     ScriptEval(EvalErr),
     ScriptHashMismatch,
-    ScriptRetFalse,
     Arithmetic,
     InsufficientBalance,
     InvalidFeeAmount,
@@ -37,15 +36,14 @@ impl TxErr {
                 buf.push(err.err as u8);
             }
             TxErr::ScriptHashMismatch => buf.push(0x01),
-            TxErr::ScriptRetFalse => buf.push(0x02),
-            TxErr::Arithmetic => buf.push(0x03),
-            TxErr::InsufficientBalance => buf.push(0x04),
-            TxErr::InvalidFeeAmount => buf.push(0x05),
-            TxErr::TooManySignatures => buf.push(0x06),
-            TxErr::TxTooLarge => buf.push(0x07),
-            TxErr::TxProhibited => buf.push(0x08),
-            TxErr::TxExpired => buf.push(0x09),
-            TxErr::TxDupe => buf.push(0x0A),
+            TxErr::Arithmetic => buf.push(0x02),
+            TxErr::InsufficientBalance => buf.push(0x03),
+            TxErr::InvalidFeeAmount => buf.push(0x04),
+            TxErr::TooManySignatures => buf.push(0x05),
+            TxErr::TxTooLarge => buf.push(0x06),
+            TxErr::TxProhibited => buf.push(0x07),
+            TxErr::TxExpired => buf.push(0x08),
+            TxErr::TxDupe => buf.push(0x09),
         }
     }
 
@@ -55,6 +53,7 @@ impl TxErr {
             0x00 => {
                 let pos = cursor.take_u32()?;
                 let kind = match cursor.take_u8()? {
+                    t if t == EvalErrType::ScriptRetFalse as u8 => EvalErrType::ScriptRetFalse,
                     t if t == EvalErrType::UnexpectedEOF as u8 => EvalErrType::UnexpectedEOF,
                     t if t == EvalErrType::UnknownOp as u8 => EvalErrType::UnknownOp,
                     t if t == EvalErrType::InvalidItemOnStack as u8 => {
@@ -72,15 +71,14 @@ impl TxErr {
                 TxErr::ScriptEval(EvalErr::new(pos, kind))
             }
             0x01 => TxErr::ScriptHashMismatch,
-            0x02 => TxErr::ScriptRetFalse,
-            0x03 => TxErr::Arithmetic,
-            0x04 => TxErr::InsufficientBalance,
-            0x05 => TxErr::InvalidFeeAmount,
-            0x06 => TxErr::TooManySignatures,
-            0x07 => TxErr::TxTooLarge,
-            0x08 => TxErr::TxProhibited,
-            0x09 => TxErr::TxExpired,
-            0x0A => TxErr::TxDupe,
+            0x02 => TxErr::Arithmetic,
+            0x03 => TxErr::InsufficientBalance,
+            0x04 => TxErr::InvalidFeeAmount,
+            0x05 => TxErr::TooManySignatures,
+            0x06 => TxErr::TxTooLarge,
+            0x07 => TxErr::TxProhibited,
+            0x08 => TxErr::TxExpired,
+            0x09 => TxErr::TxDupe,
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,

@@ -25,7 +25,7 @@ pub mod prelude {
     pub use super::asset::{self, Asset, AssetError, AssetErrorKind};
     pub use super::blockchain::{
         self, index::IndexStatus, AddressInfo, Block, BlockFilter, BlockHeader, BlockHeaderV0,
-        BlockV0, Blockchain, FilteredBlock, Properties,
+        BlockV0, Blockchain, FilteredBlock, LogEntry, Properties, Receipt,
     };
     pub use super::crypto::{
         DoubleSha256, KeyPair, PrivateKey, PublicKey, ScriptHash, SigPair, Wif, WifError,
