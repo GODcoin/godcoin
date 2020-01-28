@@ -95,7 +95,7 @@ impl<'a> Into<Cow<'a, TxPrecompData<'a>>> for &'a TxPrecompData<'a> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TxVariant {
     V0(TxVariantV0),
 }
@@ -243,7 +243,7 @@ impl<'a> Into<Cow<'a, TxVariant>> for &'a TxVariant {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TxVariantV0 {
     OwnerTx(OwnerTx),
     MintTx(MintTx),
@@ -275,7 +275,7 @@ impl DerefMut for TxVariantV0 {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tx {
     pub nonce: u32,
     pub expiry: u64,
@@ -313,7 +313,7 @@ impl Tx {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OwnerTx {
     pub base: Tx,
     pub minter: PublicKey,  // Key that signs blocks
@@ -345,7 +345,7 @@ impl DeserializeTx<OwnerTx> for OwnerTx {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MintTx {
     pub base: Tx,
     pub to: ScriptHash,
@@ -388,7 +388,7 @@ impl DeserializeTx<MintTx> for MintTx {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RewardTx {
     pub base: Tx,
     pub to: ScriptHash,
@@ -418,7 +418,7 @@ impl DeserializeTx<RewardTx> for RewardTx {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransferTx {
     pub base: Tx,
     pub from: ScriptHash,

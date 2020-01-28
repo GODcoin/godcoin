@@ -1,7 +1,7 @@
 use super::{PublicKey, Signature};
 use sodiumoxide::crypto::sign;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SigPair {
     pub pub_key: PublicKey,
     pub signature: Signature,

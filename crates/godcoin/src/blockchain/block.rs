@@ -7,13 +7,13 @@ use std::{collections::BTreeSet, io::Cursor, ops::Deref, sync::Arc};
 
 pub type BlockFilter = BTreeSet<ScriptHash>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FilteredBlock {
     Header((BlockHeader, SigPair)),
     Block(Arc<Block>),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Block {
     V0(BlockV0),
 }
@@ -125,7 +125,7 @@ impl Block {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BlockHeader {
     V0(BlockHeaderV0),
 }
@@ -146,7 +146,7 @@ impl BlockHeader {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockHeaderV0 {
     pub previous_hash: Digest,
     pub height: u64,
@@ -181,7 +181,7 @@ impl BlockHeaderV0 {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockV0 {
     pub header: BlockHeaderV0,
     pub signer: Option<SigPair>,

@@ -18,7 +18,7 @@ pub use self::op::*;
 
 pub const MAX_FRAME_STACK: usize = 64;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Script(Vec<u8>);
 
 impl Script {

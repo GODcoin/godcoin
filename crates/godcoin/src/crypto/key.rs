@@ -39,7 +39,7 @@ impl Drop for PrivateWif {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct PublicKey(pub(crate) sign::PublicKey);
 
 impl PublicKey {
