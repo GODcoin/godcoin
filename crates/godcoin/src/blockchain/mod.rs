@@ -403,9 +403,9 @@ impl Blockchain {
                         },
                     }
 
-                    return ScriptEngine::new(data, &new_owner.script)
-                        .eval()
-                        .map_err(TxErr::ScriptEval);
+                    if let Err(e) = ScriptEngine::new(data, &new_owner.script).eval() {
+                        return Err(TxErr::ScriptEval(e));
+                    }
                 }
                 TxVariantV0::MintTx(mint_tx) => {
                     check_zero_fee!(tx.fee);
@@ -463,10 +463,6 @@ impl Blockchain {
                         return Err(TxErr::ScriptHashMismatch);
                     }
 
-                    if let Err(e) = ScriptEngine::new(data, &transfer.script).eval() {
-                        return Err(TxErr::ScriptEval(e));
-                    }
-
                     let bal = info
                         .balance
                         .checked_sub(transfer.fee)
@@ -474,6 +470,11 @@ impl Blockchain {
                         .checked_sub(transfer.amount)
                         .ok_or(TxErr::Arithmetic)?;
                     check_suf_bal!(bal);
+
+                    // TODO handle the log
+                    if let Err(e) = ScriptEngine::new(data, &transfer.script).eval() {
+                        return Err(TxErr::ScriptEval(e));
+                    }
                 }
             },
         }
