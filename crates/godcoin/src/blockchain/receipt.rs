@@ -45,7 +45,7 @@ impl ReceiptPool {
             return Err(TxErr::TxDupe);
         }
 
-        let log = self.chain.verify_tx(&data, &self.receipts, skip_flags)?;
+        let log = self.chain.execute_tx(&data, &self.receipts, skip_flags)?;
 
         self.manager.insert(data.txid(), expiry);
         self.receipts.push(Receipt {

@@ -27,12 +27,15 @@ fn mint_tx_verification() {
     };
 
     let tx = create_tx("0.00000 TEST");
-    assert!(chain.verify_tx(&tx.precompute(), &[], skip_flags).is_ok());
+    assert_eq!(
+        chain.execute_tx(&tx.precompute(), &[], skip_flags),
+        Ok(vec![])
+    );
 
     let tx = create_tx("1.00000 TEST");
     assert_eq!(
         chain
-            .verify_tx(&tx.precompute(), &[], skip_flags)
+            .execute_tx(&tx.precompute(), &[], skip_flags)
             .unwrap_err(),
         blockchain::TxErr::InvalidFeeAmount
     );
@@ -40,7 +43,7 @@ fn mint_tx_verification() {
     let mut tx = create_tx("0.00000 TEST");
     tx.sigs_mut().remove(1);
     assert!(check_sigs(&tx));
-    match chain.verify_tx(&tx.precompute(), &[], skip_flags) {
+    match chain.execute_tx(&tx.precompute(), &[], skip_flags) {
         Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrType::ScriptRetFalse),
         res @ _ => panic!("Assertion failed, got {:?}", res),
     }
@@ -48,7 +51,7 @@ fn mint_tx_verification() {
     let mut tx = create_tx("0.00000 TEST");
     tx.sigs_mut().clear();
     assert!(check_sigs(&tx));
-    match chain.verify_tx(&tx.precompute(), &[], skip_flags) {
+    match chain.execute_tx(&tx.precompute(), &[], skip_flags) {
         Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrType::ScriptRetFalse),
         res @ _ => panic!("Assertion failed, got {:?}", res),
     }
@@ -60,7 +63,7 @@ fn mint_tx_verification() {
         signature: Signature::from_slice(&[0; 64]).unwrap(),
     });
     assert!(!check_sigs(&tx));
-    match chain.verify_tx(&tx.precompute(), &[], skip_flags) {
+    match chain.execute_tx(&tx.precompute(), &[], skip_flags) {
         Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrType::ScriptRetFalse),
         res @ _ => panic!("Assertion failed, got {:?}", res),
     }

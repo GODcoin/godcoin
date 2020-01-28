@@ -346,7 +346,7 @@ impl Blockchain {
         for i in 0..len {
             let r = &block_receipts[i];
             let receipts = &block_receipts[0..i];
-            if let Err(e) = self.verify_tx(&TxPrecompData::from_tx(&r.tx), receipts, skip_flags) {
+            if let Err(e) = self.execute_tx(&TxPrecompData::from_tx(&r.tx), receipts, skip_flags) {
                 return Err(BlockErr::Tx(e));
             }
         }
@@ -354,7 +354,7 @@ impl Blockchain {
         Ok(())
     }
 
-    pub fn verify_tx(
+    pub fn execute_tx(
         &self,
         data: &TxPrecompData,
         additional_receipts: &[Receipt],
