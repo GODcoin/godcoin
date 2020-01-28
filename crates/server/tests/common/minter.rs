@@ -37,8 +37,8 @@ impl TestMinter {
         let info = chain.create_genesis_block(minter_key.clone());
 
         {
-            let txs = {
-                let mut txs = Vec::with_capacity(1);
+            let receipts = {
+                let mut receipts = Vec::with_capacity(1);
 
                 let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
                     base: create_tx_header("0.00000 TEST"),
@@ -51,25 +51,28 @@ impl TestMinter {
 
                 tx.append_sign(&info.wallet_keys[1]);
                 tx.append_sign(&info.wallet_keys[0]);
-                txs.push(tx);
+                receipts.push(Receipt { tx, log: vec![] });
 
-                txs.push(TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
-                    base: Tx {
-                        nonce: 0,
-                        expiry: 0,
-                        fee: "0.00000 TEST".parse().unwrap(),
-                        signature_pairs: Vec::new(),
-                    },
-                    to: (&info.script).into(),
-                    rewards: Asset::default(),
-                })));
-                txs
+                receipts.push(Receipt {
+                    tx: TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
+                        base: Tx {
+                            nonce: 0,
+                            expiry: 0,
+                            fee: "0.00000 TEST".parse().unwrap(),
+                            signature_pairs: Vec::new(),
+                        },
+                        to: (&info.script).into(),
+                        rewards: Asset::default(),
+                    })),
+                    log: vec![],
+                });
+                receipts
             };
 
             let head = chain.get_chain_head();
             let child = match head.as_ref() {
                 Block::V0(block) => {
-                    let mut b = block.new_child(txs);
+                    let mut b = block.new_child(receipts);
                     b.sign(&info.minter_key);
                     b
                 }

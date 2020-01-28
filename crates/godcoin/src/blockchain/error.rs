@@ -7,7 +7,7 @@ use std::io::{self, Cursor};
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum BlockErr {
     InvalidBlockHeight,
-    InvalidMerkleRoot,
+    InvalidReceiptRoot,
     InvalidSignature,
     InvalidPrevHash,
     Tx(TxErr),

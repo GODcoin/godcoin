@@ -456,14 +456,14 @@ fn net_fee_dynamic_increase() {
         let min_height = max_height - NETWORK_FEE_AVG_WINDOW;
         assert!(min_height < max_height);
 
-        let tx_count = (min_height..=max_height).fold(1u64, |tx_count, height| {
+        let receipt_count = (min_height..=max_height).fold(1u64, |receipt_count, height| {
             let block = chain.get_block(height).unwrap();
-            tx_count + block.txs().len() as u64
+            receipt_count + block.receipts().len() as u64
         });
-        let tx_count = (tx_count / NETWORK_FEE_AVG_WINDOW) as u16;
-        assert!(tx_count > 10);
+        let receipt_count = (receipt_count / NETWORK_FEE_AVG_WINDOW) as u16;
+        assert!(receipt_count > 10);
 
-        let fee = GRAEL_FEE_MIN.checked_mul(GRAEL_FEE_NET_MULT.checked_pow(tx_count).unwrap());
+        let fee = GRAEL_FEE_MIN.checked_mul(GRAEL_FEE_NET_MULT.checked_pow(receipt_count).unwrap());
         assert_eq!(Some(props.network_fee), fee);
     }
 

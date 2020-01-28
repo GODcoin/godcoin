@@ -25,7 +25,7 @@ pub mod prelude {
     pub use super::asset::{self, Asset, AssetError, AssetErrorKind};
     pub use super::blockchain::{
         self, index::IndexStatus, AddressInfo, Block, BlockFilter, BlockHeader, BlockHeaderV0,
-        BlockV0, Blockchain, FilteredBlock, LogEntry, Properties, Receipt,
+        BlockV0, Blockchain, FilteredBlock, LogEntry, Properties, Receipt, ReceiptPool,
     };
     pub use super::crypto::{
         DoubleSha256, KeyPair, PrivateKey, PublicKey, ScriptHash, SigPair, Wif, WifError,
@@ -34,7 +34,6 @@ pub mod prelude {
     pub use super::net::{self, rpc, Body, Msg};
     pub use super::script::{self, OpFrame, Script, ScriptEngine};
     pub use super::tx::{
-        MintTx, OwnerTx, RewardTx, TransferTx, Tx, TxId, TxPool, TxPrecompData, TxVariant,
-        TxVariantV0,
+        MintTx, OwnerTx, RewardTx, TransferTx, Tx, TxId, TxPrecompData, TxVariant, TxVariantV0,
     };
 }

@@ -1,7 +1,7 @@
 use crate::{
+    blockchain::Receipt,
     crypto::{double_sha256, Digest, DoubleSha256, KeyPair, ScriptHash, SigPair},
     serializer::*,
-    tx::*,
 };
 use std::{collections::BTreeSet, io::Cursor, ops::Deref, sync::Arc};
 
@@ -41,9 +41,9 @@ impl Block {
     }
 
     #[inline]
-    pub fn txs(&self) -> &[TxVariant] {
+    pub fn receipts(&self) -> &[Receipt] {
         match self {
-            Block::V0(block) => &block.transactions,
+            Block::V0(block) => &block.receipts,
         }
     }
 
@@ -70,11 +70,11 @@ impl Block {
         cur_prev_hash == &prev_block.calc_header_hash()
     }
 
-    pub fn verify_tx_merkle_root(&self) -> bool {
+    pub fn verify_receipt_root(&self) -> bool {
         match self {
             Block::V0(block) => {
-                let digest = calc_tx_merkle_root(&block.transactions);
-                block.tx_merkle_root == digest
+                let digest = calc_receipt_root(&block.receipts);
+                block.receipt_root == digest
             }
         }
     }
@@ -82,27 +82,6 @@ impl Block {
     pub fn calc_header_hash(&self) -> Digest {
         match self {
             Block::V0(block) => block.calc_header_hash(),
-        }
-    }
-
-    pub fn deserialize(cur: &mut Cursor<&[u8]>) -> Option<Self> {
-        let header = BlockHeader::deserialize(cur)?;
-        match header {
-            BlockHeader::V0(header) => {
-                let signer = Some(cur.take_sig_pair().ok()?);
-
-                let len = cur.take_u32().ok()?;
-                let mut transactions = Vec::<TxVariant>::with_capacity(len as usize);
-                for _ in 0..len {
-                    transactions.push(TxVariant::deserialize(cur)?);
-                }
-
-                Some(Block::V0(BlockV0 {
-                    header,
-                    signer,
-                    transactions,
-                }))
-            }
         }
     }
 
@@ -116,10 +95,31 @@ impl Block {
                         .as_ref()
                         .expect("block must be signed to serialize"),
                 );
-                buf.push_u32(block.transactions.len() as u32);
-                for tx in &block.transactions {
-                    tx.serialize(buf)
+                buf.push_u32(block.receipts.len() as u32);
+                for r in &block.receipts {
+                    r.serialize(buf)
                 }
+            }
+        }
+    }
+
+    pub fn deserialize(cur: &mut Cursor<&[u8]>) -> Option<Self> {
+        let header = BlockHeader::deserialize(cur)?;
+        match header {
+            BlockHeader::V0(header) => {
+                let signer = Some(cur.take_sig_pair().ok()?);
+
+                let len = cur.take_u32().ok()?;
+                let mut receipts = Vec::with_capacity(len as usize);
+                for _ in 0..len {
+                    receipts.push(Receipt::deserialize(cur)?);
+                }
+
+                Some(Block::V0(BlockV0 {
+                    header,
+                    signer,
+                    receipts,
+                }))
             }
         }
     }
@@ -151,7 +151,7 @@ pub struct BlockHeaderV0 {
     pub previous_hash: Digest,
     pub height: u64,
     pub timestamp: u64,
-    pub tx_merkle_root: Digest,
+    pub receipt_root: Digest,
 }
 
 impl BlockHeaderV0 {
@@ -162,7 +162,7 @@ impl BlockHeaderV0 {
         buf.push_digest(&self.previous_hash);
         buf.push_u64(self.height);
         buf.push_u64(self.timestamp);
-        buf.push_digest(&self.tx_merkle_root);
+        buf.push_digest(&self.receipt_root);
     }
 
     pub(self) fn deserialize(cur: &mut Cursor<&[u8]>) -> Option<Self> {
@@ -171,12 +171,12 @@ impl BlockHeaderV0 {
         let previous_hash = cur.take_digest().ok()?;
         let height = cur.take_u64().ok()?;
         let timestamp = cur.take_u64().ok()?;
-        let tx_merkle_root = cur.take_digest().ok()?;
+        let receipt_root = cur.take_digest().ok()?;
         Some(Self {
             previous_hash,
             height,
             timestamp,
-            tx_merkle_root,
+            receipt_root,
         })
     }
 }
@@ -185,24 +185,24 @@ impl BlockHeaderV0 {
 pub struct BlockV0 {
     pub header: BlockHeaderV0,
     pub signer: Option<SigPair>,
-    pub transactions: Vec<TxVariant>,
+    pub receipts: Vec<Receipt>,
 }
 
 impl BlockV0 {
-    pub fn new_child(&self, txs: Vec<TxVariant>) -> Block {
+    pub fn new_child(&self, receipts: Vec<Receipt>) -> Block {
         let previous_hash = self.calc_header_hash();
         let height = self.header.height + 1;
-        let tx_merkle_root = calc_tx_merkle_root(&txs);
+        let receipt_root = calc_receipt_root(&receipts);
         let timestamp = crate::get_epoch_time();
         Block::V0(BlockV0 {
             header: BlockHeaderV0 {
                 previous_hash,
                 height,
                 timestamp,
-                tx_merkle_root,
+                receipt_root,
             },
             signer: None,
-            transactions: txs,
+            receipts,
         })
     }
 
@@ -221,12 +221,12 @@ impl Deref for BlockV0 {
     }
 }
 
-pub fn calc_tx_merkle_root(txs: &[TxVariant]) -> Digest {
+pub fn calc_receipt_root(receipts: &[Receipt]) -> Digest {
     let mut hasher = DoubleSha256::new();
     let mut buf = Vec::with_capacity(4096);
-    for tx in txs {
+    for receipt in receipts {
         buf.clear();
-        tx.serialize(&mut buf);
+        receipt.serialize(&mut buf);
         hasher.update(&buf);
     }
     hasher.finalize()
@@ -235,31 +235,34 @@ pub fn calc_tx_merkle_root(txs: &[TxVariant]) -> Digest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{asset::Asset, crypto::KeyPair};
+    use crate::{asset::Asset, crypto::KeyPair, tx::*};
 
     #[test]
     fn serialize_block_v0() {
         let keys = KeyPair::gen();
-        let transactions = vec![TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
-            base: Tx {
-                nonce: 111,
-                expiry: 1234567890,
-                fee: Asset::default(),
-                signature_pairs: Vec::new(),
-            },
-            to: keys.0.clone().into(),
-            rewards: Asset::default(),
-        }))];
-        let tx_merkle_root = calc_tx_merkle_root(&transactions);
+        let receipts = vec![Receipt {
+            tx: TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
+                base: Tx {
+                    nonce: 111,
+                    expiry: 1234567890,
+                    fee: Asset::default(),
+                    signature_pairs: Vec::new(),
+                },
+                to: keys.0.clone().into(),
+                rewards: Asset::default(),
+            })),
+            log: vec![],
+        }];
+        let receipt_root = calc_receipt_root(&receipts);
         let mut block = Block::V0(BlockV0 {
             header: BlockHeaderV0 {
                 previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
                 height: 123,
                 timestamp: 1532992800,
-                tx_merkle_root,
+                receipt_root,
             },
             signer: None,
-            transactions,
+            receipts,
         });
         block.sign(&keys);
 
@@ -273,26 +276,26 @@ mod tests {
     }
 
     #[test]
-    fn merkle_root() {
+    fn receipt_root() {
         let mut block = Block::V0(BlockV0 {
             header: BlockHeaderV0 {
                 previous_hash: Digest::from_slice(&[0; 32]).unwrap(),
                 height: 0,
                 timestamp: 0,
-                tx_merkle_root: double_sha256(&[0; 0]),
+                receipt_root: double_sha256(&[0; 0]),
             },
             signer: None,
-            transactions: vec![],
+            receipts: vec![],
         });
-        assert!(block.verify_tx_merkle_root());
+        assert!(block.verify_receipt_root());
 
         match &mut block {
             Block::V0(block) => {
-                block.header.tx_merkle_root = Digest::from_slice(&[0; 32]).unwrap();
+                block.header.receipt_root = Digest::from_slice(&[0; 32]).unwrap();
             }
         }
 
-        assert!(!block.verify_tx_merkle_root());
+        assert!(!block.verify_receipt_root());
     }
 
     #[test]
@@ -302,10 +305,10 @@ mod tests {
                 previous_hash: Digest::from_slice(&[0; 32]).unwrap(),
                 height: 0,
                 timestamp: 0,
-                tx_merkle_root: double_sha256(&[0; 0]),
+                receipt_root: double_sha256(&[0; 0]),
             },
             signer: None,
-            transactions: vec![],
+            receipts: vec![],
         });
 
         let block_1 = Block::V0(BlockV0 {
@@ -313,10 +316,10 @@ mod tests {
                 previous_hash: block_0.calc_header_hash(),
                 height: 1,
                 timestamp: 0,
-                tx_merkle_root: double_sha256(&[0; 0]),
+                receipt_root: double_sha256(&[0; 0]),
             },
             signer: None,
-            transactions: vec![],
+            receipts: vec![],
         });
 
         let block_1_invalid = Block::V0(BlockV0 {
@@ -324,10 +327,10 @@ mod tests {
                 previous_hash: Digest::from_slice(&[0; 32]).unwrap(),
                 height: 1,
                 timestamp: 0,
-                tx_merkle_root: double_sha256(&[0; 0]),
+                receipt_root: double_sha256(&[0; 0]),
             },
             signer: None,
-            transactions: vec![],
+            receipts: vec![],
         });
 
         assert!(block_1.verify_previous_hash(&block_0));

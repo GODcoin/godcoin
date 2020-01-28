@@ -15,10 +15,6 @@ use crate::{
 #[macro_use]
 mod util;
 
-pub mod tx_pool;
-
-pub use self::tx_pool::*;
-
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum TxType {

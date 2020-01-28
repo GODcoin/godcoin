@@ -81,8 +81,8 @@ impl Blockchain {
         }
         let mut store = self.store.lock();
         store.reindex_blocks(opts, |batch, block| {
-            for tx in block.txs() {
-                Blockchain::index_tx(batch, &tx);
+            for receipt in block.receipts() {
+                Blockchain::index_receipt(batch, &receipt);
             }
             if block.height() % 1000 == 0 {
                 info!("Indexed block {}", block.height());
@@ -96,8 +96,8 @@ impl Blockchain {
         for height in (0..=self.get_chain_height()).rev() {
             let block = store.get(height).unwrap();
             if current_time - block.timestamp() <= TX_MAX_EXPIRY_TIME {
-                for tx in block.txs() {
-                    let data = TxPrecompData::from_tx(tx);
+                for receipt in block.receipts() {
+                    let data = TxPrecompData::from_tx(&receipt.tx);
                     let expiry = data.tx().expiry();
                     if expiry > current_time {
                         manager.insert(data.txid(), expiry);
@@ -155,7 +155,7 @@ impl Blockchain {
                 let has_match = if filter.is_empty() {
                     false
                 } else {
-                    block.txs().iter().any(|tx| match tx {
+                    block.receipts().iter().any(|receipt| match &receipt.tx {
                         TxVariant::V0(tx) => match tx {
                             TxVariantV0::OwnerTx(owner_tx) => {
                                 let hash = ScriptHash::from(&owner_tx.script);
@@ -184,94 +184,10 @@ impl Blockchain {
         }
     }
 
-    pub fn get_address_info(
-        &self,
-        addr: &ScriptHash,
-        additional_txs: &[TxVariant],
-    ) -> Option<AddressInfo> {
-        let net_fee = self.get_network_fee()?;
-        let addr_fee = self.get_address_fee(addr, additional_txs)?;
-        let balance = self.get_balance(addr, additional_txs)?;
-        Some(AddressInfo {
-            net_fee,
-            addr_fee,
-            balance,
-        })
-    }
-
-    pub fn get_address_fee(
-        &self,
-        addr: &ScriptHash,
-        additional_txs: &[TxVariant],
-    ) -> Option<Asset> {
-        let mut tx_count = 1;
-        let mut delta = 0;
-
-        macro_rules! handle_tx_match {
-            ($tx:expr) => {
-                let has_match = match $tx {
-                    TxVariant::V0(tx) => match tx {
-                        TxVariantV0::OwnerTx(_) => false,
-                        TxVariantV0::MintTx(_) => false,
-                        TxVariantV0::RewardTx(_) => false,
-                        TxVariantV0::TransferTx(tx) => &tx.from == addr,
-                    },
-                };
-                if has_match {
-                    tx_count += 1;
-                    // Reset the delta count
-                    delta = 0;
-                }
-            };
-        }
-
-        for tx in additional_txs {
-            handle_tx_match!(tx);
-        }
-
-        for i in (0..=self.get_chain_height()).rev() {
-            delta += 1;
-            let block = self.get_block(i).unwrap();
-            for tx in block.txs() {
-                // Delta gets reset if a match is found
-                handle_tx_match!(tx);
-            }
-            if delta == FEE_RESET_WINDOW {
-                break;
-            }
-        }
-
-        GRAEL_FEE_MIN.checked_mul(GRAEL_FEE_MULT.checked_pow(tx_count as u16)?)
-    }
-
-    pub fn get_network_fee(&self) -> Option<Asset> {
-        // The network fee adjusts every 5 blocks so that users have a bigger time
-        // frame to confirm the fee they want to spend without suddenly changing.
-        use crate::constants::*;
-        let max_height = self.get_chain_height();
-        let max_height = max_height - (max_height % 5);
-        let min_height = if max_height > NETWORK_FEE_AVG_WINDOW {
-            max_height - NETWORK_FEE_AVG_WINDOW
-        } else {
-            0
-        };
-
-        let mut tx_count: u64 = 1;
-        for i in min_height..=max_height {
-            tx_count += self.get_block(i).unwrap().txs().len() as u64;
-        }
-        tx_count /= NETWORK_FEE_AVG_WINDOW;
-        if tx_count > u64::from(u16::max_value()) {
-            return None;
-        }
-
-        GRAEL_FEE_MIN.checked_mul(GRAEL_FEE_NET_MULT.checked_pow(tx_count as u16)?)
-    }
-
-    pub fn get_balance(&self, addr: &ScriptHash, additional_txs: &[TxVariant]) -> Option<Asset> {
+    pub fn get_balance(&self, addr: &ScriptHash, additional_receipts: &[Receipt]) -> Option<Asset> {
         let mut bal = self.indexer.get_balance(addr).unwrap_or_default();
-        for tx in additional_txs {
-            match tx {
+        for receipt in additional_receipts {
+            match &receipt.tx {
                 TxVariant::V0(tx) => match tx {
                     TxVariantV0::OwnerTx(_) => {}
                     TxVariantV0::MintTx(tx) => {
@@ -299,12 +215,95 @@ impl Blockchain {
         Some(bal)
     }
 
+    pub fn get_address_info(
+        &self,
+        addr: &ScriptHash,
+        additional_receipts: &[Receipt],
+    ) -> Option<AddressInfo> {
+        let net_fee = self.get_network_fee()?;
+        let addr_fee = self.get_address_fee(addr, additional_receipts)?;
+        let balance = self.get_balance(addr, additional_receipts)?;
+        Some(AddressInfo {
+            net_fee,
+            addr_fee,
+            balance,
+        })
+    }
+
+    pub fn get_address_fee(
+        &self,
+        addr: &ScriptHash,
+        additional_receipts: &[Receipt],
+    ) -> Option<Asset> {
+        let mut count = 1;
+        let mut delta = 0;
+
+        macro_rules! handle_receipt_match {
+            ($receipt:expr) => {
+                let has_match = match &$receipt.tx {
+                    TxVariant::V0(tx) => match tx {
+                        TxVariantV0::OwnerTx(_) => false,
+                        TxVariantV0::MintTx(_) => false,
+                        TxVariantV0::RewardTx(_) => false,
+                        TxVariantV0::TransferTx(tx) => &tx.from == addr,
+                    },
+                };
+                if has_match {
+                    count += 1;
+                    // Reset the delta count when a match is found
+                    delta = 0;
+                }
+            };
+        }
+
+        for r in additional_receipts {
+            handle_receipt_match!(r);
+        }
+
+        for i in (0..=self.get_chain_height()).rev() {
+            delta += 1;
+            let block = self.get_block(i).unwrap();
+            for r in block.receipts() {
+                handle_receipt_match!(r);
+            }
+            if delta == FEE_RESET_WINDOW {
+                break;
+            }
+        }
+
+        GRAEL_FEE_MIN.checked_mul(GRAEL_FEE_MULT.checked_pow(count as u16)?)
+    }
+
+    pub fn get_network_fee(&self) -> Option<Asset> {
+        // The network fee adjusts every 5 blocks so that users have a bigger time
+        // frame to confirm the fee they want to spend without suddenly changing.
+        use crate::constants::*;
+        let max_height = self.get_chain_height();
+        let max_height = max_height - (max_height % 5);
+        let min_height = if max_height > NETWORK_FEE_AVG_WINDOW {
+            max_height - NETWORK_FEE_AVG_WINDOW
+        } else {
+            0
+        };
+
+        let mut count: u64 = 1;
+        for i in min_height..=max_height {
+            count += self.get_block(i).unwrap().receipts().len() as u64;
+        }
+        count /= NETWORK_FEE_AVG_WINDOW;
+        if count > u64::from(u16::max_value()) {
+            return None;
+        }
+
+        GRAEL_FEE_MIN.checked_mul(GRAEL_FEE_NET_MULT.checked_pow(count as u16)?)
+    }
+
     pub fn insert_block(&self, block: Block) -> Result<(), BlockErr> {
         static SKIP_FLAGS: SkipFlags = SKIP_NONE | SKIP_REWARD_TX;
         self.verify_block(&block, &self.get_chain_head(), SKIP_FLAGS)?;
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
-        for tx in block.txs() {
-            Self::index_tx(&mut batch, tx);
+        for r in block.receipts() {
+            Self::index_receipt(&mut batch, r);
         }
         self.store.lock().insert(&mut batch, block);
         batch.commit();
@@ -320,8 +319,8 @@ impl Blockchain {
     ) -> Result<(), BlockErr> {
         if prev_block.height() + 1 != block.height() {
             return Err(BlockErr::InvalidBlockHeight);
-        } else if !block.verify_tx_merkle_root() {
-            return Err(BlockErr::InvalidMerkleRoot);
+        } else if !block.verify_receipt_root() {
+            return Err(BlockErr::InvalidReceiptRoot);
         } else if !block.verify_previous_hash(prev_block) {
             return Err(BlockErr::InvalidPrevHash);
         }
@@ -342,12 +341,12 @@ impl Blockchain {
             return Err(BlockErr::InvalidSignature);
         }
 
-        let block_txs = block.txs();
-        let len = block_txs.len();
+        let block_receipts = block.receipts();
+        let len = block_receipts.len();
         for i in 0..len {
-            let tx = &block_txs[i];
-            let txs = &block_txs[0..i];
-            if let Err(e) = self.verify_tx(&TxPrecompData::from_tx(tx), txs, skip_flags) {
+            let r = &block_receipts[i];
+            let receipts = &block_receipts[0..i];
+            if let Err(e) = self.verify_tx(&TxPrecompData::from_tx(&r.tx), receipts, skip_flags) {
                 return Err(BlockErr::Tx(e));
             }
         }
@@ -358,9 +357,9 @@ impl Blockchain {
     pub fn verify_tx(
         &self,
         data: &TxPrecompData,
-        additional_txs: &[TxVariant],
+        additional_receipts: &[Receipt],
         skip_flags: SkipFlags,
-    ) -> Result<(), TxErr> {
+    ) -> Result<Vec<LogEntry>, TxErr> {
         macro_rules! check_zero_fee {
             ($asset:expr) => {
                 if $asset.amount != 0 {
@@ -406,6 +405,7 @@ impl Blockchain {
                     if let Err(e) = ScriptEngine::new(data, &new_owner.script).eval() {
                         return Err(TxErr::ScriptEval(e));
                     }
+                    Ok(vec![])
                 }
                 TxVariantV0::MintTx(mint_tx) => {
                     check_zero_fee!(tx.fee);
@@ -426,7 +426,7 @@ impl Blockchain {
                     }
 
                     // Sanity check to ensure too many new coins can't be minted
-                    self.get_balance(&mint_tx.to, additional_txs)
+                    self.get_balance(&mint_tx.to, additional_receipts)
                         .ok_or(TxErr::Arithmetic)?
                         .checked_add(mint_tx.amount)
                         .ok_or(TxErr::Arithmetic)?;
@@ -435,6 +435,8 @@ impl Blockchain {
                         .get_token_supply()
                         .checked_add(mint_tx.amount)
                         .ok_or(TxErr::Arithmetic)?;
+
+                    Ok(vec![])
                 }
                 TxVariantV0::RewardTx(tx) => {
                     if skip_flags & SKIP_REWARD_TX == 0 {
@@ -448,13 +450,14 @@ impl Blockchain {
                     } else if tx.expiry != 0 {
                         panic!("reward tx must have an expiry timestamp of 0");
                     }
+                    Ok(vec![])
                 }
                 TxVariantV0::TransferTx(transfer) => {
                     if transfer.memo.len() > MAX_MEMO_BYTE_SIZE {
                         return Err(TxErr::TxTooLarge);
                     }
                     let info = self
-                        .get_address_info(&transfer.from, additional_txs)
+                        .get_address_info(&transfer.from, additional_receipts)
                         .ok_or(TxErr::Arithmetic)?;
                     let total_fee = info.total_fee().ok_or(TxErr::Arithmetic)?;
                     if tx.fee < total_fee {
@@ -471,17 +474,17 @@ impl Blockchain {
                         .ok_or(TxErr::Arithmetic)?;
                     check_suf_bal!(bal);
 
-                    // TODO handle the log
-                    if let Err(e) = ScriptEngine::new(data, &transfer.script).eval() {
-                        return Err(TxErr::ScriptEval(e));
-                    }
+                    let log = ScriptEngine::new(data, &transfer.script)
+                        .eval()
+                        .map_err(|e| TxErr::ScriptEval(e))?;
+                    Ok(log)
                 }
             },
         }
-        Ok(())
     }
 
-    fn index_tx(batch: &mut WriteBatch, tx: &TxVariant) {
+    fn index_receipt(batch: &mut WriteBatch, receipt: &Receipt) {
+        let tx = &receipt.tx;
         match tx {
             TxVariant::V0(var) => match var {
                 TxVariantV0::OwnerTx(_) => {
@@ -518,15 +521,21 @@ impl Blockchain {
             script: Builder::new().push(OpFrame::False).build(),
         }));
 
+        let receipts = vec![Receipt {
+            tx: owner_tx.clone(),
+            log: vec![],
+        }];
+        let receipt_root = calc_receipt_root(&receipts);
+
         let mut block = Block::V0(BlockV0 {
             header: BlockHeaderV0 {
                 height: 0,
                 previous_hash: Digest::from_slice(&[0u8; 32]).unwrap(),
-                tx_merkle_root: Digest::from_slice(&[0u8; 32]).unwrap(),
+                receipt_root,
                 timestamp,
             },
             signer: None,
-            transactions: vec![owner_tx.clone()],
+            receipts,
         });
         block.sign(&info.minter_key);
 
