@@ -95,7 +95,7 @@ fn transfer_from_user() {
 }
 
 #[test]
-fn insufficient_balance_caused_by_fee() {
+fn invalid_fee_amt_caused_by_insufficient_balance() {
     let minter = TestMinter::new();
 
     let from_addr = ScriptHash::from(&minter.genesis_info().script);
@@ -117,7 +117,7 @@ fn insufficient_balance_caused_by_fee() {
     assert_eq!(
         res,
         Some(Err(net::ErrorKind::TxValidation(
-            blockchain::TxErr::InsufficientBalance
+            blockchain::TxErr::InvalidAmount
         )))
     );
     minter.produce_block().unwrap();
@@ -164,7 +164,34 @@ fn insufficient_fee() {
 }
 
 #[test]
-fn insufficient_balance_caused_by_amt() {
+fn negative_fee_should_fail() {
+    let minter = TestMinter::new();
+
+    let from_addr = ScriptHash::from(&minter.genesis_info().script);
+    let tx = {
+        let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+            base: create_tx_header("-100.00000 TEST"),
+            from: from_addr.clone(),
+            to: KeyPair::gen().0.into(),
+            amount: get_asset("0.00000 TEST"),
+            memo: vec![],
+            script: minter.genesis_info().script.clone(),
+        }));
+        tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+        tx
+    };
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
+    assert_eq!(
+        res,
+        Some(Err(net::ErrorKind::TxValidation(
+            blockchain::TxErr::InvalidFeeAmount
+        )))
+    );
+}
+
+#[test]
+fn invalid_amt_caused_by_insufficient_balance() {
     let minter = TestMinter::new();
 
     let from_addr = ScriptHash::from(&minter.genesis_info().script);
@@ -186,7 +213,43 @@ fn insufficient_balance_caused_by_amt() {
     assert_eq!(
         res,
         Some(Err(net::ErrorKind::TxValidation(
-            blockchain::TxErr::InsufficientBalance
+            blockchain::TxErr::InvalidAmount
+        )))
+    );
+    minter.produce_block().unwrap();
+
+    let chain = minter.chain();
+    let cur_bal = chain.get_balance(&to_addr.0.into(), &[]);
+    assert_eq!(cur_bal, Some(get_asset("0.00000 TEST")));
+
+    let cur_bal = chain.get_balance(&from_addr, &[]);
+    assert_eq!(cur_bal, Some(get_asset("1000.00000 TEST")));
+}
+
+#[test]
+fn invalid_amt_caused_by_negative_amt() {
+    let minter = TestMinter::new();
+
+    let from_addr = ScriptHash::from(&minter.genesis_info().script);
+    let to_addr = KeyPair::gen();
+    let tx = {
+        let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+            base: create_tx_header("1.00000 TEST"),
+            from: from_addr.clone(),
+            to: (&to_addr.0).into(),
+            amount: get_asset("-500000.00000 TEST"),
+            memo: vec![],
+            script: minter.genesis_info().script.clone(),
+        }));
+        tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+        tx
+    };
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
+    assert_eq!(
+        res,
+        Some(Err(net::ErrorKind::TxValidation(
+            blockchain::TxErr::InvalidAmount
         )))
     );
     minter.produce_block().unwrap();

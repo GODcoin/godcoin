@@ -388,10 +388,18 @@ impl Blockchain {
             };
         }
 
+        macro_rules! check_pos_amt {
+            ($asset:expr) => {
+                if $asset.amount < 0 {
+                    return Err(TxErr::InvalidAmount);
+                }
+            };
+        }
+
         macro_rules! check_suf_bal {
             ($asset:expr) => {
                 if $asset.amount < 0 {
-                    return Err(TxErr::InsufficientBalance);
+                    return Err(TxErr::InvalidAmount);
                 }
             };
         }
@@ -429,6 +437,7 @@ impl Blockchain {
                 }
                 TxVariantV0::MintTx(mint_tx) => {
                     check_zero_fee!(tx.fee);
+                    check_pos_amt!(mint_tx.amount);
 
                     match self.get_owner() {
                         TxVariant::V0(tx) => match tx {
@@ -459,6 +468,8 @@ impl Blockchain {
                     Ok(vec![])
                 }
                 TxVariantV0::RewardTx(tx) => {
+                    check_pos_amt!(tx.rewards);
+
                     if skip_flags & SKIP_REWARD_TX == 0 {
                         return Err(TxErr::TxProhibited);
                     }
@@ -476,6 +487,8 @@ impl Blockchain {
                     if transfer.memo.len() > MAX_MEMO_BYTE_SIZE {
                         return Err(TxErr::TxTooLarge);
                     }
+                    check_pos_amt!(transfer.amount);
+
                     let info = self
                         .get_address_info(&transfer.from, additional_receipts)
                         .ok_or(TxErr::Arithmetic)?;

@@ -18,7 +18,7 @@ pub enum TxErr {
     ScriptEval(EvalErr),
     ScriptHashMismatch,
     Arithmetic,
-    InsufficientBalance,
+    InvalidAmount,
     InvalidFeeAmount,
     TooManySignatures,
     TxTooLarge,
@@ -37,7 +37,7 @@ impl TxErr {
             }
             TxErr::ScriptHashMismatch => buf.push(0x01),
             TxErr::Arithmetic => buf.push(0x02),
-            TxErr::InsufficientBalance => buf.push(0x03),
+            TxErr::InvalidAmount => buf.push(0x03),
             TxErr::InvalidFeeAmount => buf.push(0x04),
             TxErr::TooManySignatures => buf.push(0x05),
             TxErr::TxTooLarge => buf.push(0x06),
@@ -72,7 +72,7 @@ impl TxErr {
             }
             0x01 => TxErr::ScriptHashMismatch,
             0x02 => TxErr::Arithmetic,
-            0x03 => TxErr::InsufficientBalance,
+            0x03 => TxErr::InvalidAmount,
             0x04 => TxErr::InvalidFeeAmount,
             0x05 => TxErr::TooManySignatures,
             0x06 => TxErr::TxTooLarge,
