@@ -162,13 +162,26 @@ impl Blockchain {
                                 filter.contains(&owner_tx.wallet) || filter.contains(&hash)
                             }
                             TxVariantV0::MintTx(mint_tx) => {
-                                let hash = (&mint_tx.script).into();
+                                let hash = ScriptHash::from(&mint_tx.script);
                                 filter.contains(&hash) || filter.contains(&mint_tx.to)
                             }
                             TxVariantV0::RewardTx(reward_tx) => filter.contains(&reward_tx.to),
                             TxVariantV0::TransferTx(transfer_tx) => {
-                                filter.contains(&transfer_tx.from)
+                                if filter.contains(&transfer_tx.from)
                                     || filter.contains(&transfer_tx.to)
+                                {
+                                    return true;
+                                }
+                                for entry in &receipt.log {
+                                    match entry {
+                                        LogEntry::Transfer(to_addr, _) => {
+                                            if filter.contains(to_addr) {
+                                                return true;
+                                            }
+                                        }
+                                    }
+                                }
+                                false
                             }
                         },
                     })
@@ -204,8 +217,15 @@ impl Blockchain {
                         if &tx.from == addr {
                             bal = bal.checked_sub(tx.fee)?;
                             bal = bal.checked_sub(tx.amount)?;
-                        } else if &tx.to == addr {
-                            bal = bal.checked_add(tx.amount)?;
+                        }
+                        for entry in &receipt.log {
+                            match entry {
+                                LogEntry::Transfer(to_addr, amount) => {
+                                    if to_addr == addr {
+                                        bal = bal.checked_add(*amount)?;
+                                    }
+                                }
+                            }
                         }
                     }
                 },
@@ -474,9 +494,11 @@ impl Blockchain {
                         .ok_or(TxErr::Arithmetic)?;
                     check_suf_bal!(bal);
 
-                    let log = ScriptEngine::new(data, &transfer.script)
+                    let mut log = ScriptEngine::new(data, &transfer.script)
                         .eval()
                         .map_err(|e| TxErr::ScriptEval(e))?;
+                    // TODO replace the manual entry with a TRANSFER opcode in the script engine.
+                    log.push(LogEntry::Transfer(transfer.to.clone(), transfer.amount));
                     Ok(log)
                 }
             },
@@ -499,7 +521,11 @@ impl Blockchain {
                 }
                 TxVariantV0::TransferTx(tx) => {
                     batch.sub_bal(&tx.from, tx.fee.checked_add(tx.amount).unwrap());
-                    batch.add_bal(&tx.to, tx.amount);
+                    for entry in &receipt.log {
+                        match entry {
+                            LogEntry::Transfer(to_addr, amount) => batch.add_bal(to_addr, *amount),
+                        }
+                    }
                 }
             },
         }

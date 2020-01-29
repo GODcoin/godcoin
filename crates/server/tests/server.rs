@@ -62,51 +62,54 @@ fn get_block_unfiltered() {
 
 #[test]
 fn get_block_filtered_with_addresses() {
-    let mut state = create_uninit_state().0;
-    let minter = TestMinter::new();
-
-    let mut filter = BlockFilter::new();
-    filter.insert((&minter.genesis_info().script).into());
-    let res = minter
-        .send_msg(
-            &mut state,
-            Msg {
-                id: 0,
-                body: Body::Request(rpc::Request::SetBlockFilter(filter.clone())),
-            },
-        )
-        .unwrap()
-        .body;
-    assert_eq!(res, Body::Response(rpc::Response::SetBlockFilter));
-    assert_eq!(state.filter(), Some(&filter));
-
-    {
-        let block = minter.chain().get_block(1).unwrap();
+    let set_filter = |minter: &TestMinter, state: &mut WsState, addr: ScriptHash| {
+        let mut filter = BlockFilter::new();
+        filter.insert(addr);
         let res = minter
             .send_msg(
-                &mut state,
+                state,
                 Msg {
                     id: 0,
-                    body: Body::Request(rpc::Request::GetBlock(1)),
+                    body: Body::Request(rpc::Request::SetBlockFilter(filter.clone())),
                 },
             )
             .unwrap()
             .body;
-        assert_eq!(
-            res,
-            Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block)))
-        );
-    }
+        assert_eq!(res, Body::Response(rpc::Response::SetBlockFilter));
+        assert_eq!(state.filter(), Some(&filter));
+    };
+
+    let get_block = |minter: &TestMinter, state: &mut WsState, height: u64| {
+        let block = minter.chain().get_block(height).unwrap();
+        let res = minter
+            .send_msg(
+                state,
+                Msg {
+                    id: 0,
+                    body: Body::Request(rpc::Request::GetBlock(height)),
+                },
+            )
+            .unwrap()
+            .body;
+
+        (block, res)
+    };
+
+    let mut state = create_uninit_state().0;
+    let minter = TestMinter::new();
+
+    let from_addr: ScriptHash = (&minter.genesis_info().script).into();
+    let to_addr: ScriptHash = (&KeyPair::gen().0).into();
 
     {
-        // Produce block 2, should be filtered
+        // Produce block 2, this block will be filtered
         minter.produce_block().unwrap();
 
         let tx = {
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 TEST"),
                 from: (&minter.genesis_info().script).into(),
-                to: (&KeyPair::gen().0).into(),
+                to: to_addr.clone(),
                 amount: get_asset("1.00000 TEST"),
                 memo: vec![],
                 script: minter.genesis_info().script.clone(),
@@ -117,50 +120,42 @@ fn get_block_filtered_with_addresses() {
         };
         let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
         assert_eq!(res, Ok(rpc::Response::Broadcast));
+
         // Produce block 3, should not be filtered
         minter.produce_block().unwrap();
     }
 
-    {
-        let block = minter.chain().get_block(2).unwrap();
-        let res = minter
-            .send_msg(
-                &mut state,
-                Msg {
-                    id: 0,
-                    body: Body::Request(rpc::Request::GetBlock(2)),
-                },
-            )
-            .unwrap()
-            .body;
+    // Test the outgoing transfer filter
+    set_filter(&minter, &mut state, from_addr.clone());
+    let (block, res) = get_block(&minter, &mut state, 2);
+    assert_eq!(
+        res,
+        Body::Response(rpc::Response::GetBlock(FilteredBlock::Header((
+            block.header(),
+            block.signer().unwrap().clone(),
+        ))))
+    );
+    let (block, res) = get_block(&minter, &mut state, 3);
+    assert_eq!(
+        res,
+        Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block)))
+    );
 
-        let signer = block.signer().unwrap().clone();
-        assert_eq!(
-            res,
-            Body::Response(rpc::Response::GetBlock(FilteredBlock::Header((
-                block.header(),
-                signer
-            ))))
-        );
-    }
-
-    {
-        let block = minter.chain().get_block(3).unwrap();
-        let res = minter
-            .send_msg(
-                &mut state,
-                Msg {
-                    id: 0,
-                    body: Body::Request(rpc::Request::GetBlock(3)),
-                },
-            )
-            .unwrap()
-            .body;
-        assert_eq!(
-            res,
-            Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block)))
-        );
-    }
+    // Test the incoming transfer filter
+    set_filter(&minter, &mut state, to_addr.clone());
+    let (block, res) = get_block(&minter, &mut state, 2);
+    assert_eq!(
+        res,
+        Body::Response(rpc::Response::GetBlock(FilteredBlock::Header((
+            block.header(),
+            block.signer().unwrap().clone(),
+        ))))
+    );
+    let (block, res) = get_block(&minter, &mut state, 3);
+    assert_eq!(
+        res,
+        Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block)))
+    );
 }
 
 #[test]
