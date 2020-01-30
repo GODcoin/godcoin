@@ -8,6 +8,7 @@ pub enum BuildError {
     UnknownOp(String),
     MissingArgForOp(String),
     WifError(WifError),
+    AssetParseError(AssetError),
     Other(String),
 }
 
@@ -25,6 +26,15 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
                 if let Some(key) = key {
                     let key = PublicKey::from_wif(key).map_err(BuildError::WifError)?;
                     builder.try_push(OpFrame::PubKey(key))
+                } else {
+                    return Err(BuildError::MissingArgForOp(op.to_owned()));
+                }
+            }
+            "OP_ASSET" => {
+                let asset = iter.next();
+                if let Some(asset) = asset {
+                    let asset = asset.parse().map_err(BuildError::AssetParseError)?;
+                    builder.try_push(OpFrame::Asset(asset))
                 } else {
                     return Err(BuildError::MissingArgForOp(op.to_owned()));
                 }
