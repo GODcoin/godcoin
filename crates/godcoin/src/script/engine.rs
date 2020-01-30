@@ -1,8 +1,8 @@
 use sodiumoxide::crypto::sign;
-use std::borrow::Cow;
+use std::{borrow::Cow, convert::TryInto, mem};
 
 use super::{stack::*, *};
-use crate::{blockchain::LogEntry, crypto::PublicKey, tx::TxPrecompData};
+use crate::{asset::Asset, blockchain::LogEntry, crypto::PublicKey, tx::TxPrecompData};
 
 macro_rules! map_err_type {
     ($self:expr, $var:expr) => {
@@ -148,7 +148,7 @@ impl<'a> ScriptEngine<'a> {
         // Scripts must return true or false
         if map_err_type!(self, self.stack.pop_bool())? {
             let mut log = vec![];
-            std::mem::swap(&mut self.log, &mut log);
+            mem::swap(&mut self.log, &mut log);
             Ok(log)
         } else {
             Err(self.new_err(EvalErrType::ScriptRetFalse))
@@ -213,6 +213,12 @@ impl<'a> ScriptEngine<'a> {
                 let slice = read_bytes!(self, sign::PUBLICKEYBYTES);
                 let key = PublicKey::from_slice(slice).unwrap();
                 Ok(Some(OpFrame::PubKey(key)))
+            }
+            o if o == Operand::PushAsset as u8 => {
+                let slice = read_bytes!(self, mem::size_of::<i64>());
+                let amt = i64::from_be_bytes(slice.try_into().unwrap());
+                let amt = Asset::new(amt);
+                Ok(Some(OpFrame::Asset(amt)))
             }
             // Stack manipulation
             o if o == Operand::OpNot as u8 => Ok(Some(OpFrame::OpNot)),
@@ -294,6 +300,16 @@ mod tests {
     fn false_only_script() {
         let mut engine = new_engine(Builder::new().push(OpFrame::False));
         assert_eq!(engine.eval().unwrap_err().err, EvalErrType::ScriptRetFalse);
+        assert!(engine.stack.is_empty());
+    }
+
+    #[test]
+    fn push_asset() {
+        let asset = "100.00000 TEST".parse().unwrap();
+        let frame = OpFrame::Asset(asset);
+        let mut engine = new_engine(Builder::new().push(frame).push(OpFrame::True));
+        assert_eq!(engine.eval().unwrap(), vec![]);
+        assert_eq!(engine.stack.pop_asset().unwrap(), asset);
         assert!(engine.stack.is_empty());
     }
 

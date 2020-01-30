@@ -1,8 +1,5 @@
-use crate::crypto::PublicKey;
-
-use super::error::*;
-use super::OpFrame;
-use super::MAX_FRAME_STACK;
+use super::{error::*, OpFrame, MAX_FRAME_STACK};
+use crate::{asset::Asset, crypto::PublicKey};
 
 #[derive(Debug)]
 pub struct Stack {
@@ -45,6 +42,14 @@ impl Stack {
         let frame = self.pop()?;
         match frame {
             OpFrame::PubKey(key) => Ok(key),
+            _ => Err(EvalErrType::InvalidItemOnStack),
+        }
+    }
+
+    pub fn pop_asset(&mut self) -> Result<Asset, EvalErrType> {
+        let frame = self.pop()?;
+        match frame {
+            OpFrame::Asset(asset) => Ok(asset),
             _ => Err(EvalErrType::InvalidItemOnStack),
         }
     }
