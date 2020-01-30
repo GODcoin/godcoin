@@ -34,9 +34,8 @@ impl Builder {
                 self.insert_bytes(&[Operand::PushAsset.into()])?;
                 self.insert_bytes(&asset.amount.to_be_bytes())?;
             }
-            // Stack manipulation
+            // Logic
             OpFrame::OpNot => self.insert_bytes(&[Operand::OpNot.into()])?,
-            // Control
             OpFrame::OpIf => self.insert_bytes(&[Operand::OpIf.into()])?,
             OpFrame::OpElse => self.insert_bytes(&[Operand::OpElse.into()])?,
             OpFrame::OpEndIf => self.insert_bytes(&[Operand::OpEndIf.into()])?,

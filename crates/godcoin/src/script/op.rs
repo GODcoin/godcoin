@@ -9,10 +9,8 @@ pub enum Operand {
     PushPubKey = 0x02,
     PushAsset = 0x03,
 
-    // Stack manipulation
+    // Logic
     OpNot = 0x10,
-
-    // Control
     OpIf = 0x20,
     OpElse = 0x21,
     OpEndIf = 0x22,
@@ -39,10 +37,8 @@ pub enum OpFrame {
     PubKey(PublicKey),
     Asset(Asset),
 
-    // Stack manipulation
+    // Logic
     OpNot,
-
-    // Control
     OpIf,
     OpElse,
     OpEndIf,

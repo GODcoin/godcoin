@@ -56,12 +56,11 @@ impl<'a> ScriptEngine<'a> {
         let mut ignore_else = false;
         while let Some(op) = self.consume_op()? {
             match op {
-                // Stack manipulation
+                // Logic
                 OpFrame::OpNot => {
                     let b = map_err_type!(self, self.stack.pop_bool())?;
                     map_err_type!(self, self.stack.push(!b))?;
                 }
-                // Control
                 OpFrame::OpIf => {
                     if_marker += 1;
                     ignore_else = map_err_type!(self, self.stack.pop_bool())?;
@@ -220,9 +219,8 @@ impl<'a> ScriptEngine<'a> {
                 let amt = Asset::new(amt);
                 Ok(Some(OpFrame::Asset(amt)))
             }
-            // Stack manipulation
+            // Logic
             o if o == Operand::OpNot as u8 => Ok(Some(OpFrame::OpNot)),
-            // Control
             o if o == Operand::OpIf as u8 => Ok(Some(OpFrame::OpIf)),
             o if o == Operand::OpElse as u8 => Ok(Some(OpFrame::OpElse)),
             o if o == Operand::OpEndIf as u8 => Ok(Some(OpFrame::OpEndIf)),

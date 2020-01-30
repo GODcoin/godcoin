@@ -29,9 +29,8 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
                     return Err(BuildError::MissingArgForOp(op.to_owned()));
                 }
             }
-            // Stack manipulation
+            // Logic
             "OP_NOT" => builder.try_push(OpFrame::OpNot),
-            // Control
             "OP_IF" => builder.try_push(OpFrame::OpIf),
             "OP_ELSE" => builder.try_push(OpFrame::OpElse),
             "OP_ENDIF" => builder.try_push(OpFrame::OpEndIf),
