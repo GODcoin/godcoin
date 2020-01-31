@@ -30,6 +30,10 @@ impl Builder {
                 self.insert_bytes(&[Operand::PushPubKey.into()])?;
                 self.insert_bytes(key.as_ref())?;
             }
+            OpFrame::ScriptHash(hash) => {
+                self.insert_bytes(&[Operand::PushScriptHash.into()])?;
+                self.insert_bytes(hash.as_ref())?;
+            }
             OpFrame::Asset(asset) => {
                 self.insert_bytes(&[Operand::PushAsset.into()])?;
                 self.insert_bytes(&asset.amount.to_be_bytes())?;

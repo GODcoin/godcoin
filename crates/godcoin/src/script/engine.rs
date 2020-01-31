@@ -5,7 +5,7 @@ use super::{stack::*, *};
 use crate::{
     asset::Asset,
     blockchain::LogEntry,
-    crypto::PublicKey,
+    crypto::{PublicKey, ScriptHash, SCRIPT_HASH_BYTES},
     tx::{TxPrecompData, TxVariant, TxVariantV0},
 };
 
@@ -82,6 +82,7 @@ impl<'a> ScriptEngine<'a> {
                 OpFrame::False => map_err_type!(self, self.stack.push(op))?,
                 OpFrame::True => map_err_type!(self, self.stack.push(op))?,
                 OpFrame::PubKey(_) => map_err_type!(self, self.stack.push(op))?,
+                OpFrame::ScriptHash(_) => map_err_type!(self, self.stack.push(op))?,
                 OpFrame::Asset(_) => map_err_type!(self, self.stack.push(op))?,
                 // Arithmetic
                 OpFrame::OpLoadAmt => {
@@ -274,6 +275,11 @@ impl<'a> ScriptEngine<'a> {
                 let slice = read_bytes!(self, sign::PUBLICKEYBYTES);
                 let key = PublicKey::from_slice(slice).unwrap();
                 Ok(Some(OpFrame::PubKey(key)))
+            }
+            o if o == Operand::PushScriptHash as u8 => {
+                let slice = read_bytes!(self, SCRIPT_HASH_BYTES);
+                let hash = ScriptHash::from_slice(slice).unwrap();
+                Ok(Some(OpFrame::ScriptHash(hash)))
             }
             o if o == Operand::PushAsset as u8 => {
                 let slice = read_bytes!(self, mem::size_of::<i64>());

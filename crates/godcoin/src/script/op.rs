@@ -1,4 +1,7 @@
-use crate::{asset::Asset, crypto::PublicKey};
+use crate::{
+    asset::Asset,
+    crypto::{PublicKey, ScriptHash},
+};
 
 #[derive(PartialEq)]
 #[repr(u8)]
@@ -7,7 +10,8 @@ pub enum Operand {
     PushFalse = 0x00,
     PushTrue = 0x01,
     PushPubKey = 0x02,
-    PushAsset = 0x03,
+    PushScriptHash = 0x03,
+    PushAsset = 0x04,
 
     // Arithmetic
     OpLoadAmt = 0x10,
@@ -43,6 +47,7 @@ pub enum OpFrame {
     False,
     True,
     PubKey(PublicKey),
+    ScriptHash(ScriptHash),
     Asset(Asset),
 
     // Arithmetic

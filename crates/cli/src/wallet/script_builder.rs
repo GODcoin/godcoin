@@ -21,15 +21,20 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
             // Push value
             "OP_FALSE" => builder.try_push(OpFrame::False),
             "OP_TRUE" => builder.try_push(OpFrame::True),
-            "OP_PUBKEY" => {
-                let key = iter.next();
-                if let Some(key) = key {
+            "OP_PUBKEY" => match iter.next() {
+                Some(key) => {
                     let key = PublicKey::from_wif(key).map_err(BuildError::WifError)?;
                     builder.try_push(OpFrame::PubKey(key))
-                } else {
-                    return Err(BuildError::MissingArgForOp(op.to_owned()));
                 }
-            }
+                None => return Err(BuildError::MissingArgForOp(op.to_owned())),
+            },
+            "OP_SCRIPTHASH" => match iter.next() {
+                Some(hash) => {
+                    let hash = ScriptHash::from_wif(hash).map_err(BuildError::WifError)?;
+                    builder.try_push(OpFrame::ScriptHash(hash))
+                }
+                None => return Err(BuildError::MissingArgForOp(op.to_owned())),
+            },
             "OP_ASSET" => {
                 let asset = iter.next();
                 if let Some(asset) = asset {

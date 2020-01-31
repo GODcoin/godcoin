@@ -19,6 +19,7 @@ simplifies documenting any changes.
   the transaction originally sent. LoadRemAmt will load the remaining amount
   that can be transferred (i.e. since we support partial transfers, this will
   push the remaining amount onto the stack).
+- Implement push script hash opcode which allows transferring to addresses.
 
 ### Breaking changes
 
