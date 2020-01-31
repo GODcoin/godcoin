@@ -40,6 +40,8 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
                 }
             }
             // Arithmetic
+            "OP_LOADAMT" => builder.try_push(OpFrame::OpLoadAmt),
+            "OP_LOADREMAMT" => builder.try_push(OpFrame::OpLoadRemAmt),
             "OP_ADD" => builder.try_push(OpFrame::OpAdd),
             "OP_SUB" => builder.try_push(OpFrame::OpSub),
             "OP_MUL" => builder.try_push(OpFrame::OpMul),

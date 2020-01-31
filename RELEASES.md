@@ -15,6 +15,10 @@ simplifies documenting any changes.
 - Introduce basic arithmetic operations and an ability to push assets.
 - Transactions are stored in blocks as receipts, which represents an executed
   transaction with a corresponding event log.
+- Introduce LoadAmt and LoadRemAmt opcodes. LoadAmt will load the amount that
+  the transaction originally sent. LoadRemAmt will load the remaining amount
+  that can be transferred (i.e. since we support partial transfers, this will
+  push the remaining amount onto the stack).
 
 ### Breaking changes
 

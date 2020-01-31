@@ -2,7 +2,12 @@ use sodiumoxide::crypto::sign;
 use std::{borrow::Cow, convert::TryInto, mem};
 
 use super::{stack::*, *};
-use crate::{asset::Asset, blockchain::LogEntry, crypto::PublicKey, tx::TxPrecompData};
+use crate::{
+    asset::Asset,
+    blockchain::LogEntry,
+    crypto::PublicKey,
+    tx::{TxPrecompData, TxVariant, TxVariantV0},
+};
 
 macro_rules! map_err_type {
     ($self:expr, $var:expr) => {
@@ -18,6 +23,8 @@ pub struct ScriptEngine<'a> {
     stack: Stack,
     sig_pair_pos: usize,
     log: Vec<LogEntry>,
+    total_amt: Asset,
+    remaining_amt: Asset,
 }
 
 impl<'a> ScriptEngine<'a> {
@@ -28,6 +35,16 @@ impl<'a> ScriptEngine<'a> {
     {
         let script = script.into();
         let data = data.into();
+
+        let total_amt = match data.tx() {
+            TxVariant::V0(tx) => match tx {
+                TxVariantV0::OwnerTx(_) => Asset::default(),
+                TxVariantV0::MintTx(tx) => tx.amount,
+                TxVariantV0::RewardTx(tx) => tx.rewards,
+                TxVariantV0::TransferTx(tx) => tx.amount,
+            },
+        };
+
         Self {
             script,
             data,
@@ -35,6 +52,11 @@ impl<'a> ScriptEngine<'a> {
             stack: Stack::new(),
             sig_pair_pos: 0,
             log: vec![],
+            total_amt,
+            // TODO set this to the total amount when the transfer opcode is implemented and auto generated entries are
+            // no longer created. At present, all the funds are transferred to a single address with an auto generated
+            // event log entry, therefore, no amount can possibly remain.
+            remaining_amt: Asset::default(),
         }
     }
 
@@ -62,6 +84,12 @@ impl<'a> ScriptEngine<'a> {
                 OpFrame::PubKey(_) => map_err_type!(self, self.stack.push(op))?,
                 OpFrame::Asset(_) => map_err_type!(self, self.stack.push(op))?,
                 // Arithmetic
+                OpFrame::OpLoadAmt => {
+                    map_err_type!(self, self.stack.push(OpFrame::Asset(self.total_amt)))?;
+                }
+                OpFrame::OpLoadRemAmt => {
+                    map_err_type!(self, self.stack.push(OpFrame::Asset(self.remaining_amt)))?;
+                }
                 OpFrame::OpAdd => {
                     let b = map_err_type!(self, self.stack.pop_asset())?;
                     let a = map_err_type!(self, self.stack.pop_asset())?;
@@ -254,6 +282,8 @@ impl<'a> ScriptEngine<'a> {
                 Ok(Some(OpFrame::Asset(amt)))
             }
             // Arithmetic
+            o if o == Operand::OpLoadAmt as u8 => Ok(Some(OpFrame::OpLoadAmt)),
+            o if o == Operand::OpLoadRemAmt as u8 => Ok(Some(OpFrame::OpLoadRemAmt)),
             o if o == Operand::OpAdd as u8 => Ok(Some(OpFrame::OpAdd)),
             o if o == Operand::OpSub as u8 => Ok(Some(OpFrame::OpSub)),
             o if o == Operand::OpMul as u8 => Ok(Some(OpFrame::OpMul)),
@@ -347,6 +377,32 @@ mod tests {
         let mut engine = new_engine(Builder::new().push(frame).push(OpFrame::True));
         assert_eq!(engine.eval().unwrap(), vec![]);
         assert_eq!(engine.stack.pop_asset().unwrap(), asset);
+        assert!(engine.stack.is_empty());
+    }
+
+    #[test]
+    fn arithmetic_loadamt() {
+        let mut engine = new_engine(Builder::new().push(OpFrame::OpLoadAmt).push(OpFrame::True));
+        assert_eq!(engine.eval().unwrap(), vec![]);
+        assert_eq!(
+            engine.stack.pop_asset().unwrap(),
+            "10.00000 TEST".parse().unwrap()
+        );
+        assert!(engine.stack.is_empty());
+    }
+
+    #[test]
+    fn arithmetic_loadremamt() {
+        let mut engine = new_engine(
+            Builder::new()
+                .push(OpFrame::OpLoadRemAmt)
+                .push(OpFrame::True),
+        );
+        assert_eq!(engine.eval().unwrap(), vec![]);
+        assert_eq!(
+            engine.stack.pop_asset().unwrap(),
+            "0.00000 TEST".parse().unwrap()
+        );
         assert!(engine.stack.is_empty());
     }
 

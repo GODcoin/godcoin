@@ -10,10 +10,12 @@ pub enum Operand {
     PushAsset = 0x03,
 
     // Arithmetic
-    OpAdd = 0x10,
-    OpSub = 0x11,
-    OpMul = 0x12,
-    OpDiv = 0x13,
+    OpLoadAmt = 0x10,
+    OpLoadRemAmt = 0x11,
+    OpAdd = 0x12,
+    OpSub = 0x13,
+    OpMul = 0x14,
+    OpDiv = 0x15,
 
     // Logic
     OpNot = 0x20,
@@ -44,6 +46,8 @@ pub enum OpFrame {
     Asset(Asset),
 
     // Arithmetic
+    OpLoadAmt,
+    OpLoadRemAmt, // Load remaining amount
     OpAdd,
     OpSub,
     OpMul,
