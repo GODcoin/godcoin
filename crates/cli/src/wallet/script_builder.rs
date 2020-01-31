@@ -35,15 +35,13 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
                 }
                 None => return Err(BuildError::MissingArgForOp(op.to_owned())),
             },
-            "OP_ASSET" => {
-                let asset = iter.next();
-                if let Some(asset) = asset {
+            "OP_ASSET" => match iter.next() {
+                Some(asset) => {
                     let asset = asset.parse().map_err(BuildError::AssetParseError)?;
                     builder.try_push(OpFrame::Asset(asset))
-                } else {
-                    return Err(BuildError::MissingArgForOp(op.to_owned()));
                 }
-            }
+                None => return Err(BuildError::MissingArgForOp(op.to_owned())),
+            },
             // Arithmetic
             "OP_LOADAMT" => builder.try_push(OpFrame::OpLoadAmt),
             "OP_LOADREMAMT" => builder.try_push(OpFrame::OpLoadRemAmt),
