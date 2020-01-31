@@ -56,6 +56,44 @@ impl<'a> ScriptEngine<'a> {
         let mut ignore_else = false;
         while let Some(op) = self.consume_op()? {
             match op {
+                // Push
+                OpFrame::False => map_err_type!(self, self.stack.push(op))?,
+                OpFrame::True => map_err_type!(self, self.stack.push(op))?,
+                OpFrame::PubKey(_) => map_err_type!(self, self.stack.push(op))?,
+                OpFrame::Asset(_) => map_err_type!(self, self.stack.push(op))?,
+                // Arithmetic
+                OpFrame::OpAdd => {
+                    let b = map_err_type!(self, self.stack.pop_asset())?;
+                    let a = map_err_type!(self, self.stack.pop_asset())?;
+                    let res = a
+                        .checked_add(b)
+                        .ok_or_else(|| self.new_err(EvalErrType::Arithmetic))?;
+                    map_err_type!(self, self.stack.push(OpFrame::Asset(res)))?;
+                }
+                OpFrame::OpSub => {
+                    let b = map_err_type!(self, self.stack.pop_asset())?;
+                    let a = map_err_type!(self, self.stack.pop_asset())?;
+                    let res = a
+                        .checked_sub(b)
+                        .ok_or_else(|| self.new_err(EvalErrType::Arithmetic))?;
+                    map_err_type!(self, self.stack.push(OpFrame::Asset(res)))?;
+                }
+                OpFrame::OpMul => {
+                    let b = map_err_type!(self, self.stack.pop_asset())?;
+                    let a = map_err_type!(self, self.stack.pop_asset())?;
+                    let res = a
+                        .checked_mul(b)
+                        .ok_or_else(|| self.new_err(EvalErrType::Arithmetic))?;
+                    map_err_type!(self, self.stack.push(OpFrame::Asset(res)))?;
+                }
+                OpFrame::OpDiv => {
+                    let b = map_err_type!(self, self.stack.pop_asset())?;
+                    let a = map_err_type!(self, self.stack.pop_asset())?;
+                    let res = a
+                        .checked_div(b)
+                        .ok_or_else(|| self.new_err(EvalErrType::Arithmetic))?;
+                    map_err_type!(self, self.stack.push(OpFrame::Asset(res)))?;
+                }
                 // Logic
                 OpFrame::OpNot => {
                     let b = map_err_type!(self, self.stack.pop_bool())?;
@@ -132,10 +170,6 @@ impl<'a> ScriptEngine<'a> {
                     if !self.check_sigs(usize::from(threshold), &keys) {
                         return Err(self.new_err(EvalErrType::ScriptRetFalse));
                     }
-                }
-                // Handle push ops
-                _ => {
-                    map_err_type!(self, self.stack.push(op))?;
                 }
             }
         }
@@ -219,6 +253,11 @@ impl<'a> ScriptEngine<'a> {
                 let amt = Asset::new(amt);
                 Ok(Some(OpFrame::Asset(amt)))
             }
+            // Arithmetic
+            o if o == Operand::OpAdd as u8 => Ok(Some(OpFrame::OpAdd)),
+            o if o == Operand::OpSub as u8 => Ok(Some(OpFrame::OpSub)),
+            o if o == Operand::OpMul as u8 => Ok(Some(OpFrame::OpMul)),
+            o if o == Operand::OpDiv as u8 => Ok(Some(OpFrame::OpDiv)),
             // Logic
             o if o == Operand::OpNot as u8 => Ok(Some(OpFrame::OpNot)),
             o if o == Operand::OpIf as u8 => Ok(Some(OpFrame::OpIf)),
@@ -308,6 +347,82 @@ mod tests {
         let mut engine = new_engine(Builder::new().push(frame).push(OpFrame::True));
         assert_eq!(engine.eval().unwrap(), vec![]);
         assert_eq!(engine.stack.pop_asset().unwrap(), asset);
+        assert!(engine.stack.is_empty());
+    }
+
+    #[test]
+    fn arithmetic_add() {
+        let asset_a = "100.00000 TEST".parse().unwrap();
+        let asset_b = "0.12345 TEST".parse().unwrap();
+        let mut engine = new_engine(
+            Builder::new()
+                .push(OpFrame::Asset(asset_a))
+                .push(OpFrame::Asset(asset_b))
+                .push(OpFrame::OpAdd)
+                .push(OpFrame::True),
+        );
+        assert_eq!(engine.eval().unwrap(), vec![]);
+        assert_eq!(
+            engine.stack.pop_asset().unwrap(),
+            "100.12345 TEST".parse().unwrap()
+        );
+        assert!(engine.stack.is_empty());
+    }
+
+    #[test]
+    fn arithmetic_sub() {
+        let asset_a = "100.00000 TEST".parse().unwrap();
+        let asset_b = "1.00000 TEST".parse().unwrap();
+        let mut engine = new_engine(
+            Builder::new()
+                .push(OpFrame::Asset(asset_a))
+                .push(OpFrame::Asset(asset_b))
+                .push(OpFrame::OpSub)
+                .push(OpFrame::True),
+        );
+        assert_eq!(engine.eval().unwrap(), vec![]);
+        assert_eq!(
+            engine.stack.pop_asset().unwrap(),
+            "99.00000 TEST".parse().unwrap()
+        );
+        assert!(engine.stack.is_empty());
+    }
+
+    #[test]
+    fn arithmetic_mul() {
+        let asset_a = "50.00000 TEST".parse().unwrap();
+        let asset_b = "1.50000 TEST".parse().unwrap();
+        let mut engine = new_engine(
+            Builder::new()
+                .push(OpFrame::Asset(asset_a))
+                .push(OpFrame::Asset(asset_b))
+                .push(OpFrame::OpMul)
+                .push(OpFrame::True),
+        );
+        assert_eq!(engine.eval().unwrap(), vec![]);
+        assert_eq!(
+            engine.stack.pop_asset().unwrap(),
+            "75.00000 TEST".parse().unwrap()
+        );
+        assert!(engine.stack.is_empty());
+    }
+
+    #[test]
+    fn arithmetic_div() {
+        let asset_a = "75.00000 TEST".parse().unwrap();
+        let asset_b = "2.00000 TEST".parse().unwrap();
+        let mut engine = new_engine(
+            Builder::new()
+                .push(OpFrame::Asset(asset_a))
+                .push(OpFrame::Asset(asset_b))
+                .push(OpFrame::OpDiv)
+                .push(OpFrame::True),
+        );
+        assert_eq!(engine.eval().unwrap(), vec![]);
+        assert_eq!(
+            engine.stack.pop_asset().unwrap(),
+            "37.50000 TEST".parse().unwrap()
+        );
         assert!(engine.stack.is_empty());
     }
 

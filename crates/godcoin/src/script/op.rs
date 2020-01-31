@@ -9,12 +9,18 @@ pub enum Operand {
     PushPubKey = 0x02,
     PushAsset = 0x03,
 
+    // Arithmetic
+    OpAdd = 0x10,
+    OpSub = 0x11,
+    OpMul = 0x12,
+    OpDiv = 0x13,
+
     // Logic
-    OpNot = 0x10,
-    OpIf = 0x20,
-    OpElse = 0x21,
-    OpEndIf = 0x22,
-    OpReturn = 0x23,
+    OpNot = 0x20,
+    OpIf = 0x21,
+    OpElse = 0x22,
+    OpEndIf = 0x23,
+    OpReturn = 0x24,
 
     // Crypto
     OpCheckSig = 0x30,
@@ -36,6 +42,12 @@ pub enum OpFrame {
     True,
     PubKey(PublicKey),
     Asset(Asset),
+
+    // Arithmetic
+    OpAdd,
+    OpSub,
+    OpMul,
+    OpDiv,
 
     // Logic
     OpNot,

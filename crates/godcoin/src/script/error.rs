@@ -19,4 +19,5 @@ pub enum EvalErrType {
     InvalidItemOnStack = 0x03,
     StackOverflow = 0x04,
     StackUnderflow = 0x05,
+    Arithmetic = 0x06,
 }

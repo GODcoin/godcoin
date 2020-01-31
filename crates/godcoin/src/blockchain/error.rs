@@ -61,6 +61,7 @@ impl TxErr {
                     }
                     t if t == EvalErrType::StackOverflow as u8 => EvalErrType::StackOverflow,
                     t if t == EvalErrType::StackUnderflow as u8 => EvalErrType::StackUnderflow,
+                    t if t == EvalErrType::Arithmetic as u8 => EvalErrType::Arithmetic,
                     _ => {
                         return Err(io::Error::new(
                             io::ErrorKind::InvalidData,

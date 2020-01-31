@@ -34,6 +34,11 @@ impl Builder {
                 self.insert_bytes(&[Operand::PushAsset.into()])?;
                 self.insert_bytes(&asset.amount.to_be_bytes())?;
             }
+            // Arithmetic
+            OpFrame::OpAdd => self.insert_bytes(&[Operand::OpAdd.into()])?,
+            OpFrame::OpSub => self.insert_bytes(&[Operand::OpSub.into()])?,
+            OpFrame::OpMul => self.insert_bytes(&[Operand::OpMul.into()])?,
+            OpFrame::OpDiv => self.insert_bytes(&[Operand::OpDiv.into()])?,
             // Logic
             OpFrame::OpNot => self.insert_bytes(&[Operand::OpNot.into()])?,
             OpFrame::OpIf => self.insert_bytes(&[Operand::OpIf.into()])?,

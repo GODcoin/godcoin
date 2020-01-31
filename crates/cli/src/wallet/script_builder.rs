@@ -39,6 +39,11 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
                     return Err(BuildError::MissingArgForOp(op.to_owned()));
                 }
             }
+            // Arithmetic
+            "OP_ADD" => builder.try_push(OpFrame::OpAdd),
+            "OP_SUB" => builder.try_push(OpFrame::OpSub),
+            "OP_MUL" => builder.try_push(OpFrame::OpMul),
+            "OP_DIV" => builder.try_push(OpFrame::OpDiv),
             // Logic
             "OP_NOT" => builder.try_push(OpFrame::OpNot),
             "OP_IF" => builder.try_push(OpFrame::OpIf),
