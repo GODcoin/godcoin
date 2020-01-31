@@ -12,6 +12,9 @@ simplifies documenting any changes.
   testnet.
 - Introduce DoubleSha256 API that allows for streaming hash updates, but when
   finalize is called, a double hash will be performed.
+- Introduce basic arithmetic operations and an ability to push assets.
+- Transactions are stored in blocks as receipts, which represents an executed
+  transaction with a corresponding event log.
 
 ### Breaking changes
 
@@ -26,6 +29,7 @@ simplifies documenting any changes.
   other data (e.g. timestamp) chances.
 - TxId hashes now include a chain ID and no longer include signatures.
 - Transactions are now signed using the TxID.
+- Constants for script and transaction errors have been updated.
 
 # Version 0.3.0 (2019-12-31)
 
