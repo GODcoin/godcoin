@@ -93,10 +93,18 @@ pub fn handle_new_client(stream: TcpStream, peer_addr: SocketAddr, data: Arc<Ser
             let mut tx = tx.clone();
             async move {
                 while let Some(msg) = stream.next().await {
-                    let res = process_ws_msg(&data, &mut state, msg.unwrap());
-                    if let Some(res) = res {
-                        if let Err(e) = tx.send(res).await {
-                            warn!("[{}] Failed to send message: {:?}", peer_addr, e);
+                    match msg {
+                        Ok(msg) => {
+                            let res = process_ws_msg(&data, &mut state, msg);
+                            if let Some(res) = res {
+                                if let Err(e) = tx.send(res).await {
+                                    warn!("[{}] Failed to send message: {:?}", peer_addr, e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!("[{}] Error reading WS message: {:?}", peer_addr, e);
+                            break;
                         }
                     }
                 }
