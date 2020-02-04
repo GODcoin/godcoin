@@ -20,7 +20,7 @@ testnet = ["godcoin/testnet"]
 [dependencies]
 dirs = "2.0.2"
 env_logger = "0.7.1"
-futures = "0.3.1"
+futures = "0.3.2"
 godcoin = { path = "../godcoin" }
 log = "0.4.8"
 parking_lot = "0.10.0"

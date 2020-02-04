@@ -38,5 +38,5 @@ version = "2.33.0"
 default-features = false
 
 [dependencies.tungstenite]
-version = "0.10.0"
+version = "0.10.1"
 default-features = false
