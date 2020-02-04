@@ -17,12 +17,12 @@ testnet = []
 
 [dependencies]
 bs58 = "0.3.0"
-bytes = "0.4.12"
+bytes = "0.5.4"
 crc32c = "0.4.0"
 faster-hex = "0.4.1"
 log = "0.4.8"
-num-bigint = "0.2.3"
-num-traits = "0.2.8"
-parking_lot = "0.9.0"
-rocksdb = "0.12.4"
+num-bigint = "0.2.6"
+num-traits = "0.2.11"
+parking_lot = "0.10.0"
+rocksdb = "0.13.0"
 sodiumoxide = { version = "0.2.5", default-features = false, features = ["std"] }

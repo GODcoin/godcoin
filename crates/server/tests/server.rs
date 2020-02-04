@@ -1,4 +1,4 @@
-use futures::prelude::*;
+use futures::{channel::*, prelude::*};
 use godcoin::{
     constants,
     prelude::{net::ErrorKind, *},
@@ -7,10 +7,7 @@ use godcoin_server::WsState;
 use std::{
     io::Cursor,
     net::SocketAddr,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicU64, Ordering},
 };
 use tokio_tungstenite::tungstenite::Message;
 
@@ -367,11 +364,11 @@ fn get_full_block() {
 #[test]
 fn get_block_range_unfiltered() {
     let mut runtime = tokio::runtime::Runtime::new().unwrap();
-    let (tx, rx) = futures::sync::oneshot::channel();
+    let (tx, rx) = oneshot::channel();
 
-    runtime.spawn(futures::lazy(move || {
+    runtime.spawn(async {
         let minter = TestMinter::new();
-        let (mut state, rx) = create_uninit_state();
+        let (mut state, mut rx) = create_uninit_state();
         for _ in 0..100 {
             minter.produce_block().unwrap();
         }
@@ -386,46 +383,43 @@ fn get_block_range_unfiltered() {
         );
         assert_eq!(res, None);
 
-        let height = Arc::new(AtomicU64::new(0));
-        rx.map(move |msg| {
-            let msg = match msg {
-                Message::Binary(msg) => msg,
-                _ => panic!("Expected binary response"),
-            };
-            let mut cur = Cursor::<&[u8]>::new(&msg);
-            Msg::deserialize(&mut cur).unwrap()
-        })
-        .for_each({
-            let height = Arc::clone(&height);
-            move |msg: Msg| {
-                assert_eq!(msg.id, 123);
+        // The block range implementation holds onto a reference of the state sender. When the block range finishes, the
+        // tx reference is dropped. State needs to be dropped early to ensure the sender doesn't stay alive forever.
+        std::mem::drop(state);
 
-                match msg.body {
-                    Body::Response(rpc::Response::GetBlock(block)) => {
-                        let height = height.fetch_add(1, Ordering::SeqCst);
-                        assert!(height <= 100);
-                        match block {
-                            FilteredBlock::Block(block) => {
-                                assert_eq!(block.height(), height);
-                            }
-                            _ => panic!("Expected a full block"),
-                        }
-                    }
-                    Body::Response(rpc::Response::GetBlockRange) => {
-                        assert_eq!(height.load(Ordering::Acquire), 101);
-                    }
-                    unexp @ _ => panic!("Expected GetBlock response: {:?}", unexp),
+        let height = AtomicU64::new(0);
+        while let Some(msg) = rx.next().await {
+            let msg = {
+                let msg = match msg {
+                    Message::Binary(msg) => msg,
+                    _ => panic!("Expected binary response"),
                 };
+                let mut cur = Cursor::<&[u8]>::new(&msg);
+                Msg::deserialize(&mut cur).unwrap()
+            };
 
-                Ok(())
-            }
-        })
-        .and_then(move |()| {
-            assert_eq!(height.load(Ordering::Acquire), 101);
-            tx.send(()).unwrap();
-            Ok(())
-        })
-    }));
+            assert_eq!(msg.id, 123);
+            match msg.body {
+                Body::Response(rpc::Response::GetBlock(block)) => {
+                    let height = height.fetch_add(1, Ordering::SeqCst);
+                    assert!(height <= 100);
+                    match block {
+                        FilteredBlock::Block(block) => {
+                            assert_eq!(block.height(), height);
+                        }
+                        _ => panic!("Expected a full block"),
+                    }
+                }
+                Body::Response(rpc::Response::GetBlockRange) => {
+                    assert_eq!(height.load(Ordering::Acquire), 101);
+                }
+                unexp @ _ => panic!("Expected GetBlock response: {:?}", unexp),
+            };
+        }
+
+        assert_eq!(height.load(Ordering::Acquire), 101);
+        tx.send(()).unwrap();
+    });
 
     runtime.block_on(rx).unwrap();
 }
@@ -433,11 +427,11 @@ fn get_block_range_unfiltered() {
 #[test]
 fn get_block_range_filter_all() {
     let mut runtime = tokio::runtime::Runtime::new().unwrap();
-    let (tx, rx) = futures::sync::oneshot::channel();
+    let (tx, rx) = oneshot::channel();
 
-    runtime.spawn(futures::lazy(move || {
+    runtime.spawn(async {
         let minter = TestMinter::new();
-        let (mut state, rx) = create_uninit_state();
+        let (mut state, mut rx) = create_uninit_state();
         for _ in 0..100 {
             minter.produce_block().unwrap();
         }
@@ -464,48 +458,45 @@ fn get_block_range_filter_all() {
         );
         assert_eq!(res, None);
 
-        let height = Arc::new(AtomicU64::new(0));
-        rx.map(move |msg| {
-            let msg = match msg {
-                Message::Binary(msg) => msg,
-                _ => panic!("Expected binary response"),
-            };
-            let mut cur = Cursor::<&[u8]>::new(&msg);
-            Msg::deserialize(&mut cur).unwrap()
-        })
-        .for_each({
-            let height = Arc::clone(&height);
-            move |msg: Msg| {
-                assert_eq!(msg.id, 123);
+        // The block range implementation holds onto a reference of the state sender. When the block range finishes, the
+        // tx reference is dropped. State needs to be dropped early to ensure the sender doesn't stay alive forever.
+        std::mem::drop(state);
 
-                match msg.body {
-                    Body::Response(rpc::Response::GetBlock(block)) => {
-                        let height = height.fetch_add(1, Ordering::SeqCst);
-                        assert!(height <= 100);
-                        match block {
-                            FilteredBlock::Header((header, _)) => match header {
-                                BlockHeader::V0(header) => {
-                                    assert_eq!(header.height, height);
-                                }
-                            },
-                            _ => panic!("Expected a partial block"),
-                        }
-                    }
-                    Body::Response(rpc::Response::GetBlockRange) => {
-                        assert_eq!(height.load(Ordering::Acquire), 101);
-                    }
-                    _ => panic!("Expected GetBlock response"),
+        let height = AtomicU64::new(0);
+        while let Some(msg) = rx.next().await {
+            let msg = {
+                let msg = match msg {
+                    Message::Binary(msg) => msg,
+                    _ => panic!("Expected binary response"),
                 };
+                let mut cur = Cursor::<&[u8]>::new(&msg);
+                Msg::deserialize(&mut cur).unwrap()
+            };
 
-                Ok(())
-            }
-        })
-        .and_then(move |()| {
-            assert_eq!(height.load(Ordering::Acquire), 101);
-            tx.send(()).unwrap();
-            Ok(())
-        })
-    }));
+            assert_eq!(msg.id, 123);
+            match msg.body {
+                Body::Response(rpc::Response::GetBlock(block)) => {
+                    let height = height.fetch_add(1, Ordering::SeqCst);
+                    assert!(height <= 100);
+                    match block {
+                        FilteredBlock::Header((header, _)) => match header {
+                            BlockHeader::V0(header) => {
+                                assert_eq!(header.height, height);
+                            }
+                        },
+                        _ => panic!("Expected a partial block"),
+                    }
+                }
+                Body::Response(rpc::Response::GetBlockRange) => {
+                    assert_eq!(height.load(Ordering::Acquire), 101);
+                }
+                _ => panic!("Expected GetBlock response"),
+            };
+        }
+
+        assert_eq!(height.load(Ordering::Acquire), 101);
+        tx.send(()).unwrap();
+    });
 
     runtime.block_on(rx).unwrap();
 }
@@ -629,8 +620,8 @@ fn response_id_matches_request() {
     assert_eq!(res, expected);
 }
 
-fn create_uninit_state() -> (WsState, futures::sync::mpsc::Receiver<Message>) {
-    let (tx, rx) = futures::sync::mpsc::channel(8);
+fn create_uninit_state() -> (WsState, mpsc::Receiver<Message>) {
+    let (tx, rx) = mpsc::channel(8);
     (
         WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx),
         rx,

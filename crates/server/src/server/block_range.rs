@@ -1,6 +1,9 @@
-use futures::{Async, Poll, Stream};
+use futures::{
+    task::{Context, Poll},
+    Stream,
+};
 use godcoin::prelude::{BlockFilter, Blockchain, FilteredBlock};
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 
 pub struct AsyncBlockRange {
     chain: Arc<Blockchain>,
@@ -30,9 +33,8 @@ impl AsyncBlockRange {
 
 impl Stream for AsyncBlockRange {
     type Item = FilteredBlock;
-    type Error = ();
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Option<Self::Item>> {
         if self.min_height <= self.max_height {
             let block = match self.filter {
                 Some(ref filter) => self
@@ -46,9 +48,9 @@ impl Stream for AsyncBlockRange {
                 ),
             };
             self.min_height += 1;
-            Ok(Async::Ready(Some(block)))
+            Poll::Ready(Some(block))
         } else {
-            Ok(Async::Ready(None))
+            Poll::Ready(None)
         }
     }
 }

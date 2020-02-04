@@ -6,7 +6,7 @@ use std::{
     net::{SocketAddr, TcpStream, ToSocketAddrs},
     time::Duration,
 };
-use tungstenite::{client, handshake::client::Request as WsReq, protocol::Message, stream::Stream};
+use tungstenite::{client, protocol::Message, stream::Stream};
 
 macro_rules! check_unlocked {
     ($self:expr) => {
@@ -104,14 +104,8 @@ pub fn send_rpc_req(wallet: &mut Wallet, body: rpc::Request) -> Result<Msg, Stri
             _ => panic!("Expected node url scheme to be ws or wss"),
         };
 
-        let (ws, _) = client(
-            WsReq {
-                url: wallet.url.clone(),
-                extra_headers: None,
-            },
-            stream,
-        )
-        .map_err(|e| format!("Failed to init ws socket: {:?}", e))?;
+        let (ws, _) = client(wallet.url.clone(), stream)
+            .map_err(|e| format!("Failed to init ws socket: {:?}", e))?;
         ws
     };
     ws.write_message(Message::Binary(buf)).unwrap();

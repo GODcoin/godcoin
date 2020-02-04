@@ -7,7 +7,7 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
 };
-use tokio::{prelude::*, runtime::Builder};
+use tokio::runtime::Builder;
 
 #[derive(Debug, Deserialize)]
 struct Config {
@@ -17,6 +17,7 @@ struct Config {
 }
 
 fn main() {
+    install_panic_hook();
     env_logger::init_from_env(Env::new().filter_or(DEFAULT_FILTER_ENV, "godcoin=info"));
     godcoin::init().unwrap();
 
@@ -91,12 +92,13 @@ fn main() {
     };
 
     let mut rt = Builder::new()
-        .panic_handler(|_| std::process::abort())
+        .threaded_scheduler()
+        .enable_all()
         .build()
         .unwrap();
 
     let enable_stale_production = config.enable_stale_production;
-    rt.spawn(future::lazy(move || {
+    rt.spawn(async move {
         godcoin_server::start(godcoin_server::ServerOpts {
             blocklog_loc,
             index_loc,
@@ -105,15 +107,18 @@ fn main() {
             reindex,
             enable_stale_production,
         });
-        Ok(())
-    }));
+    });
 
-    let future = tokio_signal::ctrl_c()
-        .flatten_stream()
-        .into_future()
-        .and_then(|_| {
-            info!("Received ctrl-c, shutting down...");
-            Ok(())
-        });
-    rt.block_on(future).map_err(|(e, _)| e).unwrap();
+    rt.block_on(async {
+        tokio::signal::ctrl_c().await.unwrap();
+        info!("Received ctrl-c, shutting down...");
+    });
+}
+
+fn install_panic_hook() {
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        default_hook(panic_info);
+        std::process::abort();
+    }));
 }

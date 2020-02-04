@@ -1,4 +1,7 @@
-use futures::sync::mpsc::{self, Sender};
+use futures::{
+    channel::mpsc::{self, Sender},
+    SinkExt, StreamExt,
+};
 use godcoin::{blockchain::ReindexOpts, get_epoch_time, net::*, prelude::*};
 use log::{debug, error, info, warn};
 use std::{
@@ -11,11 +14,14 @@ use std::{
     },
     time::Duration,
 };
-use tokio::{net::TcpListener, prelude::*, timer::Interval};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    prelude::*,
+    time,
+};
 use tokio_tungstenite::tungstenite::{protocol, Message as WsMessage};
 
 mod block_range;
-mod forever;
 pub mod minter;
 pub mod pool;
 
@@ -92,81 +98,113 @@ pub fn start(opts: ServerOpts) {
 }
 
 fn start_server(server_addr: SocketAddr, data: Arc<ServerData>) {
-    let server = TcpListener::bind(&server_addr).unwrap();
-    let incoming = forever::ListenForever::new(server.incoming());
-    tokio::spawn(incoming.for_each(move |stream| {
-        let peer_addr = stream.peer_addr().unwrap();
-        let data = Arc::clone(&data);
-        let config = Some(protocol::WebSocketConfig {
-            // # of protocol Message's
-            max_send_queue: Some(16),
-            // 64 MiB
-            max_message_size: Some(64 << 20),
-            // 16 MiB
-            max_frame_size: Some(16 << 20),
-        });
-        tokio::spawn(
-            tokio_tungstenite::accept_async_with_config(stream, config)
-                .and_then(move |ws| {
-                    info!("[{}] Connection opened", peer_addr);
+    fn is_connection_error(e: &io::Error) -> bool {
+        match e.kind() {
+            io::ErrorKind::ConnectionRefused
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::ConnectionReset => true,
+            _ => false,
+        }
+    }
 
-                    let (tx, rx) = mpsc::channel(32);
-                    let (sink, stream) = ws.split();
-                    let mut state = WsState::new(peer_addr, tx.clone());
-                    let needs_pong = state.needs_pong();
+    tokio::spawn(async move {
+        let mut server = TcpListener::bind(&server_addr).await.unwrap();
+        loop {
+            match server.accept().await {
+                Ok((stream, peer_addr)) => {
+                    process_new_client(stream, peer_addr, Arc::clone(&data));
+                }
+                Err(e) => {
+                    error!("Accept error: {:?}", e);
+                    match e {
+                        ref e if is_connection_error(e) => continue,
+                        _ => time::delay_for(Duration::from_millis(500)).await,
+                    }
+                }
+            }
+        }
+    });
+}
 
-                    let ws_reader = stream.for_each({
-                        let data = Arc::clone(&data);
-                        let tx = tx.clone();
-                        move |msg| {
-                            let res = process_ws_message(&data, &mut state, msg);
-                            if let Some(res) = res {
-                                future::Either::A(tx.clone().send(res).then(move |res| {
-                                    if res.is_err() {
-                                        error!("[{}] Failed to send message", peer_addr);
-                                    }
-                                    Ok(())
-                                }))
-                            } else {
-                                future::Either::B(future::ok(()))
-                            }
+fn process_new_client(stream: TcpStream, peer_addr: SocketAddr, data: Arc<ServerData>) {
+    let config = Some(protocol::WebSocketConfig {
+        // # of protocol Message's
+        max_send_queue: Some(16),
+        // 64 MiB
+        max_message_size: Some(64 << 20),
+        // 16 MiB
+        max_frame_size: Some(16 << 20),
+    });
+    tokio::spawn(async move {
+        let ws_stream = match tokio_tungstenite::accept_async_with_config(stream, config).await {
+            Ok(ws) => ws,
+            Err(e) => {
+                error!("[{}] WS accept error = {:?}", peer_addr, e);
+                return;
+            }
+        };
+        info!("[{}] Connection opened", peer_addr);
+
+        let (tx, rx) = mpsc::channel(32);
+        let (sink, mut stream) = ws_stream.split();
+        let mut state = WsState::new(peer_addr, tx.clone());
+        let needs_pong = state.needs_pong();
+
+        let ws_reader = {
+            let data = Arc::clone(&data);
+            let mut tx = tx.clone();
+            async move {
+                while let Some(msg) = stream.next().await {
+                    let res = process_ws_message(&data, &mut state, msg.unwrap());
+                    if let Some(res) = res {
+                        if let Err(e) = tx.send(res).await {
+                            error!("[{}] Failed to send message: {:?}", peer_addr, e);
                         }
-                    });
-                    let ws_writer = rx.forward(sink.sink_map_err(move |e| {
-                        error!("[{}] Sink send error: {:?}", peer_addr, e);
-                    }));
+                    }
+                }
+            }
+        };
 
-                    let heartbeat_interval = Interval::new_interval(Duration::from_secs(20))
-                        .take_while(move |_| Ok(!needs_pong.swap(true, Ordering::AcqRel)))
-                        .for_each(move |_| {
-                            let nonce = get_epoch_time();
-                            let msg = Msg {
-                                id: u32::max_value(),
-                                body: Body::Ping(nonce),
-                            };
-                            debug!("[{}] Sending ping: {}", peer_addr, nonce);
+        let ws_writer = rx.map(|msg| Ok(msg)).forward(sink.sink_map_err(move |e| {
+            error!("[{}] Sink send error: {:?}", peer_addr, e);
+        }));
 
-                            let mut buf = Vec::with_capacity(16);
-                            msg.serialize(&mut buf);
-                            tx.clone().send(WsMessage::Binary(buf)).then(|_| Ok(()))
-                        });
+        let heartbeat_interval = async move {
+            let dur = Duration::from_secs(20);
+            let mut interval = time::interval_at(time::Instant::now() + dur, dur);
+            loop {
+                interval.tick().await;
+                if needs_pong.swap(true, Ordering::AcqRel) {
+                    debug!("[{}] Did not receive pong in time from peer", peer_addr);
+                    break;
+                }
 
-                    let conn = ws_reader.select2(ws_writer).select2(heartbeat_interval);
-                    tokio::spawn(conn.then(move |_| {
-                        info!("[{}] Connection closed", peer_addr);
-                        // Remove block subscriptions if there are any
-                        data.sub_pool.remove(peer_addr);
-                        Ok(())
-                    }));
+                let nonce = get_epoch_time();
+                let msg = Msg {
+                    id: u32::max_value(),
+                    body: Body::Ping(nonce),
+                };
+                debug!("[{}] Sending ping: {}", peer_addr, nonce);
 
-                    Ok(())
-                })
-                .map_err(move |e| {
-                    error!("[{}] WS accept error = {:?}", peer_addr, e);
-                }),
-        );
-        Ok(())
-    }));
+                let mut buf = Vec::with_capacity(16);
+                msg.serialize(&mut buf);
+
+                if tx.clone().send(WsMessage::Binary(buf)).await.is_err() {
+                    break;
+                }
+            }
+        };
+
+        tokio::select! {
+            _ = ws_reader => {},
+            _ = ws_writer => {},
+            _ = heartbeat_interval => {},
+        };
+
+        info!("[{}] Connection closed", peer_addr);
+        // Remove block subscriptions if there are any
+        data.sub_pool.remove(peer_addr);
+    });
 }
 
 pub fn process_ws_message(
@@ -307,10 +345,10 @@ fn handle_rpc_request(
                     }
 
                     let peer_addr = state.addr();
-                    let tx = state.sender();
-                    tokio::spawn(
-                        range
-                            .map(move |block| {
+                    let mut tx = state.sender();
+                    tokio::spawn(async move {
+                        while let Some(block) = range.next().await {
+                            let ws_msg = {
                                 let msg = Msg {
                                     id,
                                     body: Body::Response(rpc::Response::GetBlock(block)),
@@ -319,28 +357,27 @@ fn handle_rpc_request(
                                 let mut buf = Vec::with_capacity(65536);
                                 msg.serialize(&mut buf);
                                 WsMessage::Binary(buf)
-                            })
-                            .forward(tx.clone().sink_map_err(move |_| {
-                                error!("[{}] Failed to send block range update", peer_addr);
-                            }))
-                            .and_then(move |_| {
-                                let msg = Msg {
-                                    id,
-                                    body: Body::Response(rpc::Response::GetBlockRange),
-                                };
+                            };
+                            if tx.send(ws_msg).await.is_err() {
+                                warn!("[{}] Failed to send block range update", peer_addr);
+                                return;
+                            }
+                        }
 
-                                let mut buf = Vec::with_capacity(32);
-                                msg.serialize(&mut buf);
-                                tx.send(WsMessage::Binary(buf))
-                                    .map(|_sink| ())
-                                    .map_err(move |_| {
-                                        error!(
-                                            "[{}] Failed to send block range finalizer",
-                                            peer_addr
-                                        );
-                                    })
-                            }),
-                    );
+                        let ws_msg = {
+                            let msg = Msg {
+                                id,
+                                body: Body::Response(rpc::Response::GetBlockRange),
+                            };
+
+                            let mut buf = Vec::with_capacity(32);
+                            msg.serialize(&mut buf);
+                            WsMessage::Binary(buf)
+                        };
+                        if tx.send(ws_msg).await.is_err() {
+                            warn!("[{}] Failed to send block range finalizer", peer_addr);
+                        }
+                    });
 
                     return None;
                 }

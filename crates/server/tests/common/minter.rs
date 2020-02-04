@@ -132,7 +132,7 @@ impl TestMinter {
     }
 
     pub fn send_req(&self, req: rpc::Request) -> Option<Result<rpc::Response, net::ErrorKind>> {
-        let (tx, _) = futures::sync::mpsc::channel(8);
+        let (tx, _) = futures::channel::mpsc::channel(8);
         let mut state = WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx);
         let msg = self.send_msg(
             &mut state,

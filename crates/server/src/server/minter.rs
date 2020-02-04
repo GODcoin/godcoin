@@ -2,11 +2,8 @@ use crate::SubscriptionPool;
 use godcoin::{constants::BLOCK_PROD_TIME, prelude::*};
 use log::{info, warn};
 use parking_lot::Mutex;
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
-use tokio::{prelude::*, timer::Delay};
+use std::{sync::Arc, time::Duration};
+use tokio::time;
 
 #[derive(Clone)]
 pub struct Minter {
@@ -41,17 +38,13 @@ impl Minter {
 
     pub fn start_production_loop(self) {
         let dur = Duration::from_secs(BLOCK_PROD_TIME);
-        tokio::spawn(
-            Delay::new(Instant::now() + dur)
-                .and_then(move |_| {
-                    self.produce(false).unwrap();
-                    self.start_production_loop();
-                    Ok(())
-                })
-                .map_err(|e| {
-                    panic!("Minter production timer error: {:?}", e);
-                }),
-        );
+        tokio::spawn(async move {
+            // We use a delay rather than an interval to prevent mass-producing blocks if the timer needs to "catch up"
+            // on missed interval events.
+            time::delay_for(dur).await;
+            self.produce(false).unwrap();
+            self.start_production_loop();
+        });
     }
 
     pub fn force_produce_block(

@@ -1,4 +1,4 @@
-use futures::{sync::mpsc::Sender, Future, Sink};
+use futures::channel::mpsc::Sender;
 use godcoin::prelude::*;
 use parking_lot::RwLock;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
@@ -42,13 +42,7 @@ impl SubscriptionPool {
         for client in clients.values() {
             // Errors only occur when the other end is dropped, it is the pool managers responsibility to remove any
             // disconnected clients
-            tokio::spawn(
-                client
-                    .clone()
-                    .send(msg.clone())
-                    .map(|_sink| ())
-                    .map_err(|_| ()),
-            );
+            let _ = client.clone().try_send(msg.clone());
         }
     }
 }
