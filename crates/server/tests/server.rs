@@ -3,7 +3,7 @@ use godcoin::{
     constants,
     prelude::{net::ErrorKind, *},
 };
-use godcoin_server::WsState;
+use godcoin_server::client::WsClient;
 use std::{
     io::Cursor,
     net::SocketAddr,
@@ -59,7 +59,7 @@ fn get_block_unfiltered() {
 
 #[test]
 fn get_block_filtered_with_addresses() {
-    let set_filter = |minter: &TestMinter, state: &mut WsState, addr: ScriptHash| {
+    let set_filter = |minter: &TestMinter, state: &mut WsClient, addr: ScriptHash| {
         let mut filter = BlockFilter::new();
         filter.insert(addr);
         let res = minter
@@ -76,7 +76,7 @@ fn get_block_filtered_with_addresses() {
         assert_eq!(state.filter(), Some(&filter));
     };
 
-    let get_block = |minter: &TestMinter, state: &mut WsState, height: u64| {
+    let get_block = |minter: &TestMinter, state: &mut WsClient, height: u64| {
         let block = minter.chain().get_block(height).unwrap();
         let res = minter
             .send_msg(
@@ -620,10 +620,10 @@ fn response_id_matches_request() {
     assert_eq!(res, expected);
 }
 
-fn create_uninit_state() -> (WsState, mpsc::Receiver<Message>) {
+fn create_uninit_state() -> (WsClient, mpsc::Receiver<Message>) {
     let (tx, rx) = mpsc::channel(8);
     (
-        WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx),
+        WsClient::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx),
         rx,
     )
 }

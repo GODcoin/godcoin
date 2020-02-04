@@ -3,7 +3,7 @@ use godcoin::{
     blockchain::{GenesisBlockInfo, ReindexOpts},
     prelude::*,
 };
-use godcoin_server::{prelude::*, process_ws_message, ServerData, WsState};
+use godcoin_server::{client::*, prelude::*, ServerData};
 use sodiumoxide::randombytes;
 use std::{
     env, fs,
@@ -133,7 +133,7 @@ impl TestMinter {
 
     pub fn send_req(&self, req: rpc::Request) -> Option<Result<rpc::Response, net::ErrorKind>> {
         let (tx, _) = futures::channel::mpsc::channel(8);
-        let mut state = WsState::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx);
+        let mut state = WsClient::new(SocketAddr::from(([127, 0, 0, 1], 7777)), tx);
         let msg = self.send_msg(
             &mut state,
             Msg {
@@ -148,19 +148,19 @@ impl TestMinter {
         }
     }
 
-    pub fn send_msg(&self, state: &mut WsState, msg: Msg) -> Option<Msg> {
+    pub fn send_msg(&self, state: &mut WsClient, msg: Msg) -> Option<Msg> {
         let mut buf = Vec::with_capacity(1_048_576);
         msg.serialize(&mut buf);
         self.send_bin_msg(state, buf)
     }
 
-    pub fn send_bin_msg(&self, state: &mut WsState, bytes: Vec<u8>) -> Option<Msg> {
+    pub fn send_bin_msg(&self, state: &mut WsClient, bytes: Vec<u8>) -> Option<Msg> {
         assert!(
             self.3,
             "attempting to send a request to an unindexed minter"
         );
 
-        let res = match process_ws_message(&self.0, state, Message::Binary(bytes))? {
+        let res = match process_ws_msg(&self.0, state, Message::Binary(bytes))? {
             Message::Binary(res) => res,
             _ => panic!("Expected binary response"),
         };
