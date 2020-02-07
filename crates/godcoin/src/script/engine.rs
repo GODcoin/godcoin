@@ -60,13 +60,13 @@ impl<'a> ScriptEngine<'a> {
         }
     }
 
+    /// Returns the log the script produces after execution completes, if any error occurs, evaluation will be aborted
+    /// and return an error.
     #[inline]
     pub fn eval(mut self) -> Result<Vec<LogEntry>, EvalErr> {
         self.inner_eval()
     }
 
-    /// Returns the log the script produces after execution completes, if any error occurs, evaluation will be aborted
-    /// and return an error.
     fn inner_eval(&mut self) -> Result<Vec<LogEntry>, EvalErr> {
         macro_rules! pop_multisig_keys {
             ($self:expr, $key_count:expr) => {{
