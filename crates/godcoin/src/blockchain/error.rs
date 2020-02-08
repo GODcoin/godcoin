@@ -2,7 +2,10 @@ use crate::{
     script::{EvalErr, EvalErrType},
     serializer::*,
 };
-use std::io::{self, Cursor};
+use std::{
+    convert::TryFrom,
+    io::{self, Cursor},
+};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum BlockErr {
@@ -52,23 +55,12 @@ impl TxErr {
         Ok(match tag {
             0x00 => {
                 let pos = cursor.take_u32()?;
-                let kind = match cursor.take_u8()? {
-                    t if t == EvalErrType::ScriptRetFalse as u8 => EvalErrType::ScriptRetFalse,
-                    t if t == EvalErrType::UnexpectedEOF as u8 => EvalErrType::UnexpectedEOF,
-                    t if t == EvalErrType::UnknownOp as u8 => EvalErrType::UnknownOp,
-                    t if t == EvalErrType::InvalidItemOnStack as u8 => {
-                        EvalErrType::InvalidItemOnStack
-                    }
-                    t if t == EvalErrType::StackOverflow as u8 => EvalErrType::StackOverflow,
-                    t if t == EvalErrType::StackUnderflow as u8 => EvalErrType::StackUnderflow,
-                    t if t == EvalErrType::Arithmetic as u8 => EvalErrType::Arithmetic,
-                    _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            "failed to deserialize EvalErrType",
-                        ))
-                    }
-                };
+                let kind = EvalErrType::try_from(cursor.take_u8()?).map_err(|_| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "failed to deserialize EvalErrType",
+                    )
+                })?;
                 TxErr::ScriptEval(EvalErr::new(pos, kind))
             }
             0x01 => TxErr::ScriptHashMismatch,
