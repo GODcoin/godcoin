@@ -557,7 +557,10 @@ impl Blockchain {
             },
             minter: info.minter_key.0.clone(),
             wallet: (&info.script).into(),
-            script: Builder::new().push(OpFrame::False).build(),
+            script: Builder::new()
+                .push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::False))
+                .build()
+                .unwrap(),
         }));
 
         let receipts = vec![Receipt {
@@ -604,12 +607,16 @@ impl GenesisBlockInfo {
         ];
 
         let script = Builder::new()
-            .push(OpFrame::PubKey(wallet_keys[0].0.clone()))
-            .push(OpFrame::PubKey(wallet_keys[1].0.clone()))
-            .push(OpFrame::PubKey(wallet_keys[2].0.clone()))
-            .push(OpFrame::PubKey(wallet_keys[3].0.clone()))
-            .push(OpFrame::OpCheckMultiSig(2, 4))
-            .build();
+            .push(
+                FnBuilder::new(0, OpFrame::OpDefine)
+                    .push(OpFrame::PubKey(wallet_keys[0].0.clone()))
+                    .push(OpFrame::PubKey(wallet_keys[1].0.clone()))
+                    .push(OpFrame::PubKey(wallet_keys[2].0.clone()))
+                    .push(OpFrame::PubKey(wallet_keys[3].0.clone()))
+                    .push(OpFrame::OpCheckMultiSig(2, 4)),
+            )
+            .build()
+            .unwrap();
 
         Self {
             minter_key,

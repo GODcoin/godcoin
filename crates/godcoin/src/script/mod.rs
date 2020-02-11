@@ -1,7 +1,8 @@
-use crate::crypto::PublicKey;
+use crate::{crypto::PublicKey, serializer::*};
 use std::{
     borrow::Cow,
     fmt::{self, Debug, Formatter},
+    io::{self, BufRead as IoBufRead, Cursor},
     ops::Deref,
 };
 
@@ -26,6 +27,21 @@ impl Script {
     pub fn new(byte_code: Vec<u8>) -> Self {
         Script(byte_code)
     }
+
+    pub fn get_fn_ptr(&self, fn_id: u8) -> io::Result<Option<u32>> {
+        let mut cur = Cursor::<&[u8]>::new(&self.0);
+        let fn_count = cur.take_u8()?;
+        for _ in 0..fn_count {
+            let header_id = cur.take_u8()?;
+            if header_id == fn_id {
+                let pos = cur.take_u32()?;
+                return Ok(Some(pos));
+            }
+            cur.consume(4);
+        }
+
+        Ok(None)
+    }
 }
 
 impl Debug for Script {
@@ -49,19 +65,16 @@ impl From<Vec<u8>> for Script {
     }
 }
 
-impl From<Builder> for Script {
-    #[inline]
-    fn from(b: Builder) -> Self {
-        b.build()
-    }
-}
-
 impl From<PublicKey> for Script {
     fn from(key: PublicKey) -> Self {
-        let builder = Builder::new()
-            .push(OpFrame::PubKey(key))
-            .push(OpFrame::OpCheckSig);
-        builder.build()
+        let builder = Builder::new().push(
+            FnBuilder::new(0x00, OpFrame::OpDefine)
+                .push(OpFrame::PubKey(key))
+                .push(OpFrame::OpCheckSig),
+        );
+        builder
+            .build()
+            .expect("Failed to build default script for PublicKey")
     }
 }
 

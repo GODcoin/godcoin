@@ -25,7 +25,10 @@ fn fresh_blockchain() {
     assert_eq!(owner.minter, minter.genesis_info().minter_key.0);
     assert_eq!(
         owner.script,
-        script::Builder::new().push(OpFrame::False).build()
+        script::Builder::new()
+            .push(script::FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::False))
+            .build()
+            .unwrap()
     );
     assert_eq!(owner.wallet, (&minter.genesis_info().script).into());
 
@@ -98,7 +101,10 @@ fn reindexed_blockchain() {
     assert_eq!(owner.minter, minter.genesis_info().minter_key.0);
     assert_eq!(
         owner.script,
-        script::Builder::new().push(OpFrame::False).build()
+        script::Builder::new()
+            .push(script::FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::False))
+            .build()
+            .unwrap()
     );
     assert_eq!(owner.wallet, (&minter.genesis_info().script).into());
 

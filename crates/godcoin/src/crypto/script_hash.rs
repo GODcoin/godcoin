@@ -103,9 +103,11 @@ mod tests {
         let kp =
             PrivateKey::from_wif("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").unwrap();
 
-        let wif = "GOD78WVbdCHAwEVajuPKprZ6je6t1zvTieLEsEcKiYVtTjbpfjqLR";
+        // When script opcode constants change, the P2SH WIF may change when converting a public key to the default
+        // built script provided by the library.
+        let wif = "GOD7iEx5JVkpaNoKxYaPaQobgH4JUPBHEL5sgF9acAfApvU7vozUj";
         let hash = ScriptHash::from_wif(&wif).unwrap();
         assert_eq!(hash.to_wif().as_ref(), wif);
-        assert_eq!(ScriptHash::from(Script::from(kp.0.clone())), hash);
+        assert_eq!(ScriptHash::from(Script::from(kp.0)), hash);
     }
 }

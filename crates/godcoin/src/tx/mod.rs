@@ -464,7 +464,7 @@ mod tests {
     use super::*;
     use crate::{
         crypto,
-        script::{Builder, OpFrame},
+        script::{Builder, FnBuilder, OpFrame},
     };
 
     macro_rules! cmp_base_tx {
@@ -717,7 +717,10 @@ mod tests {
             },
             from: KeyPair::gen().0.into(),
             to: KeyPair::gen().0.into(),
-            script: Builder::new().push(OpFrame::True).build(),
+            script: Builder::new()
+                .push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::True))
+                .build()
+                .unwrap(),
             amount: get_asset("1.00000 TEST"),
             memo: vec![1, 2, 3],
         };
@@ -742,7 +745,10 @@ mod tests {
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.script = Builder::new().push(OpFrame::False).build();
+        tx_b.script = Builder::new()
+            .push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::False))
+            .build()
+            .unwrap();
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
@@ -765,7 +771,10 @@ mod tests {
             },
             from: KeyPair::gen().0.into(),
             to: KeyPair::gen().0.into(),
-            script: Builder::new().push(OpFrame::True).build(),
+            script: Builder::new()
+                .push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::True))
+                .build()
+                .unwrap(),
             amount: get_asset("1.00000 TEST"),
             memo: vec![1, 2, 3],
         }));

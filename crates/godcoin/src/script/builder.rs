@@ -1,86 +1,127 @@
 use super::{op::*, Script};
-use crate::constants::MAX_SCRIPT_BYTE_SIZE;
+use crate::{constants::MAX_SCRIPT_BYTE_SIZE, serializer::*};
+
+type FnRef = (u8, u32); // ID, pointer
 
 #[derive(Clone, Debug, Default)]
 pub struct Builder {
-    byte_code: Vec<u8>,
+    lookup_table: Vec<FnRef>,
+    body: Vec<u8>,
 }
 
 impl Builder {
-    pub fn new() -> Builder {
-        Builder {
-            byte_code: Vec::with_capacity(MAX_SCRIPT_BYTE_SIZE),
+    pub fn new() -> Self {
+        Self {
+            lookup_table: Vec::new(),
+            body: Vec::new(),
         }
     }
 
-    pub fn build(self) -> Script {
-        self.byte_code.into()
-    }
-
-    pub fn push(self, frame: OpFrame) -> Self {
-        self.try_push(frame).expect("script byte size exceeded")
-    }
-
-    pub fn try_push(mut self, frame: OpFrame) -> Option<Self> {
-        match frame {
-            // Push value
-            OpFrame::False => self.insert_bytes(&[Operand::PushFalse.into()])?,
-            OpFrame::True => self.insert_bytes(&[Operand::PushTrue.into()])?,
-            OpFrame::PubKey(key) => {
-                self.insert_bytes(&[Operand::PushPubKey.into()])?;
-                self.insert_bytes(key.as_ref())?;
-            }
-            OpFrame::ScriptHash(hash) => {
-                self.insert_bytes(&[Operand::PushScriptHash.into()])?;
-                self.insert_bytes(hash.as_ref())?;
-            }
-            OpFrame::Asset(asset) => {
-                self.insert_bytes(&[Operand::PushAsset.into()])?;
-                self.insert_bytes(&asset.amount.to_be_bytes())?;
-            }
-            // Arithmetic
-            OpFrame::OpLoadAmt => self.insert_bytes(&[Operand::OpLoadAmt.into()])?,
-            OpFrame::OpLoadRemAmt => self.insert_bytes(&[Operand::OpLoadRemAmt.into()])?,
-            OpFrame::OpAdd => self.insert_bytes(&[Operand::OpAdd.into()])?,
-            OpFrame::OpSub => self.insert_bytes(&[Operand::OpSub.into()])?,
-            OpFrame::OpMul => self.insert_bytes(&[Operand::OpMul.into()])?,
-            OpFrame::OpDiv => self.insert_bytes(&[Operand::OpDiv.into()])?,
-            // Logic
-            OpFrame::OpNot => self.insert_bytes(&[Operand::OpNot.into()])?,
-            OpFrame::OpIf => self.insert_bytes(&[Operand::OpIf.into()])?,
-            OpFrame::OpElse => self.insert_bytes(&[Operand::OpElse.into()])?,
-            OpFrame::OpEndIf => self.insert_bytes(&[Operand::OpEndIf.into()])?,
-            OpFrame::OpReturn => self.insert_bytes(&[Operand::OpReturn.into()])?,
-            // Crypto
-            OpFrame::OpCheckSig => self.insert_bytes(&[Operand::OpCheckSig.into()])?,
-            OpFrame::OpCheckSigFastFail => {
-                self.insert_bytes(&[Operand::OpCheckSigFastFail.into()])?
-            }
-            OpFrame::OpCheckMultiSig(threshold, key_count) => {
-                self.insert_bytes(&[Operand::OpCheckMultiSig.into(), threshold, key_count])?
-            }
-            OpFrame::OpCheckMultiSigFastFail(threshold, key_count) => self.insert_bytes(&[
-                Operand::OpCheckMultiSigFastFail.into(),
-                threshold,
-                key_count,
-            ])?,
+    /// Returns the script on success, otherwise an error with the total script size that has exceeded the max script
+    /// byte size.
+    pub fn build(self) -> Result<Script, usize> {
+        // 1 byte for fn len, 5 bytes for 1 byte id + 4 bytes pointer per fn
+        let header_len = 1 + (self.lookup_table.len() * 5);
+        let total_len = header_len + self.body.len();
+        if total_len > MAX_SCRIPT_BYTE_SIZE {
+            return Err(total_len);
         }
-        Some(self)
+        let mut script = Vec::<u8>::with_capacity(total_len);
+        debug_assert!(self.lookup_table.len() <= u8::max_value() as usize);
+        script.push(self.lookup_table.len() as u8);
+        for fn_ref in self.lookup_table {
+            script.push(fn_ref.0);
+            // Offset the byte pointer by the length of the header
+            script.push_u32(header_len as u32 + fn_ref.1);
+        }
+        script.extend(self.body);
+        debug_assert_eq!(
+            script.len(),
+            total_len,
+            "buffer capacity under utilized, total length is incorrect"
+        );
+        debug_assert_eq!(
+            script.capacity(),
+            total_len,
+            "additional allocation was performed, total length is incorrect"
+        );
+        Ok(Script::new(script))
     }
 
-    #[must_use]
-    fn insert_bytes(&mut self, bytes: &[u8]) -> Option<()> {
-        if self.byte_code.len() + bytes.len() <= MAX_SCRIPT_BYTE_SIZE {
-            self.byte_code.extend(bytes);
-            Some(())
-        } else {
-            None
+    pub fn push(mut self, function: FnBuilder) -> Self {
+        if self.lookup_table.len() + 1 > usize::from(u8::max_value()) {
+            panic!("cannot push more than {} functions", u8::max_value());
         }
+        let byte_pos = self.body.len() as u32;
+        self.lookup_table.push((function.id, byte_pos));
+        self.body.extend(&function.byte_code);
+        self
     }
 }
 
-impl AsRef<[u8]> for Builder {
-    fn as_ref(&self) -> &[u8] {
-        &self.byte_code
+#[derive(Clone, Debug)]
+pub struct FnBuilder {
+    id: u8,
+    byte_code: Vec<u8>,
+}
+
+impl FnBuilder {
+    /// Creates a function builder with the specified `id` and function definition `fn_def`. The function definition
+    /// frame must represent an OpDefine operation.
+    pub fn new(id: u8, fn_def: OpFrame) -> Self {
+        assert_eq!(fn_def, OpFrame::OpDefine, "expected a function definition");
+        let mut byte_code = vec![];
+        byte_code.push(Operand::OpDefine.into());
+        Self { id, byte_code }
+    }
+
+    pub fn push(mut self, frame: OpFrame) -> Self {
+        match frame {
+            // Function definition
+            OpFrame::OpDefine => panic!("OpDefine cannot be pushed in a function"),
+            // Push value
+            OpFrame::False => self.byte_code.push(Operand::PushFalse.into()),
+            OpFrame::True => self.byte_code.push(Operand::PushTrue.into()),
+            OpFrame::PubKey(key) => {
+                self.byte_code.push(Operand::PushPubKey.into());
+                self.byte_code.extend(key.as_ref());
+            }
+            OpFrame::ScriptHash(hash) => {
+                self.byte_code.push(Operand::PushScriptHash.into());
+                self.byte_code.extend(hash.as_ref());
+            }
+            OpFrame::Asset(asset) => {
+                self.byte_code.push(Operand::PushAsset.into());
+                self.byte_code.extend(&asset.amount.to_be_bytes());
+            }
+            // Arithmetic
+            OpFrame::OpLoadAmt => self.byte_code.push(Operand::OpLoadAmt.into()),
+            OpFrame::OpLoadRemAmt => self.byte_code.push(Operand::OpLoadRemAmt.into()),
+            OpFrame::OpAdd => self.byte_code.push(Operand::OpAdd.into()),
+            OpFrame::OpSub => self.byte_code.push(Operand::OpSub.into()),
+            OpFrame::OpMul => self.byte_code.push(Operand::OpMul.into()),
+            OpFrame::OpDiv => self.byte_code.push(Operand::OpDiv.into()),
+            // Logic
+            OpFrame::OpNot => self.byte_code.push(Operand::OpNot.into()),
+            OpFrame::OpIf => self.byte_code.push(Operand::OpIf.into()),
+            OpFrame::OpElse => self.byte_code.push(Operand::OpElse.into()),
+            OpFrame::OpEndIf => self.byte_code.push(Operand::OpEndIf.into()),
+            OpFrame::OpReturn => self.byte_code.push(Operand::OpReturn.into()),
+            // Crypto
+            OpFrame::OpCheckSig => self.byte_code.push(Operand::OpCheckSig.into()),
+            OpFrame::OpCheckSigFastFail => {
+                self.byte_code.push(Operand::OpCheckSigFastFail.into());
+            }
+            OpFrame::OpCheckMultiSig(threshold, key_count) => {
+                self.byte_code
+                    .extend(&[Operand::OpCheckMultiSig.into(), threshold, key_count]);
+            }
+            OpFrame::OpCheckMultiSigFastFail(threshold, key_count) => self.byte_code.extend(&[
+                Operand::OpCheckMultiSigFastFail.into(),
+                threshold,
+                key_count,
+            ]),
+        }
+        self
     }
 }

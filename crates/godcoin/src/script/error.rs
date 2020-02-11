@@ -17,11 +17,14 @@ impl EvalErr {
 pub enum EvalErrType {
     ScriptRetFalse = 0x00,
     UnexpectedEOF = 0x01,
-    UnknownOp = 0x02,
-    InvalidItemOnStack = 0x03,
-    StackOverflow = 0x04,
-    StackUnderflow = 0x05,
-    Arithmetic = 0x06,
+    HeaderReadErr = 0x02,
+    InvalidEntryPoint = 0x03,
+    UnknownOp = 0x04,
+    UnknownFn = 0x05,
+    InvalidItemOnStack = 0x06,
+    StackOverflow = 0x07,
+    StackUnderflow = 0x08,
+    Arithmetic = 0x09,
 }
 
 impl TryFrom<u8> for EvalErrType {
@@ -31,16 +34,15 @@ impl TryFrom<u8> for EvalErrType {
         Ok(match value {
             t if t == EvalErrType::ScriptRetFalse as u8 => EvalErrType::ScriptRetFalse,
             t if t == EvalErrType::UnexpectedEOF as u8 => EvalErrType::UnexpectedEOF,
+            t if t == EvalErrType::HeaderReadErr as u8 => EvalErrType::HeaderReadErr,
+            t if t == EvalErrType::InvalidEntryPoint as u8 => EvalErrType::InvalidEntryPoint,
             t if t == EvalErrType::UnknownOp as u8 => EvalErrType::UnknownOp,
-            t if t == EvalErrType::InvalidItemOnStack as u8 => {
-                EvalErrType::InvalidItemOnStack
-            }
+            t if t == EvalErrType::UnknownFn as u8 => EvalErrType::UnknownFn,
+            t if t == EvalErrType::InvalidItemOnStack as u8 => EvalErrType::InvalidItemOnStack,
             t if t == EvalErrType::StackOverflow as u8 => EvalErrType::StackOverflow,
             t if t == EvalErrType::StackUnderflow as u8 => EvalErrType::StackUnderflow,
             t if t == EvalErrType::Arithmetic as u8 => EvalErrType::Arithmetic,
-            _ => {
-                return Err(())
-            }
+            _ => return Err(()),
         })
     }
 }
