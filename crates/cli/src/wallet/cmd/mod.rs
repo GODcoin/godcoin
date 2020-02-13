@@ -267,11 +267,15 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
     let to_script = ScriptHash::from_wif(&args[3])
         .map_err(|e| format!("Failed to parse P2SH address: {}", e))?;
 
-    let amount = args[4]
+    let call_fn = args[4]
+        .parse()
+        .map_err(|e| format!("Failed to parse call_fn id: {}", e))?;
+
+    let amount = args[5]
         .parse()
         .map_err(|_| "Failed to parse asset amount")?;
-    let fee = args[5].parse().map_err(|_| "Failed to parse asset fee")?;
-    let memo = args[6].as_bytes();
+    let fee = args[6].parse().map_err(|_| "Failed to parse asset fee")?;
+    let memo = args[7].as_bytes();
 
     let transfer_tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
         base: Tx {
@@ -283,6 +287,7 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
         from: ScriptHash::from(&from_script),
         to: to_script,
         script: from_script,
+        call_fn,
         amount,
         memo: memo.into(),
     }));

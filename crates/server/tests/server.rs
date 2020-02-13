@@ -107,9 +107,10 @@ fn get_block_filtered_with_addresses() {
                 base: create_tx_header("1.00000 TEST"),
                 from: (&minter.genesis_info().script).into(),
                 to: to_addr.clone(),
+                script: minter.genesis_info().script.clone(),
+                call_fn: 0,
                 amount: get_asset("1.00000 TEST"),
                 memo: vec![],
-                script: minter.genesis_info().script.clone(),
             }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
             tx.append_sign(&minter.genesis_info().wallet_keys[0]);

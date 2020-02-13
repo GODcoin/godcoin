@@ -64,8 +64,15 @@ impl<'a> ScriptEngine<'a> {
     /// will be aborted and return an error.
     #[inline]
     pub fn eval(mut self) -> Result<Vec<LogEntry>, EvalErr> {
-        // TODO expose the function ID for transactions to call
-        self.call_fn(0)
+        let fn_id = match self.data.tx() {
+            TxVariant::V0(tx) => match tx {
+                TxVariantV0::OwnerTx(_) => 0,
+                TxVariantV0::MintTx(_) => 0,
+                TxVariantV0::RewardTx(_) => 0,
+                TxVariantV0::TransferTx(tx) => tx.call_fn,
+            },
+        };
+        self.call_fn(fn_id)
     }
 
     fn call_fn(&mut self, fn_id: u8) -> Result<Vec<LogEntry>, EvalErr> {
@@ -567,6 +574,31 @@ mod tests {
     }
 
     #[test]
+    fn eval_uses_transfer_tx_call_fn() {
+        let script = Builder::new()
+            .push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::False))
+            .push(FnBuilder::new(1, OpFrame::OpDefine).push(OpFrame::True))
+            .build()
+            .unwrap();
+
+        {
+            let tx = new_transfer_tx(script.clone(), 0, &[]);
+            let engine = ScriptEngine::new(tx.precompute(), script.clone());
+            assert_eq!(engine.eval().unwrap_err().err, EvalErrType::ScriptRetFalse);
+        }
+        {
+            let tx = new_transfer_tx(script.clone(), 1, &[]);
+            let engine = ScriptEngine::new(tx.precompute(), script.clone());
+            assert_eq!(engine.eval().unwrap(), vec![]);
+        }
+        {
+            let tx = new_transfer_tx(script.clone(), 2, &[]);
+            let engine = ScriptEngine::new(tx.precompute(), script);
+            assert_eq!(engine.eval().unwrap_err().err, EvalErrType::UnknownFn);
+        }
+    }
+
+    #[test]
     fn if_script() {
         #[rustfmt::skip]
         let mut engine = new_engine(
@@ -766,12 +798,11 @@ mod tests {
         let key = KeyPair::gen();
         let script: Script = key.0.clone().into();
 
-        let mut engine = {
-            let tx = new_transfer_tx(script.clone(), &[key]);
+        let engine = {
+            let tx = new_transfer_tx(script.clone(), 0, &[key]);
             ScriptEngine::new(tx.precompute(), script)
         };
-
-        assert_eq!(engine.call_fn(0).unwrap(), vec![]);
+        assert_eq!(engine.eval().unwrap(), vec![]);
     }
 
     #[test]
@@ -903,16 +934,13 @@ mod tests {
                 .push(OpFrame::OpCheckMultiSig(2, 3)),
         );
 
-        let mut engine = new_engine_with_signers(
+        let engine = new_engine_with_signers(
             &[KeyPair::gen(), key_3.clone(), key_2.clone(), key_1.clone()],
             builder.clone(),
         );
-        assert_eq!(
-            engine.call_fn(0).unwrap_err().err,
-            EvalErrType::ScriptRetFalse
-        );
+        assert_eq!(engine.eval().unwrap_err().err, EvalErrType::ScriptRetFalse);
 
-        let mut engine = {
+        let engine = {
             let to = KeyPair::gen();
             let script = builder.build().unwrap();
 
@@ -931,6 +959,7 @@ mod tests {
                 to: to.clone().0.into(),
                 amount: "10.00000 TEST".parse().unwrap(),
                 script: script.clone(),
+                call_fn: 0,
                 memo: vec![],
             }));
             tx.append_sign(&key_2);
@@ -938,10 +967,7 @@ mod tests {
 
             ScriptEngine::new(tx.precompute(), script)
         };
-        assert_eq!(
-            engine.call_fn(0).unwrap_err().err,
-            EvalErrType::ScriptRetFalse
-        );
+        assert_eq!(engine.eval().unwrap_err().err, EvalErrType::ScriptRetFalse);
     }
 
     #[test]
@@ -1198,11 +1224,11 @@ mod tests {
 
     fn new_engine_with_signers<'a>(keys: &[KeyPair], b: Builder) -> ScriptEngine<'a> {
         let script = b.build().unwrap();
-        let tx = new_transfer_tx(script.clone(), keys);
+        let tx = new_transfer_tx(script.clone(), 0, keys);
         ScriptEngine::new(tx.precompute(), script)
     }
 
-    fn new_transfer_tx(script: Script, keys: &[KeyPair]) -> TxVariant {
+    fn new_transfer_tx(script: Script, call_fn: u8, keys: &[KeyPair]) -> TxVariant {
         let to = KeyPair::gen();
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: Tx {
@@ -1213,8 +1239,9 @@ mod tests {
             },
             from: to.clone().0.into(),
             to: to.clone().0.into(),
-            amount: "10.00000 TEST".parse().unwrap(),
             script: script.clone(),
+            call_fn,
+            amount: "10.00000 TEST".parse().unwrap(),
             memo: vec![],
         }));
         keys.iter().for_each(|key| tx.append_sign(key));

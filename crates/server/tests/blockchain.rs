@@ -51,9 +51,10 @@ fn reindexed_blockchain() {
             base: create_tx_header("1.00000 TEST"),
             from: from_addr.clone(),
             to: (&to_addr.0).into(),
+            script: minter.genesis_info().script.clone(),
+            call_fn: 0,
             amount,
             memo: vec![],
-            script: minter.genesis_info().script.clone(),
         }));
         tx.append_sign(&minter.genesis_info().wallet_keys[3]);
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);

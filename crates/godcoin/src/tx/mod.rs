@@ -420,6 +420,7 @@ pub struct TransferTx {
     pub from: ScriptHash,
     pub to: ScriptHash,
     pub script: Script,
+    pub call_fn: u8,
     pub amount: Asset,
     pub memo: Vec<u8>,
 }
@@ -431,6 +432,7 @@ impl SerializeTx for TransferTx {
         v.push_digest(&self.from.0);
         v.push_digest(&self.to.0);
         v.push_bytes(&self.script);
+        v.push(self.call_fn);
         v.push_asset(self.amount);
         v.push_bytes(&self.memo);
     }
@@ -441,6 +443,7 @@ impl DeserializeTx<TransferTx> for TransferTx {
         let from = ScriptHash(cur.take_digest().ok()?);
         let to = ScriptHash(cur.take_digest().ok()?);
         let script = cur.take_bytes().ok()?.into();
+        let call_fn = cur.take_u8().ok()?;
         let amount = cur.take_asset().ok()?;
         let memo = cur.take_bytes().ok()?;
         Some(TransferTx {
@@ -448,6 +451,7 @@ impl DeserializeTx<TransferTx> for TransferTx {
             from,
             to,
             script,
+            call_fn,
             amount,
             memo,
         })
@@ -627,6 +631,7 @@ mod tests {
             from: from.0.into(),
             to: to.0.into(),
             script: vec![1, 2, 3, 4].into(),
+            call_fn: 0,
             amount: get_asset("1.00456 TEST"),
             memo: Vec::from(String::from("Hello world!").as_bytes()),
         };
@@ -721,6 +726,7 @@ mod tests {
                 .push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::True))
                 .build()
                 .unwrap(),
+            call_fn: 0,
             amount: get_asset("1.00000 TEST"),
             memo: vec![1, 2, 3],
         };
@@ -775,6 +781,7 @@ mod tests {
                 .push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::True))
                 .build()
                 .unwrap(),
+            call_fn: 0,
             amount: get_asset("1.00000 TEST"),
             memo: vec![1, 2, 3],
         }));

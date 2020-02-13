@@ -139,9 +139,10 @@ mod tests {
                 },
                 from: from_keys.0.into(),
                 to: to_keys.0.clone().into(),
+                script: Script::new(vec![21, 22, 23, 24]),
+                call_fn: 0,
                 amount,
                 memo: vec![1, 2, 3, 4],
-                script: Script::new(vec![21, 22, 23, 24]),
             })),
             log: vec![LogEntry::Transfer(to_keys.0.into(), amount)],
         };
