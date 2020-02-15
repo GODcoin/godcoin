@@ -26,7 +26,7 @@ fn fresh_blockchain() {
     assert_eq!(
         owner.script,
         script::Builder::new()
-            .push(script::FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::False))
+            .push(script::FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::False))
             .build()
             .unwrap()
     );
@@ -53,6 +53,7 @@ fn reindexed_blockchain() {
             to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
+            args: vec![],
             amount,
             memo: vec![],
         }));
@@ -103,7 +104,7 @@ fn reindexed_blockchain() {
     assert_eq!(
         owner.script,
         script::Builder::new()
-            .push(script::FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::False))
+            .push(script::FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::False))
             .build()
             .unwrap()
     );

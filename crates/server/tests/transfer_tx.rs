@@ -20,6 +20,7 @@ fn transfer_from_minter() {
             to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
+            args: vec![],
             amount,
             memo: vec![],
         }));
@@ -56,6 +57,7 @@ fn transfer_from_user() {
                 to: (&user_1_addr.0).into(),
                 script: minter.genesis_info().script.clone(),
                 call_fn: 0,
+                args: vec![],
                 amount: get_asset("100.00000 TEST"),
                 memo: vec![],
             }));
@@ -74,6 +76,7 @@ fn transfer_from_user() {
             to: (&user_2_addr.0).into(),
             script: user_1_addr.0.clone().into(),
             call_fn: 0,
+            args: vec![],
             amount: get_asset("99.00000 TEST"),
             memo: vec![],
         }));
@@ -110,6 +113,7 @@ fn invalid_fee_amt_caused_by_insufficient_balance() {
             to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
+            args: vec![],
             amount: get_asset("0.00000 TEST"),
             memo: vec![],
         }));
@@ -152,6 +156,7 @@ fn insufficient_fee() {
             to: KeyPair::gen().0.into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
+            args: vec![],
             amount: get_asset("0.00000 TEST"),
             memo: vec![],
         }));
@@ -180,6 +185,7 @@ fn negative_fee_should_fail() {
             to: KeyPair::gen().0.into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
+            args: vec![],
             amount: get_asset("0.00000 TEST"),
             memo: vec![],
         }));
@@ -209,6 +215,7 @@ fn invalid_amt_caused_by_insufficient_balance() {
             to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
+            args: vec![],
             amount: get_asset("500000.00000 TEST"),
             memo: vec![],
         }));
@@ -246,6 +253,7 @@ fn invalid_amt_caused_by_negative_amt() {
             to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
+            args: vec![],
             amount: get_asset("-500000.00000 TEST"),
             memo: vec![],
         }));
@@ -283,6 +291,7 @@ fn memo_too_large() {
             to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
+            args: vec![],
             amount: get_asset("1.00000 TEST"),
             memo: (0..=godcoin::constants::MAX_MEMO_BYTE_SIZE)
                 .map(|_| 0)
@@ -327,6 +336,7 @@ fn script_too_large() {
             to: (&to_addr.0).into(),
             script: from_script,
             call_fn: 0,
+            args: vec![],
             amount: get_asset("1.00000 TEST"),
             memo: vec![],
         }));
@@ -363,6 +373,7 @@ fn tx_addr_dynamic_fee_increase_in_pool() {
             to: KeyPair::gen().0.into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
+            args: vec![],
             amount: Asset::new(0),
             memo: vec![],
         }));
@@ -428,6 +439,7 @@ fn tx_addr_dynamic_fee_increase() {
                 to: KeyPair::gen().0.into(),
                 script: minter.genesis_info().script.clone(),
                 call_fn: 0,
+                args: vec![],
                 amount: Asset::new(0),
                 memo: vec![],
             }));
@@ -472,6 +484,7 @@ fn net_fee_dynamic_increase() {
                 to: (&addrs[addr_index].0).into(),
                 script: minter.genesis_info().script.clone(),
                 call_fn: 0,
+                args: vec![],
                 amount: Asset::new(100000),
                 memo: vec![],
             }));
@@ -505,6 +518,7 @@ fn net_fee_dynamic_increase() {
                 to: from_addr.clone(),
                 script: addr.0.clone().into(),
                 call_fn: 0,
+                args: vec![],
                 amount: Asset::new(0),
                 memo: vec![],
             }));

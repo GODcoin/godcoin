@@ -69,16 +69,28 @@ impl FnBuilder {
     /// Creates a function builder with the specified `id` and function definition `fn_def`. The function definition
     /// frame must represent an OpDefine operation.
     pub fn new(id: u8, fn_def: OpFrame) -> Self {
-        assert_eq!(fn_def, OpFrame::OpDefine, "expected a function definition");
         let mut byte_code = vec![];
-        byte_code.push(Operand::OpDefine.into());
+        match fn_def {
+            OpFrame::OpDefine(args) => {
+                assert!(
+                    args.len() <= usize::from(u8::max_value()),
+                    "too many arguments provided"
+                );
+                byte_code.push(Operand::OpDefine.into());
+                byte_code.push(args.len() as u8);
+                for arg in args {
+                    byte_code.push(arg.into());
+                }
+            }
+            _ => panic!("expected a function definition"),
+        }
         Self { id, byte_code }
     }
 
     pub fn push(mut self, frame: OpFrame) -> Self {
         match frame {
             // Function definition
-            OpFrame::OpDefine => panic!("OpDefine cannot be pushed in a function"),
+            OpFrame::OpDefine(_) => panic!("OpDefine cannot be pushed in a function"),
             // Push value
             OpFrame::False => self.byte_code.push(Operand::PushFalse.into()),
             OpFrame::True => self.byte_code.push(Operand::PushTrue.into()),

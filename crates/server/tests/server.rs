@@ -109,6 +109,7 @@ fn get_block_filtered_with_addresses() {
                 to: to_addr.clone(),
                 script: minter.genesis_info().script.clone(),
                 call_fn: 0,
+                args: vec![],
                 amount: get_asset("1.00000 TEST"),
                 memo: vec![],
             }));

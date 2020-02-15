@@ -558,7 +558,7 @@ impl Blockchain {
             minter: info.minter_key.0.clone(),
             wallet: (&info.script).into(),
             script: Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::False))
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::False))
                 .build()
                 .unwrap(),
         }));
@@ -608,7 +608,7 @@ impl GenesisBlockInfo {
 
         let script = Builder::new()
             .push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::PubKey(wallet_keys[0].0.clone()))
                     .push(OpFrame::PubKey(wallet_keys[1].0.clone()))
                     .push(OpFrame::PubKey(wallet_keys[2].0.clone()))

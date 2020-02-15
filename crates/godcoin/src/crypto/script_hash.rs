@@ -104,8 +104,14 @@ mod tests {
             PrivateKey::from_wif("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").unwrap();
 
         // When script opcode constants change, the P2SH WIF may change when converting a public key to the default
-        // built script provided by the library.
-        let wif = "GOD7iEx5JVkpaNoKxYaPaQobgH4JUPBHEL5sgF9acAfApvU7vozUj";
+        // built script provided by the library. We can print out if the address changed below.
+        println!(
+            "Derived script hash WIF: {}",
+            ScriptHash::from(Script::from(kp.0.clone())).to_wif()
+        );
+
+        // Use an explicit derived WIF to notify us if the default script changes.
+        let wif = "GOD7grhUKwUKWJFWfQzL9qjri2gJmCuzoLpkQuyzrbqgb9LxxaYvh";
         let hash = ScriptHash::from_wif(&wif).unwrap();
         assert_eq!(hash.to_wif().as_ref(), wif);
         assert_eq!(ScriptHash::from(Script::from(kp.0)), hash);

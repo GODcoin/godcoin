@@ -141,6 +141,7 @@ mod tests {
                 to: to_keys.0.clone().into(),
                 script: Script::new(vec![21, 22, 23, 24]),
                 call_fn: 0,
+                args: vec![0x01, 0x02, 0x03, 0x04, 0x05],
                 amount,
                 memo: vec![1, 2, 3, 4],
             })),

@@ -6,6 +6,7 @@ use crate::{
     asset::Asset,
     blockchain::LogEntry,
     crypto::{PublicKey, ScriptHash, SCRIPT_HASH_BYTES},
+    serializer::BufRead,
     tx::{TxPrecompData, TxVariant, TxVariantV0},
 };
 
@@ -94,8 +95,35 @@ impl<'a> ScriptEngine<'a> {
 
         {
             let op = self.consume_op()?;
-            if op != Some(OpFrame::OpDefine) {
-                return Err(self.new_err(EvalErrType::InvalidEntryPoint));
+            match op {
+                Some(OpFrame::OpDefine(args)) => {
+                    let mut bin_args = Cursor::<&[u8]>::new(match self.data.tx() {
+                        TxVariant::V0(tx) => match tx {
+                            TxVariantV0::OwnerTx(_) => &[],
+                            TxVariantV0::MintTx(_) => &[],
+                            TxVariantV0::RewardTx(_) => &[],
+                            TxVariantV0::TransferTx(tx) => &tx.args,
+                        },
+                    });
+                    for arg in args {
+                        match arg {
+                            Arg::ScriptHash => {
+                                let digest = bin_args
+                                    .take_digest()
+                                    .map_err(|_| self.new_err(EvalErrType::ArgDeserialization))?;
+                                let hash = ScriptHash(digest);
+                                map_err_type!(self, self.stack.push(OpFrame::ScriptHash(hash)))?;
+                            }
+                            Arg::Asset => {
+                                let asset = bin_args
+                                    .take_asset()
+                                    .map_err(|_| self.new_err(EvalErrType::ArgDeserialization))?;
+                                map_err_type!(self, self.stack.push(OpFrame::Asset(asset)))?;
+                            }
+                        }
+                    }
+                }
+                _ => return Err(self.new_err(EvalErrType::InvalidEntryPoint)),
             }
         }
 
@@ -104,7 +132,7 @@ impl<'a> ScriptEngine<'a> {
         while let Some(op) = self.consume_op()? {
             match op {
                 // Function definition
-                OpFrame::OpDefine => {
+                OpFrame::OpDefine(_) => {
                     // We reached the next function definition, this function has no more ops to execute
                     break;
                 }
@@ -299,7 +327,18 @@ impl<'a> ScriptEngine<'a> {
 
         match byte {
             // Function definition
-            o if o == Operand::OpDefine as u8 => Ok(Some(OpFrame::OpDefine)),
+            o if o == Operand::OpDefine as u8 => {
+                let arg_cnt = read_bytes!(self);
+                let mut args = Vec::with_capacity(usize::from(arg_cnt));
+                for _ in 0..arg_cnt {
+                    let tag_byte = read_bytes!(self);
+                    let arg = tag_byte
+                        .try_into()
+                        .map_err(|_| self.new_err(EvalErrType::UnknownArgType))?;
+                    args.push(arg);
+                }
+                Ok(Some(OpFrame::OpDefine(args)))
+            }
             // Push value
             o if o == Operand::PushFalse as u8 => Ok(Some(OpFrame::False)),
             o if o == Operand::PushTrue as u8 => Ok(Some(OpFrame::True)),
@@ -397,7 +436,7 @@ mod tests {
     #[test]
     fn true_only_script() {
         let mut engine = new_engine(
-            Builder::new().push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::True)),
+            Builder::new().push(FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::True)),
         );
         assert_eq!(engine.call_fn(0).unwrap(), vec![]);
         assert!(engine.stack.is_empty());
@@ -406,7 +445,7 @@ mod tests {
     #[test]
     fn false_only_script() {
         let mut engine = new_engine(
-            Builder::new().push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::False)),
+            Builder::new().push(FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::False)),
         );
         assert_eq!(
             engine.call_fn(0).unwrap_err().err,
@@ -421,7 +460,7 @@ mod tests {
         let frame = OpFrame::Asset(asset);
         let mut engine = new_engine(
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(frame)
                     .push(OpFrame::True),
             ),
@@ -435,7 +474,7 @@ mod tests {
     fn arithmetic_loadamt() {
         let mut engine = new_engine(
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::OpLoadAmt)
                     .push(OpFrame::True),
             ),
@@ -452,7 +491,7 @@ mod tests {
     fn arithmetic_loadremamt() {
         let mut engine = new_engine(
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::OpLoadRemAmt)
                     .push(OpFrame::True),
             ),
@@ -471,7 +510,7 @@ mod tests {
         let asset_b = "0.12345 TEST".parse().unwrap();
         let mut engine = new_engine(
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::Asset(asset_a))
                     .push(OpFrame::Asset(asset_b))
                     .push(OpFrame::OpAdd)
@@ -492,7 +531,7 @@ mod tests {
         let asset_b = "1.00000 TEST".parse().unwrap();
         let mut engine = new_engine(
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::Asset(asset_a))
                     .push(OpFrame::Asset(asset_b))
                     .push(OpFrame::OpSub)
@@ -513,7 +552,7 @@ mod tests {
         let asset_b = "1.50000 TEST".parse().unwrap();
         let mut engine = new_engine(
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::Asset(asset_a))
                     .push(OpFrame::Asset(asset_b))
                     .push(OpFrame::OpMul)
@@ -534,7 +573,7 @@ mod tests {
         let asset_b = "2.00000 TEST".parse().unwrap();
         let mut engine = new_engine(
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::Asset(asset_a))
                     .push(OpFrame::Asset(asset_b))
                     .push(OpFrame::OpDiv)
@@ -552,7 +591,7 @@ mod tests {
     #[test]
     fn call_unknown_fn() {
         let mut engine = new_engine(
-            Builder::new().push(FnBuilder::new(1, OpFrame::OpDefine).push(OpFrame::True)),
+            Builder::new().push(FnBuilder::new(1, OpFrame::OpDefine(vec![])).push(OpFrame::True)),
         );
         assert_eq!(engine.call_fn(0).unwrap_err().err, EvalErrType::UnknownFn);
         assert!(engine.stack.is_empty());
@@ -562,8 +601,8 @@ mod tests {
     fn call_different_fns() {
         let mut engine = new_engine(
             Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::False))
-                .push(FnBuilder::new(1, OpFrame::OpDefine).push(OpFrame::True)),
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::False))
+                .push(FnBuilder::new(1, OpFrame::OpDefine(vec![])).push(OpFrame::True)),
         );
         assert_eq!(engine.call_fn(1).unwrap(), vec![]);
         assert_eq!(
@@ -574,25 +613,52 @@ mod tests {
     }
 
     #[test]
+    fn call_args_pushed_on_stack() {
+        let script = Builder::new()
+            .push(
+                FnBuilder::new(1, OpFrame::OpDefine(vec![Arg::ScriptHash, Arg::Asset]))
+                    .push(OpFrame::True),
+            )
+            .build()
+            .unwrap();
+        let hash = {
+            let pub_key = KeyPair::gen().0;
+            ScriptHash::from(Script::from(pub_key))
+        };
+        let asset = "1234.00000 TEST".parse().unwrap();
+
+        let mut args = vec![];
+
+        args.push_digest(&hash.0);
+        args.push_asset(asset);
+        let tx = new_transfer_tx(script.clone(), 1, args, &[]);
+        let mut engine = ScriptEngine::new(tx.precompute(), script.clone());
+        assert_eq!(engine.call_fn(1).unwrap(), vec![]);
+        assert_eq!(engine.stack.pop_asset(), Ok(asset));
+        assert_eq!(engine.stack.pop_scripthash(), Ok(hash));
+        assert!(engine.stack.is_empty());
+    }
+
+    #[test]
     fn eval_uses_transfer_tx_call_fn() {
         let script = Builder::new()
-            .push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::False))
-            .push(FnBuilder::new(1, OpFrame::OpDefine).push(OpFrame::True))
+            .push(FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::False))
+            .push(FnBuilder::new(1, OpFrame::OpDefine(vec![])).push(OpFrame::True))
             .build()
             .unwrap();
 
         {
-            let tx = new_transfer_tx(script.clone(), 0, &[]);
+            let tx = new_transfer_tx(script.clone(), 0, vec![], &[]);
             let engine = ScriptEngine::new(tx.precompute(), script.clone());
             assert_eq!(engine.eval().unwrap_err().err, EvalErrType::ScriptRetFalse);
         }
         {
-            let tx = new_transfer_tx(script.clone(), 1, &[]);
+            let tx = new_transfer_tx(script.clone(), 1, vec![], &[]);
             let engine = ScriptEngine::new(tx.precompute(), script.clone());
             assert_eq!(engine.eval().unwrap(), vec![]);
         }
         {
-            let tx = new_transfer_tx(script.clone(), 2, &[]);
+            let tx = new_transfer_tx(script.clone(), 2, vec![], &[]);
             let engine = ScriptEngine::new(tx.precompute(), script);
             assert_eq!(engine.eval().unwrap_err().err, EvalErrType::UnknownFn);
         }
@@ -603,7 +669,7 @@ mod tests {
         #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine)
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::True)
                     .push(OpFrame::OpIf)
                         .push(OpFrame::False)
@@ -618,7 +684,7 @@ mod tests {
         #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine)
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::True)
                     .push(OpFrame::OpIf)
                         .push(OpFrame::True)
@@ -633,7 +699,7 @@ mod tests {
         #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine)
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::True)
                     .push(OpFrame::OpIf)
                         .push(OpFrame::False)
@@ -650,7 +716,7 @@ mod tests {
         #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
-            .push(FnBuilder::new(0, OpFrame::OpDefine)
+            .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                 .push(OpFrame::False)
                 .push(OpFrame::OpIf)
                     .push(OpFrame::False)
@@ -669,7 +735,7 @@ mod tests {
         #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine)
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::True)
                     .push(OpFrame::OpIf)
                         .push(OpFrame::True)
@@ -683,7 +749,7 @@ mod tests {
         #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine)
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::False)
                     .push(OpFrame::OpIf)
                         .push(OpFrame::False)
@@ -700,7 +766,7 @@ mod tests {
         #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine)
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::True)
                     .push(OpFrame::OpIf)
                         .push(OpFrame::True)
@@ -720,7 +786,7 @@ mod tests {
         #[rustfmt::skip]
         let mut engine = new_engine(
             Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine)
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::False)
                     .push(OpFrame::OpIf)
                         .push(OpFrame::True)
@@ -742,7 +808,8 @@ mod tests {
     fn fail_invalid_stack_on_return() {
         let key = KeyPair::gen().0;
         let mut engine = new_engine(
-            Builder::new().push(FnBuilder::new(0, OpFrame::OpDefine).push(OpFrame::PubKey(key))),
+            Builder::new()
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::PubKey(key))),
         );
         assert_eq!(
             engine.call_fn(0).unwrap_err().err,
@@ -755,7 +822,7 @@ mod tests {
         let key = KeyPair::gen().0;
         let mut engine = new_engine(
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::PubKey(key))
                     .push(OpFrame::OpIf),
             ),
@@ -770,7 +837,7 @@ mod tests {
     fn fail_unended_if() {
         let mut engine = new_engine(
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::True)
                     .push(OpFrame::OpIf),
             ),
@@ -782,7 +849,7 @@ mod tests {
 
         let mut engine = new_engine(
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::False)
                     .push(OpFrame::OpIf),
             ),
@@ -799,7 +866,7 @@ mod tests {
         let script: Script = key.0.clone().into();
 
         let engine = {
-            let tx = new_transfer_tx(script.clone(), 0, &[key]);
+            let tx = new_transfer_tx(script.clone(), 0, vec![], &[key]);
             ScriptEngine::new(tx.precompute(), script)
         };
         assert_eq!(engine.eval().unwrap(), vec![]);
@@ -811,7 +878,7 @@ mod tests {
         let mut engine = new_engine_with_signers(
             &[key.clone()],
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::PubKey(key.0.clone()))
                     .push(OpFrame::OpCheckSig),
             ),
@@ -822,7 +889,7 @@ mod tests {
         let mut engine = new_engine_with_signers(
             &[key.clone()],
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::PubKey(other.0.clone()))
                     .push(OpFrame::OpCheckSig),
             ),
@@ -835,7 +902,7 @@ mod tests {
         let mut engine = new_engine_with_signers(
             &[other],
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::PubKey(key.0))
                     .push(OpFrame::OpCheckSig),
             ),
@@ -855,7 +922,7 @@ mod tests {
         let mut engine = new_engine_with_signers(
             &[key_3.clone(), key_1.clone()],
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::PubKey(key_1.0.clone()))
                     .push(OpFrame::PubKey(key_2.0.clone()))
                     .push(OpFrame::PubKey(key_3.0.clone()))
@@ -874,7 +941,7 @@ mod tests {
         let mut engine = new_engine_with_signers(
             &[key_3.clone(), key_1.clone()],
             Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine)
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::PubKey(key_1.0.clone()))
                     .push(OpFrame::PubKey(key_2.0.clone()))
                     .push(OpFrame::PubKey(key_3.0.clone()))
@@ -893,7 +960,7 @@ mod tests {
         let key_2 = KeyPair::gen();
         let key_3 = KeyPair::gen();
         let builder = Builder::new().push(
-            FnBuilder::new(0, OpFrame::OpDefine)
+            FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                 .push(OpFrame::PubKey(key_1.0.clone()))
                 .push(OpFrame::PubKey(key_2.0.clone()))
                 .push(OpFrame::PubKey(key_3.0.clone()))
@@ -927,7 +994,7 @@ mod tests {
         let key_2 = KeyPair::gen();
         let key_3 = KeyPair::gen();
         let builder = Builder::new().push(
-            FnBuilder::new(0, OpFrame::OpDefine)
+            FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                 .push(OpFrame::PubKey(key_1.0.clone()))
                 .push(OpFrame::PubKey(key_2.0.clone()))
                 .push(OpFrame::PubKey(key_3.0.clone()))
@@ -957,9 +1024,10 @@ mod tests {
                 },
                 from: key_1.clone().0.into(),
                 to: to.clone().0.into(),
-                amount: "10.00000 TEST".parse().unwrap(),
                 script: script.clone(),
                 call_fn: 0,
+                args: vec![],
+                amount: "10.00000 TEST".parse().unwrap(),
                 memo: vec![],
             }));
             tx.append_sign(&key_2);
@@ -979,7 +1047,7 @@ mod tests {
         let key_4 = KeyPair::gen();
         #[rustfmt::skip]
         let builder = Builder::new()
-            .push(FnBuilder::new(0, OpFrame::OpDefine)
+            .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                 .push(OpFrame::PubKey(key_1.0.clone()))
                 .push(OpFrame::PubKey(key_2.0.clone()))
                 .push(OpFrame::PubKey(key_3.0.clone()))
@@ -1055,7 +1123,7 @@ mod tests {
         let key_4 = KeyPair::gen();
         #[rustfmt::skip]
         let builder = Builder::new()
-            .push(FnBuilder::new(0, OpFrame::OpDefine)
+            .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                 .push(OpFrame::PubKey(key_1.0.clone()))
                 .push(OpFrame::PubKey(key_2.0.clone()))
                 .push(OpFrame::PubKey(key_3.0.clone()))
@@ -1096,7 +1164,7 @@ mod tests {
         let key_3 = KeyPair::gen();
         #[rustfmt::skip]
         let builder = Builder::new()
-            .push(FnBuilder::new(0, OpFrame::OpDefine)
+            .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                 .push(OpFrame::PubKey(key_0.0.clone()))
                 .push(OpFrame::OpCheckSig)
                 .push(OpFrame::OpIf)
@@ -1138,7 +1206,7 @@ mod tests {
         let key_3 = KeyPair::gen();
         #[rustfmt::skip]
         let builder = Builder::new()
-            .push(FnBuilder::new(0, OpFrame::OpDefine)
+            .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                 .push(OpFrame::PubKey(key_0.0.clone()))
                 .push(OpFrame::OpCheckSig)
                 .push(OpFrame::OpNot)
@@ -1185,7 +1253,7 @@ mod tests {
         let mut engine = new_engine_with_signers(
             &[key_1.clone(), key_2.clone()],
             Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine)
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::PubKey(key_0.0.clone()))
                     .push(OpFrame::OpCheckSigFastFail)
                     .push(OpFrame::PubKey(key_1.0.clone()))
@@ -1203,7 +1271,7 @@ mod tests {
         let mut engine = new_engine_with_signers(
             &[key_0.clone(), key_1.clone()],
             Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine)
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::PubKey(key_1.0.clone()))
                     .push(OpFrame::PubKey(key_2.0.clone()))
                     .push(OpFrame::PubKey(key_3.0.clone()))
@@ -1224,11 +1292,11 @@ mod tests {
 
     fn new_engine_with_signers<'a>(keys: &[KeyPair], b: Builder) -> ScriptEngine<'a> {
         let script = b.build().unwrap();
-        let tx = new_transfer_tx(script.clone(), 0, keys);
+        let tx = new_transfer_tx(script.clone(), 0, vec![], keys);
         ScriptEngine::new(tx.precompute(), script)
     }
 
-    fn new_transfer_tx(script: Script, call_fn: u8, keys: &[KeyPair]) -> TxVariant {
+    fn new_transfer_tx(script: Script, call_fn: u8, args: Vec<u8>, keys: &[KeyPair]) -> TxVariant {
         let to = KeyPair::gen();
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: Tx {
@@ -1241,6 +1309,7 @@ mod tests {
             to: to.clone().0.into(),
             script: script.clone(),
             call_fn,
+            args,
             amount: "10.00000 TEST".parse().unwrap(),
             memo: vec![],
         }));

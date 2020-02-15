@@ -1,5 +1,8 @@
 use super::{error::*, OpFrame, MAX_FRAME_STACK};
-use crate::{asset::Asset, crypto::PublicKey};
+use crate::{
+    asset::Asset,
+    crypto::{PublicKey, ScriptHash},
+};
 
 #[derive(Debug)]
 pub struct Stack {
@@ -42,6 +45,14 @@ impl Stack {
         let frame = self.pop()?;
         match frame {
             OpFrame::PubKey(key) => Ok(key),
+            _ => Err(EvalErrType::InvalidItemOnStack),
+        }
+    }
+
+    pub fn pop_scripthash(&mut self) -> Result<ScriptHash, EvalErrType> {
+        let frame = self.pop()?;
+        match frame {
+            OpFrame::ScriptHash(hash) => Ok(hash),
             _ => Err(EvalErrType::InvalidItemOnStack),
         }
     }

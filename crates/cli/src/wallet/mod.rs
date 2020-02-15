@@ -164,7 +164,7 @@ impl Wallet {
             "Builds a mint transaction",
         ]);
         cmds.push([
-            "build_transfer_tx <expiry> <from:script_hex> <to:p2sh> <call_fn:u8> <amount:asset> <fee:asset> <memo>",
+            "build_transfer_tx <expiry> <from:script_hex> <to:p2sh> <call_fn:u8> <args:hex> <amount:asset> <fee:asset> <memo>",
             "Builds a transfer transaction",
         ]);
         cmds.push(["get_properties", "Retrieve global network properties"]);

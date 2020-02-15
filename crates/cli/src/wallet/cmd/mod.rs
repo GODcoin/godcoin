@@ -270,12 +270,13 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
     let call_fn = args[4]
         .parse()
         .map_err(|e| format!("Failed to parse call_fn id: {}", e))?;
+    let call_args = hex_to_bytes!(args[5])?;
 
-    let amount = args[5]
+    let amount = args[6]
         .parse()
         .map_err(|_| "Failed to parse asset amount")?;
-    let fee = args[6].parse().map_err(|_| "Failed to parse asset fee")?;
-    let memo = args[7].as_bytes();
+    let fee = args[7].parse().map_err(|_| "Failed to parse asset fee")?;
+    let memo = args[8].as_bytes();
 
     let transfer_tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
         base: Tx {
@@ -288,6 +289,7 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
         to: to_script,
         script: from_script,
         call_fn,
+        args: call_args,
         amount,
         memo: memo.into(),
     }));

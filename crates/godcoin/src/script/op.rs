@@ -2,8 +2,9 @@ use crate::{
     asset::Asset,
     crypto::{PublicKey, ScriptHash},
 };
+use std::convert::TryFrom;
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Operand {
     // Function definition
@@ -44,10 +45,10 @@ impl From<Operand> for u8 {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OpFrame {
     // Function definition
-    OpDefine,
+    OpDefine(Vec<Arg>),
 
     // Push value
     False,
@@ -85,5 +86,31 @@ impl From<bool> for OpFrame {
         } else {
             OpFrame::False
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Arg {
+    ScriptHash = 0x00,
+    Asset = 0x01,
+}
+
+impl TryFrom<u8> for Arg {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        Ok(match value {
+            t if t == Self::ScriptHash as u8 => Self::ScriptHash,
+            t if t == Self::Asset as u8 => Self::Asset,
+            _ => return Err(()),
+        })
+    }
+}
+
+impl Into<u8> for Arg {
+    #[inline]
+    fn into(self) -> u8 {
+        self as u8
     }
 }

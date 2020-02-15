@@ -24,7 +24,8 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
             if let Some(fnb) = fn_builder {
                 builder = builder.push(fnb);
             }
-            fn_builder = Some(FnBuilder::new(fn_id, OpFrame::OpDefine));
+            // TODO handle op definition arguments in the textual script builder
+            fn_builder = Some(FnBuilder::new(fn_id, OpFrame::OpDefine(vec![])));
             fn_id += 1;
             continue;
         }
