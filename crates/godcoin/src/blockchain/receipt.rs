@@ -100,7 +100,7 @@ impl LogEntry {
         match self {
             Self::Transfer(addr, amt) => {
                 buf.push(0x00);
-                buf.push_digest(&addr.0);
+                buf.push_scripthash(&addr);
                 buf.push_asset(*amt);
             }
         }

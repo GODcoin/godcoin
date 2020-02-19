@@ -33,6 +33,7 @@ pub mod prelude {
     };
     pub use super::net::{self, rpc, Body, Msg};
     pub use super::script::{self, OpFrame, Script, ScriptEngine};
+    pub use super::serializer::{BufRead, BufWrite};
     pub use super::tx::{
         MintTx, OwnerTx, RewardTx, TransferTx, Tx, TxId, TxPrecompData, TxVariant, TxVariantV0,
     };

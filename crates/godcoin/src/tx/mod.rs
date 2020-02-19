@@ -322,7 +322,7 @@ impl SerializeTx for OwnerTx {
         v.push(TxType::OWNER as u8);
         self.serialize_header(v);
         v.push_pub_key(&self.minter);
-        v.push_digest(&self.wallet.0);
+        v.push_scripthash(&self.wallet);
         v.push_bytes(&self.script);
     }
 }
@@ -355,7 +355,7 @@ impl SerializeTx for MintTx {
     fn serialize(&self, v: &mut Vec<u8>) {
         v.push(TxType::MINT as u8);
         self.serialize_header(v);
-        v.push_digest(&self.to.0);
+        v.push_scripthash(&self.to);
         v.push_asset(self.amount);
         v.push_bytes(&self.attachment);
         v.push_bytes(self.attachment_name.as_bytes());
@@ -396,7 +396,7 @@ impl SerializeTx for RewardTx {
         debug_assert_eq!(self.base.signature_pairs.len(), 0);
         v.push(TxType::REWARD as u8);
         self.serialize_header(v);
-        v.push_digest(&self.to.0);
+        v.push_scripthash(&self.to);
         v.push_asset(self.rewards);
     }
 }
@@ -430,8 +430,8 @@ impl SerializeTx for TransferTx {
     fn serialize(&self, v: &mut Vec<u8>) {
         v.push(TxType::TRANSFER as u8);
         self.serialize_header(v);
-        v.push_digest(&self.from.0);
-        v.push_digest(&self.to.0);
+        v.push_scripthash(&self.from);
+        v.push_scripthash(&self.to);
         v.push_bytes(&self.script);
         v.push(self.call_fn);
         v.push_bytes(&self.args);

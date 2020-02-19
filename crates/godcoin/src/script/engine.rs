@@ -629,7 +629,7 @@ mod tests {
 
         let mut args = vec![];
 
-        args.push_digest(&hash.0);
+        args.push_scripthash(&hash);
         args.push_asset(asset);
         let tx = new_transfer_tx(script.clone(), 1, args, &[]);
         let mut engine = ScriptEngine::new(tx.precompute(), script.clone());

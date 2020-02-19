@@ -5,7 +5,7 @@ use sodiumoxide::crypto::{
 use std::io::{Cursor, Error, ErrorKind, Read};
 
 use crate::asset::Asset;
-use crate::crypto::{Digest, PublicKey, SigPair, Signature};
+use crate::crypto::{Digest, PublicKey, ScriptHash, SigPair, Signature};
 
 macro_rules! read_exact_bytes {
     ($self:expr, $len:expr) => {{
@@ -29,37 +29,38 @@ fn zigzag_decode(from: u64) -> i64 {
 }
 
 pub trait BufWrite {
-    fn push_u16(&mut self, num: u16);
-    fn push_u32(&mut self, num: u32);
-    fn push_i64(&mut self, num: i64);
-    fn push_var_i64(&mut self, num: i64);
-    fn push_u64(&mut self, num: u64);
-    fn push_bytes(&mut self, slice: &[u8]);
-    fn push_digest(&mut self, digest: &Digest);
-    fn push_pub_key(&mut self, key: &PublicKey);
-    fn push_sig_pair(&mut self, pair: &SigPair);
-    fn push_asset(&mut self, asset: Asset);
+    fn push_u16(&mut self, value: u16);
+    fn push_u32(&mut self, value: u32);
+    fn push_i64(&mut self, value: i64);
+    fn push_var_i64(&mut self, value: i64);
+    fn push_u64(&mut self, value: u64);
+    fn push_bytes(&mut self, value: &[u8]);
+    fn push_digest(&mut self, value: &Digest);
+    fn push_scripthash(&mut self, value: &ScriptHash);
+    fn push_pub_key(&mut self, value: &PublicKey);
+    fn push_sig_pair(&mut self, value: &SigPair);
+    fn push_asset(&mut self, value: Asset);
 }
 
 impl BufWrite for Vec<u8> {
     #[inline]
-    fn push_u16(&mut self, num: u16) {
-        self.extend(&num.to_be_bytes());
+    fn push_u16(&mut self, value: u16) {
+        self.extend(&value.to_be_bytes());
     }
 
     #[inline]
-    fn push_u32(&mut self, num: u32) {
-        self.extend(&num.to_be_bytes());
+    fn push_u32(&mut self, value: u32) {
+        self.extend(&value.to_be_bytes());
     }
 
     #[inline]
-    fn push_i64(&mut self, num: i64) {
-        self.extend(&num.to_be_bytes());
+    fn push_i64(&mut self, value: i64) {
+        self.extend(&value.to_be_bytes());
     }
 
-    fn push_var_i64(&mut self, num: i64) {
+    fn push_var_i64(&mut self, value: i64) {
         let mut more = true;
-        let mut num = zigzag_encode(num);
+        let mut num = zigzag_encode(value);
 
         while more {
             let mut byte: u8 = (num & 0x7F) as u8;
@@ -76,34 +77,38 @@ impl BufWrite for Vec<u8> {
     }
 
     #[inline]
-    fn push_u64(&mut self, num: u64) {
-        self.extend(&num.to_be_bytes());
+    fn push_u64(&mut self, value: u64) {
+        self.extend(&value.to_be_bytes());
     }
 
-    fn push_bytes(&mut self, other: &[u8]) {
-        if other.is_empty() {
+    fn push_bytes(&mut self, value: &[u8]) {
+        if value.is_empty() {
             self.push_u32(0);
             return;
         }
-        self.push_u32(other.len() as u32);
-        self.extend_from_slice(other);
+        self.push_u32(value.len() as u32);
+        self.extend_from_slice(value);
     }
 
     fn push_digest(&mut self, value: &Digest) {
         self.extend_from_slice(value.as_ref());
     }
 
-    fn push_pub_key(&mut self, key: &PublicKey) {
-        self.extend_from_slice(key.as_ref());
+    fn push_scripthash(&mut self, value: &ScriptHash) {
+        self.extend_from_slice(value.as_ref());
     }
 
-    fn push_sig_pair(&mut self, pair: &SigPair) {
-        self.push_pub_key(&pair.pub_key);
-        self.extend_from_slice(pair.signature.as_ref());
+    fn push_pub_key(&mut self, value: &PublicKey) {
+        self.extend_from_slice(value.as_ref());
     }
 
-    fn push_asset(&mut self, asset: Asset) {
-        self.push_var_i64(asset.amount);
+    fn push_sig_pair(&mut self, value: &SigPair) {
+        self.push_pub_key(&value.pub_key);
+        self.extend_from_slice(value.signature.as_ref());
+    }
+
+    fn push_asset(&mut self, value: Asset) {
+        self.push_var_i64(value.amount);
     }
 }
 
@@ -116,6 +121,7 @@ pub trait BufRead {
     fn take_u64(&mut self) -> Result<u64, Error>;
     fn take_bytes(&mut self) -> Result<Vec<u8>, Error>;
     fn take_digest(&mut self) -> Result<Digest, Error>;
+    fn take_scripthash(&mut self) -> Result<ScriptHash, Error>;
     fn take_pub_key(&mut self) -> Result<PublicKey, Error>;
     fn take_sig_pair(&mut self) -> Result<SigPair, Error>;
     fn take_asset(&mut self) -> Result<Asset, Error>;
@@ -184,6 +190,11 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     fn take_digest(&mut self) -> Result<Digest, Error> {
         let buf = read_exact_bytes!(self, DIGESTBYTES);
         Digest::from_slice(&buf).ok_or_else(|| Error::new(ErrorKind::Other, "digest length"))
+    }
+
+    fn take_scripthash(&mut self) -> Result<ScriptHash, Error> {
+        let digest = self.take_digest()?;
+        Ok(ScriptHash(digest))
     }
 
     fn take_pub_key(&mut self) -> Result<PublicKey, Error> {

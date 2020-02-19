@@ -51,7 +51,7 @@ impl Request {
                 buf.push(RpcType::SetBlockFilter as u8);
                 buf.push(filter.len() as u8);
                 for addr in filter {
-                    buf.push_digest(&addr.0);
+                    buf.push_scripthash(&addr);
                 }
             }
             Self::ClearBlockFilter => buf.push(RpcType::ClearBlockFilter as u8),
@@ -77,7 +77,7 @@ impl Request {
             Self::GetAddressInfo(addr) => {
                 buf.reserve_exact(33);
                 buf.push(RpcType::GetAddressInfo as u8);
-                buf.push_digest(&addr.0);
+                buf.push_scripthash(&addr);
             }
         }
     }
