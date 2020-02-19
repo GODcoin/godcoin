@@ -136,6 +136,19 @@ impl<'a> ScriptEngine<'a> {
                     // We reached the next function definition, this function has no more ops to execute
                     break;
                 }
+                // Events
+                OpFrame::OpTransfer => {
+                    let amt = map_err_type!(self, self.stack.pop_asset())?;
+                    let transfer_to = map_err_type!(self, self.stack.pop_scripthash())?;
+                    if amt.amount < 0 || amt > self.remaining_amt {
+                        return Err(self.new_err(EvalErrType::InvalidAmount));
+                    }
+                    self.remaining_amt = self
+                        .remaining_amt
+                        .checked_sub(amt)
+                        .ok_or_else(|| self.new_err(EvalErrType::Arithmetic))?;
+                    self.log.push(LogEntry::Transfer(transfer_to, amt));
+                }
                 // Push
                 OpFrame::False => map_err_type!(self, self.stack.push(op))?,
                 OpFrame::True => map_err_type!(self, self.stack.push(op))?,
@@ -269,6 +282,18 @@ impl<'a> ScriptEngine<'a> {
         if map_err_type!(self, self.stack.pop_bool())? {
             let mut log = vec![];
             mem::swap(&mut self.log, &mut log);
+            if self.remaining_amt.amount > 0 {
+                // Send back funds to the original sender
+                match self.data.tx() {
+                    TxVariant::V0(tx) => match tx {
+                        TxVariantV0::TransferTx(tx) => {
+                            log.push(LogEntry::Transfer(tx.from.clone(), self.remaining_amt))
+                        }
+                        _ => return Err(self.new_err(EvalErrType::InvalidAmount)),
+                    },
+                }
+                self.remaining_amt = Asset::default();
+            }
             Ok(log)
         } else {
             Err(self.new_err(EvalErrType::ScriptRetFalse))
@@ -339,6 +364,8 @@ impl<'a> ScriptEngine<'a> {
                 }
                 Ok(Some(OpFrame::OpDefine(args)))
             }
+            // Events
+            o if o == Operand::OpTransfer as u8 => Ok(Some(OpFrame::OpTransfer)),
             // Push value
             o if o == Operand::PushFalse as u8 => Ok(Some(OpFrame::False)),
             o if o == Operand::PushTrue as u8 => Ok(Some(OpFrame::True)),

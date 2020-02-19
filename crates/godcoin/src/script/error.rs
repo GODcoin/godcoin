@@ -27,6 +27,7 @@ pub enum EvalErrType {
     StackOverflow = 0x09,
     StackUnderflow = 0x0A,
     Arithmetic = 0x0B,
+    InvalidAmount = 0x0C,
 }
 
 impl TryFrom<u8> for EvalErrType {
@@ -46,6 +47,7 @@ impl TryFrom<u8> for EvalErrType {
             t if t == Self::StackOverflow as u8 => Self::StackOverflow,
             t if t == Self::StackUnderflow as u8 => Self::StackUnderflow,
             t if t == Self::Arithmetic as u8 => Self::Arithmetic,
+            t if t == Self::InvalidAmount as u8 => Self::InvalidAmount,
             _ => return Err(()),
         })
     }

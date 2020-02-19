@@ -10,6 +10,9 @@ pub enum Operand {
     // Function definition
     OpDefine = 0x00,
 
+    // Events
+    OpTransfer = 0x10,
+
     // Push value
     PushFalse = 0x20,
     PushTrue = 0x21,
@@ -49,6 +52,9 @@ impl From<Operand> for u8 {
 pub enum OpFrame {
     // Function definition
     OpDefine(Vec<Arg>),
+
+    // Events
+    OpTransfer,
 
     // Push value
     False,

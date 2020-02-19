@@ -91,6 +91,8 @@ impl FnBuilder {
         match frame {
             // Function definition
             OpFrame::OpDefine(_) => panic!("OpDefine cannot be pushed in a function"),
+            // Events
+            OpFrame::OpTransfer => self.byte_code.push(Operand::OpTransfer.into()),
             // Push value
             OpFrame::False => self.byte_code.push(Operand::PushFalse.into()),
             OpFrame::True => self.byte_code.push(Operand::PushTrue.into()),
