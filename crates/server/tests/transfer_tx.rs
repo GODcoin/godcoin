@@ -17,7 +17,6 @@ fn transfer_from_minter() {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("1.00000 TEST"),
             from: from_addr.clone(),
-            to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 1,
             args: {
@@ -60,7 +59,6 @@ fn transfer_from_user() {
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 TEST"),
                 from: ScriptHash::from(&minter.genesis_info().script),
-                to: (&user_1_addr.0).into(),
                 script: minter.genesis_info().script.clone(),
                 call_fn: 1,
                 args: {
@@ -85,7 +83,6 @@ fn transfer_from_user() {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("1.00000 TEST"),
             from: (&user_1_addr.0).into(),
-            to: (&user_2_addr.0).into(),
             script: user_1_addr.0.clone().into(),
             call_fn: 0,
             args: {
@@ -127,7 +124,6 @@ fn invalid_fee_amt_caused_by_insufficient_balance() {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("1001.00000 TEST"),
             from: from_addr.clone(),
-            to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
             args: vec![],
@@ -170,7 +166,6 @@ fn insufficient_fee() {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header(&bad_fee.to_string()),
             from: from_addr.clone(),
-            to: KeyPair::gen().0.into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
             args: vec![],
@@ -199,7 +194,6 @@ fn negative_fee_should_fail() {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("-100.00000 TEST"),
             from: from_addr.clone(),
-            to: KeyPair::gen().0.into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
             args: vec![],
@@ -229,7 +223,6 @@ fn invalid_amt_caused_by_insufficient_balance() {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("1.00000 TEST"),
             from: from_addr.clone(),
-            to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
             args: vec![],
@@ -267,7 +260,6 @@ fn invalid_amt_caused_by_negative_amt() {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("1.00000 TEST"),
             from: from_addr.clone(),
-            to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
             args: vec![],
@@ -306,7 +298,6 @@ fn memo_too_large() {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("1.00000 TEST"),
             from: from_addr.clone(),
-            to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 1,
             args: {
@@ -351,12 +342,10 @@ fn script_too_large() {
             .collect(),
     );
     let from_addr = ScriptHash::from(&from_script);
-    let to_addr = KeyPair::gen();
     let tx = {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("1.00000 TEST"),
             from: from_addr,
-            to: (&to_addr.0).into(),
             script: from_script,
             call_fn: 0,
             args: vec![],
@@ -393,7 +382,6 @@ fn tx_addr_dynamic_fee_increase_in_pool() {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header(&addr_info.total_fee().unwrap().to_string()),
             from: from_addr.clone(),
-            to: KeyPair::gen().0.into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 0,
             args: vec![],
@@ -459,7 +447,6 @@ fn tx_addr_dynamic_fee_increase() {
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header(&addr_info.total_fee().unwrap().to_string()),
                 from: from_addr.clone(),
-                to: KeyPair::gen().0.into(),
                 script: minter.genesis_info().script.clone(),
                 call_fn: 0,
                 args: vec![],
@@ -505,7 +492,6 @@ fn net_fee_dynamic_increase() {
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 TEST"),
                 from: from_addr.clone(),
-                to: (&addrs[addr_index].0).into(),
                 script: minter.genesis_info().script.clone(),
                 call_fn: 1,
                 args: {
@@ -544,7 +530,6 @@ fn net_fee_dynamic_increase() {
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 TEST"),
                 from: (&addr.0).into(),
-                to: from_addr.clone(),
                 script: addr.0.clone().into(),
                 call_fn: 0,
                 args: {

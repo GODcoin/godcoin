@@ -50,12 +50,11 @@ fn reindexed_blockchain() {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("1.00000 TEST"),
             from: from_addr.clone(),
-            to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
             call_fn: 1,
             args: {
                 let mut args = vec![];
-                args.push_scripthash(&to_addr.clone().0.into());
+                args.push_scripthash(&(&to_addr.0).into());
                 args.push_asset(amount);
                 args
             },

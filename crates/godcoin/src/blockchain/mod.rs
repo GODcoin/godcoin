@@ -167,9 +167,7 @@ impl Blockchain {
                             }
                             TxVariantV0::RewardTx(reward_tx) => filter.contains(&reward_tx.to),
                             TxVariantV0::TransferTx(transfer_tx) => {
-                                if filter.contains(&transfer_tx.from)
-                                    || filter.contains(&transfer_tx.to)
-                                {
+                                if filter.contains(&transfer_tx.from) {
                                     return true;
                                 }
                                 for entry in &receipt.log {

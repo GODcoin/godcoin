@@ -1122,7 +1122,6 @@ mod tests {
         assert_eq!(engine.eval().unwrap_err().err, EvalErrType::ScriptRetFalse);
 
         let engine = {
-            let to = KeyPair::gen();
             let script = builder.build().unwrap();
 
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
@@ -1137,7 +1136,6 @@ mod tests {
                     }],
                 },
                 from: key_1.clone().0.into(),
-                to: to.clone().0.into(),
                 script: script.clone(),
                 call_fn: 0,
                 args: vec![],
@@ -1501,7 +1499,6 @@ mod tests {
                     signature_pairs: vec![],
                 },
                 from: self.from_addr.clone().0.into(),
-                to: self.to_addr.clone().0.into(),
                 script: script.clone(),
                 call_fn,
                 args,
@@ -1517,7 +1514,7 @@ mod tests {
         type Target = ScriptEngine<'a>;
 
         fn deref(&self) -> &Self::Target {
-            self.engine.as_ref().expect("Engine not initialized")
+            self.engine.as_ref().expect("engine not initialized")
         }
     }
 

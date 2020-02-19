@@ -418,7 +418,6 @@ impl DeserializeTx<RewardTx> for RewardTx {
 pub struct TransferTx {
     pub base: Tx,
     pub from: ScriptHash,
-    pub to: ScriptHash,
     pub script: Script,
     pub call_fn: u8,
     pub args: Vec<u8>,
@@ -431,7 +430,6 @@ impl SerializeTx for TransferTx {
         v.push(TxType::TRANSFER as u8);
         self.serialize_header(v);
         v.push_scripthash(&self.from);
-        v.push_scripthash(&self.to);
         v.push_bytes(&self.script);
         v.push(self.call_fn);
         v.push_bytes(&self.args);
@@ -443,7 +441,6 @@ impl SerializeTx for TransferTx {
 impl DeserializeTx<TransferTx> for TransferTx {
     fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<TransferTx> {
         let from = ScriptHash(cur.take_digest().ok()?);
-        let to = ScriptHash(cur.take_digest().ok()?);
         let script = cur.take_bytes().ok()?.into();
         let call_fn = cur.take_u8().ok()?;
         let args = cur.take_bytes().ok()?;
@@ -452,7 +449,6 @@ impl DeserializeTx<TransferTx> for TransferTx {
         Some(TransferTx {
             base: tx,
             from,
-            to,
             script,
             call_fn,
             args,
@@ -624,7 +620,6 @@ mod tests {
     #[test]
     fn serialize_transfer() {
         let from = crypto::KeyPair::gen();
-        let to = crypto::KeyPair::gen();
         let transfer_tx = TransferTx {
             base: Tx {
                 nonce: 123,
@@ -633,7 +628,6 @@ mod tests {
                 signature_pairs: vec![],
             },
             from: from.0.into(),
-            to: to.0.into(),
             script: vec![1, 2, 3, 4].into(),
             call_fn: 0,
             args: vec![],
@@ -651,7 +645,6 @@ mod tests {
         cmp_base_tx!(dec, 1234567890, "1.23000 TEST");
         assert_eq!(tx_type, TxType::TRANSFER);
         assert_eq!(transfer_tx.from, dec.from);
-        assert_eq!(transfer_tx.to, dec.to);
         assert_eq!(transfer_tx.script, vec![1, 2, 3, 4].into());
         assert_eq!(transfer_tx.amount.to_string(), dec.amount.to_string());
         assert_eq!(transfer_tx.memo, dec.memo);
@@ -726,7 +719,6 @@ mod tests {
                 signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
             },
             from: KeyPair::gen().0.into(),
-            to: KeyPair::gen().0.into(),
             script: Builder::new()
                 .push(
                     FnBuilder::new(0, OpFrame::OpDefine(vec![Arg::ScriptHash])).push(OpFrame::True),
@@ -755,10 +747,6 @@ mod tests {
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.to = KeyPair::gen().0.into();
-        assert_ne!(tx_a, tx_b);
-
-        let mut tx_b = tx_a.clone();
         tx_b.script = Builder::new()
             .push(FnBuilder::new(0, OpFrame::OpDefine(vec![Arg::ScriptHash])).push(OpFrame::False))
             .build()
@@ -784,7 +772,6 @@ mod tests {
                 signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
             },
             from: KeyPair::gen().0.into(),
-            to: KeyPair::gen().0.into(),
             script: Builder::new()
                 .push(FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::True))
                 .build()

@@ -103,14 +103,19 @@ fn get_block_filtered_with_addresses() {
         minter.produce_block().unwrap();
 
         let tx = {
+            let amount = get_asset("1.00000 TEST");
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 TEST"),
                 from: (&minter.genesis_info().script).into(),
-                to: to_addr.clone(),
                 script: minter.genesis_info().script.clone(),
-                call_fn: 0,
-                args: vec![],
-                amount: get_asset("1.00000 TEST"),
+                call_fn: 1,
+                args: {
+                    let mut args = vec![];
+                    args.push_scripthash(&to_addr);
+                    args.push_asset(amount);
+                    args
+                },
+                amount,
                 memo: vec![],
             }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
