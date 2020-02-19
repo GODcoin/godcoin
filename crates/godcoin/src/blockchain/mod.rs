@@ -507,11 +507,9 @@ impl Blockchain {
                         .ok_or(TxErr::Arithmetic)?;
                     check_suf_bal!(bal);
 
-                    let mut log = ScriptEngine::new(data, &transfer.script)
+                    let log = ScriptEngine::new(data, &transfer.script)
                         .eval()
                         .map_err(|e| TxErr::ScriptEval(e))?;
-                    // TODO replace the manual entry with a TRANSFER opcode in the script engine.
-                    log.push(LogEntry::Transfer(transfer.to.clone(), transfer.amount));
                     Ok(log)
                 }
             },
@@ -608,12 +606,24 @@ impl GenesisBlockInfo {
 
         let script = Builder::new()
             .push(
+                // The purpose of this function is to be used for minting transactions
                 FnBuilder::new(0, OpFrame::OpDefine(vec![]))
                     .push(OpFrame::PubKey(wallet_keys[0].0.clone()))
                     .push(OpFrame::PubKey(wallet_keys[1].0.clone()))
                     .push(OpFrame::PubKey(wallet_keys[2].0.clone()))
                     .push(OpFrame::PubKey(wallet_keys[3].0.clone()))
                     .push(OpFrame::OpCheckMultiSig(2, 4)),
+            )
+            .push(
+                // Standard transfer function
+                FnBuilder::new(1, OpFrame::OpDefine(vec![Arg::ScriptHash, Arg::Asset]))
+                    .push(OpFrame::PubKey(wallet_keys[0].0.clone()))
+                    .push(OpFrame::PubKey(wallet_keys[1].0.clone()))
+                    .push(OpFrame::PubKey(wallet_keys[2].0.clone()))
+                    .push(OpFrame::PubKey(wallet_keys[3].0.clone()))
+                    .push(OpFrame::OpCheckMultiSigFastFail(2, 4))
+                    .push(OpFrame::OpTransfer)
+                    .push(OpFrame::True),
             )
             .build()
             .unwrap();

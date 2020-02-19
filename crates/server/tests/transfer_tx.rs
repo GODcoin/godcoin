@@ -19,8 +19,13 @@ fn transfer_from_minter() {
             from: from_addr.clone(),
             to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
-            call_fn: 0,
-            args: vec![],
+            call_fn: 1,
+            args: {
+                let mut args = vec![];
+                args.push_scripthash(&(&to_addr.0).into());
+                args.push_asset(amount);
+                args
+            },
             amount,
             memo: vec![],
         }));
@@ -51,14 +56,20 @@ fn transfer_from_user() {
 
     let res = {
         let tx = {
+            let amount = get_asset("100.00000 TEST");
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 TEST"),
                 from: ScriptHash::from(&minter.genesis_info().script),
                 to: (&user_1_addr.0).into(),
                 script: minter.genesis_info().script.clone(),
-                call_fn: 0,
-                args: vec![],
-                amount: get_asset("100.00000 TEST"),
+                call_fn: 1,
+                args: {
+                    let mut args = vec![];
+                    args.push_scripthash(&(&user_1_addr.0).into());
+                    args.push_asset(amount);
+                    args
+                },
+                amount,
                 memo: vec![],
             }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
@@ -70,14 +81,20 @@ fn transfer_from_user() {
     assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
 
     let tx = {
+        let amount = get_asset("99.00000 TEST");
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("1.00000 TEST"),
             from: (&user_1_addr.0).into(),
             to: (&user_2_addr.0).into(),
             script: user_1_addr.0.clone().into(),
             call_fn: 0,
-            args: vec![],
-            amount: get_asset("99.00000 TEST"),
+            args: {
+                let mut args = vec![];
+                args.push_scripthash(&(&user_2_addr.0).into());
+                args.push_asset(amount);
+                args
+            },
+            amount,
             memo: vec![],
         }));
         tx.append_sign(&user_1_addr);
@@ -285,14 +302,20 @@ fn memo_too_large() {
     let from_addr = ScriptHash::from(&minter.genesis_info().script);
     let to_addr = KeyPair::gen();
     let tx = {
+        let amount = get_asset("1.00000 TEST");
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("1.00000 TEST"),
             from: from_addr.clone(),
             to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
-            call_fn: 0,
-            args: vec![],
-            amount: get_asset("1.00000 TEST"),
+            call_fn: 1,
+            args: {
+                let mut args = vec![];
+                args.push_scripthash(&(&to_addr.0).into());
+                args.push_asset(amount);
+                args
+            },
+            amount,
             memo: (0..=godcoin::constants::MAX_MEMO_BYTE_SIZE)
                 .map(|_| 0)
                 .collect(),
@@ -478,14 +501,20 @@ fn net_fee_dynamic_increase() {
 
     for addr_index in 0..addrs.len() {
         let tx = {
+            let amount = Asset::new(100000);
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 TEST"),
                 from: from_addr.clone(),
                 to: (&addrs[addr_index].0).into(),
                 script: minter.genesis_info().script.clone(),
-                call_fn: 0,
-                args: vec![],
-                amount: Asset::new(100000),
+                call_fn: 1,
+                args: {
+                    let mut args = vec![];
+                    args.push_scripthash(&(&addrs[addr_index].0).into());
+                    args.push_asset(amount);
+                    args
+                },
+                amount,
                 memo: vec![],
             }));
             tx.append_sign(&minter.genesis_info().wallet_keys[3]);
@@ -518,8 +547,13 @@ fn net_fee_dynamic_increase() {
                 to: from_addr.clone(),
                 script: addr.0.clone().into(),
                 call_fn: 0,
-                args: vec![],
-                amount: Asset::new(0),
+                args: {
+                    let mut args = vec![];
+                    args.push_scripthash(&from_addr);
+                    args.push_asset(Asset::default());
+                    args
+                },
+                amount: Asset::default(),
                 memo: vec![],
             }));
             tx.append_sign(&addr);

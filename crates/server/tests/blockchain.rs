@@ -52,8 +52,13 @@ fn reindexed_blockchain() {
             from: from_addr.clone(),
             to: (&to_addr.0).into(),
             script: minter.genesis_info().script.clone(),
-            call_fn: 0,
-            args: vec![],
+            call_fn: 1,
+            args: {
+                let mut args = vec![];
+                args.push_scripthash(&to_addr.clone().0.into());
+                args.push_asset(amount);
+                args
+            },
             amount,
             memo: vec![],
         }));

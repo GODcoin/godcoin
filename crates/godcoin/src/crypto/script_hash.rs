@@ -111,7 +111,7 @@ mod tests {
         );
 
         // Use an explicit derived WIF to notify us if the default script changes.
-        let wif = "GOD7grhUKwUKWJFWfQzL9qjri2gJmCuzoLpkQuyzrbqgb9LxxaYvh";
+        let wif = "GOD81DgKeYytTvud5yEGu8vzHYt9iMmAoe1vHapGhpXpdSjKsBW9V";
         let hash = ScriptHash::from_wif(&wif).unwrap();
         assert_eq!(hash.to_wif().as_ref(), wif);
         assert_eq!(ScriptHash::from(Script::from(kp.0)), hash);

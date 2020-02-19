@@ -68,9 +68,11 @@ impl From<Vec<u8>> for Script {
 impl From<PublicKey> for Script {
     fn from(key: PublicKey) -> Self {
         let builder = Builder::new().push(
-            FnBuilder::new(0x00, OpFrame::OpDefine(vec![]))
+            FnBuilder::new(0x00, OpFrame::OpDefine(vec![Arg::ScriptHash, Arg::Asset]))
                 .push(OpFrame::PubKey(key))
-                .push(OpFrame::OpCheckSig),
+                .push(OpFrame::OpCheckSigFastFail)
+                .push(OpFrame::OpTransfer)
+                .push(OpFrame::True),
         );
         builder
             .build()
