@@ -124,13 +124,6 @@ pub fn sign_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String
             .db
             .get_account(account)
             .ok_or("Account does not exist")?;
-        match &tx {
-            TxVariant::V0(var) => {
-                if let TxVariantV0::RewardTx(_) = var {
-                    return Err("Cannot sign reward tx".to_owned());
-                }
-            }
-        }
         tx.append_sign(&account);
     }
 

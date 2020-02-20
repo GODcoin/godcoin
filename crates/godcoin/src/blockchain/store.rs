@@ -115,9 +115,9 @@ impl BlockStore {
         batch.set_block_byte_pos(0, 0);
     }
 
-    pub fn reindex_blocks<F>(&mut self, opts: ReindexOpts, index_fn: F)
+    pub fn reindex_blocks<F>(&mut self, opts: ReindexOpts, mut index_fn: F)
     where
-        F: Fn(&mut WriteBatch, &Block),
+        F: FnMut(&mut WriteBatch, &Block),
     {
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
         let mut last_known_good_height = 0;

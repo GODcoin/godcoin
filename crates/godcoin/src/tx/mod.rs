@@ -20,8 +20,7 @@ mod util;
 pub enum TxType {
     OWNER = 0x00,
     MINT = 0x01,
-    REWARD = 0x02,
-    TRANSFER = 0x03,
+    TRANSFER = 0x02,
 }
 
 pub trait SerializeTx {
@@ -128,7 +127,6 @@ impl TxVariant {
             TxVariant::V0(var) => match var {
                 TxVariantV0::OwnerTx(tx) => Some(&tx.script),
                 TxVariantV0::MintTx(tx) => Some(&tx.script),
-                TxVariantV0::RewardTx(_) => None,
                 TxVariantV0::TransferTx(tx) => Some(&tx.script),
             },
         }
@@ -176,7 +174,6 @@ impl TxVariant {
                 match var {
                     TxVariantV0::OwnerTx(tx) => serialize_sigs!(tx),
                     TxVariantV0::MintTx(tx) => serialize_sigs!(tx),
-                    TxVariantV0::RewardTx(tx) => serialize_sigs!(tx),
                     TxVariantV0::TransferTx(tx) => serialize_sigs!(tx),
                 }
             }
@@ -192,7 +189,6 @@ impl TxVariant {
                 match var {
                     TxVariantV0::OwnerTx(tx) => tx.serialize(buf),
                     TxVariantV0::MintTx(tx) => tx.serialize(buf),
-                    TxVariantV0::RewardTx(tx) => tx.serialize(buf),
                     TxVariantV0::TransferTx(tx) => tx.serialize(buf),
                 }
             }
@@ -207,7 +203,6 @@ impl TxVariant {
                 let mut tx = match tx_type {
                     TxType::OWNER => TxVariantV0::OwnerTx(OwnerTx::deserialize(cur, base)?),
                     TxType::MINT => TxVariantV0::MintTx(MintTx::deserialize(cur, base)?),
-                    TxType::REWARD => TxVariantV0::RewardTx(RewardTx::deserialize(cur, base)?),
                     TxType::TRANSFER => {
                         TxVariantV0::TransferTx(TransferTx::deserialize(cur, base)?)
                     }
@@ -243,7 +238,6 @@ impl<'a> Into<Cow<'a, TxVariant>> for &'a TxVariant {
 pub enum TxVariantV0 {
     OwnerTx(OwnerTx),
     MintTx(MintTx),
-    RewardTx(RewardTx),
     TransferTx(TransferTx),
 }
 
@@ -254,7 +248,6 @@ impl Deref for TxVariantV0 {
         match self {
             TxVariantV0::OwnerTx(tx) => &tx.base,
             TxVariantV0::MintTx(tx) => &tx.base,
-            TxVariantV0::RewardTx(tx) => &tx.base,
             TxVariantV0::TransferTx(tx) => &tx.base,
         }
     }
@@ -265,7 +258,6 @@ impl DerefMut for TxVariantV0 {
         match self {
             TxVariantV0::OwnerTx(tx) => &mut tx.base,
             TxVariantV0::MintTx(tx) => &mut tx.base,
-            TxVariantV0::RewardTx(tx) => &mut tx.base,
             TxVariantV0::TransferTx(tx) => &mut tx.base,
         }
     }
@@ -291,7 +283,6 @@ impl Tx {
         let tx_type = match cur.take_u8().ok()? {
             t if t == TxType::OWNER as u8 => TxType::OWNER,
             t if t == TxType::MINT as u8 => TxType::MINT,
-            t if t == TxType::REWARD as u8 => TxType::REWARD,
             t if t == TxType::TRANSFER as u8 => TxType::TRANSFER,
             _ => return None,
         };
@@ -385,36 +376,6 @@ impl DeserializeTx<MintTx> for MintTx {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RewardTx {
-    pub base: Tx,
-    pub to: ScriptHash,
-    pub rewards: Asset,
-}
-
-impl SerializeTx for RewardTx {
-    fn serialize(&self, v: &mut Vec<u8>) {
-        debug_assert_eq!(self.base.signature_pairs.len(), 0);
-        v.push(TxType::REWARD as u8);
-        self.serialize_header(v);
-        v.push_scripthash(&self.to);
-        v.push_asset(self.rewards);
-    }
-}
-
-impl DeserializeTx<RewardTx> for RewardTx {
-    fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<RewardTx> {
-        let key = ScriptHash(cur.take_digest().ok()?);
-        let rewards = cur.take_asset().ok()?;
-
-        Some(RewardTx {
-            base: tx,
-            to: key,
-            rewards,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransferTx {
     pub base: Tx,
     pub from: ScriptHash,
@@ -460,7 +421,6 @@ impl DeserializeTx<TransferTx> for TransferTx {
 
 tx_deref!(OwnerTx);
 tx_deref!(MintTx);
-tx_deref!(RewardTx);
 tx_deref!(TransferTx);
 
 #[cfg(test)]
@@ -476,27 +436,6 @@ mod tests {
             assert_eq!($id.expiry, $expiry);
             assert_eq!($id.fee.to_string(), $fee);
         };
-    }
-
-    #[test]
-    fn serialize_tx_with_empty_sigs() {
-        let to = crypto::KeyPair::gen();
-        let reward_tx = TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
-            base: Tx {
-                nonce: 12345,
-                expiry: 123,
-                fee: get_asset("123.00000 TEST"),
-                signature_pairs: vec![],
-            },
-            to: to.0.into(),
-            rewards: get_asset("1.50000 TEST"),
-        }));
-
-        let mut v = vec![];
-        reward_tx.serialize(&mut v);
-
-        let mut c = Cursor::<&[u8]>::new(&v);
-        TxVariant::deserialize(&mut c).unwrap();
     }
 
     #[test]
@@ -588,33 +527,6 @@ mod tests {
         assert_eq!(mint_tx.to, dec.to);
         assert_eq!(mint_tx.amount, dec.amount);
         assert_eq!(mint_tx, dec);
-    }
-
-    #[test]
-    fn serialize_reward() {
-        let to = crypto::KeyPair::gen();
-        let reward_tx = RewardTx {
-            base: Tx {
-                nonce: 123,
-                expiry: 123,
-                fee: get_asset("123.00000 TEST"),
-                signature_pairs: vec![],
-            },
-            to: to.0.into(),
-            rewards: get_asset("1.50000 TEST"),
-        };
-
-        let mut v = vec![];
-        reward_tx.serialize(&mut v);
-
-        let mut c = Cursor::<&[u8]>::new(&v);
-        let (base, tx_type) = Tx::deserialize_header(&mut c).unwrap();
-        let dec = RewardTx::deserialize(&mut c, base).unwrap();
-
-        cmp_base_tx!(dec, 123, "123.00000 TEST");
-        assert_eq!(tx_type, TxType::REWARD);
-        assert_eq!(reward_tx.to, dec.to);
-        assert_eq!(reward_tx.rewards, dec.rewards);
     }
 
     #[test]

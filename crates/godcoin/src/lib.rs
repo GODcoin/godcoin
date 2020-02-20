@@ -35,6 +35,6 @@ pub mod prelude {
     pub use super::script::{self, OpFrame, Script, ScriptEngine};
     pub use super::serializer::{BufRead, BufWrite};
     pub use super::tx::{
-        MintTx, OwnerTx, RewardTx, TransferTx, Tx, TxId, TxPrecompData, TxVariant, TxVariantV0,
+        MintTx, OwnerTx, TransferTx, Tx, TxId, TxPrecompData, TxVariant, TxVariantV0,
     };
 }

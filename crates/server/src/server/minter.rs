@@ -56,7 +56,7 @@ impl Minter {
     }
 
     fn produce(&self, force_stale_production: bool) -> Result<(), blockchain::BlockErr> {
-        let mut receipts = self.receipt_pool.lock().flush();
+        let receipts = self.receipt_pool.lock().flush();
         let should_produce =
             if force_stale_production || self.enable_stale_production || !receipts.is_empty() {
                 true
@@ -74,38 +74,6 @@ impl Minter {
                 height
             );
             return Ok(());
-        }
-
-        {
-            let rewards =
-                receipts
-                    .iter()
-                    .fold(Asset::default(), |acc, receipt| match &receipt.tx {
-                        TxVariant::V0(tx) => acc.checked_add(tx.fee).unwrap(),
-                    });
-            if rewards.amount > 0 {
-                // Retrieve the owner wallet here in case the owner changes, ensuring that the
-                // reward distribution always points to the correct address.
-                let wallet_addr = match self.chain.get_owner() {
-                    TxVariant::V0(tx) => match tx {
-                        TxVariantV0::OwnerTx(owner) => owner.wallet,
-                        _ => unreachable!(),
-                    },
-                };
-                receipts.push(Receipt {
-                    tx: TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
-                        base: Tx {
-                            nonce: 0,
-                            expiry: 0,
-                            fee: Asset::default(),
-                            signature_pairs: Vec::new(),
-                        },
-                        to: wallet_addr,
-                        rewards,
-                    })),
-                    log: vec![],
-                });
-            }
         }
 
         let head = self.chain.get_chain_head();

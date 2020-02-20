@@ -196,6 +196,11 @@ impl WriteBatch {
         self.owner = Some(owner);
     }
 
+    #[inline]
+    pub fn get_owner(&self) -> Option<&TxVariant> {
+        self.owner.as_ref()
+    }
+
     pub fn add_token_supply(&mut self, amount: Asset) {
         match self.token_supply.as_mut() {
             Some(token_supply) => {

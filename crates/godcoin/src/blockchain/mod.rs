@@ -81,9 +81,7 @@ impl Blockchain {
         }
         let mut store = self.store.lock();
         store.reindex_blocks(opts, |batch, block| {
-            for receipt in block.receipts() {
-                Blockchain::index_receipt(batch, &receipt);
-            }
+            self.index_block(batch, block);
             if block.height() % 1000 == 0 {
                 info!("Indexed block {}", block.height());
             }
@@ -146,6 +144,8 @@ impl Blockchain {
         store.get(height)
     }
 
+    /// Gets a filtered block using the `filter` at the specified `height`. This does not match whether the `filter`
+    /// contains an owner address to match block rewards.
     pub fn get_filtered_block(&self, height: u64, filter: &BlockFilter) -> Option<FilteredBlock> {
         let store = self.store.lock();
         let block = store.get(height);
@@ -165,7 +165,6 @@ impl Blockchain {
                                 let hash = ScriptHash::from(&mint_tx.script);
                                 filter.contains(&hash) || filter.contains(&mint_tx.to)
                             }
-                            TxVariantV0::RewardTx(reward_tx) => filter.contains(&reward_tx.to),
                             TxVariantV0::TransferTx(transfer_tx) => {
                                 if filter.contains(&transfer_tx.from) {
                                     return true;
@@ -204,11 +203,6 @@ impl Blockchain {
                     TxVariantV0::MintTx(tx) => {
                         if &tx.to == addr {
                             bal = bal.checked_add(tx.amount)?;
-                        }
-                    }
-                    TxVariantV0::RewardTx(tx) => {
-                        if &tx.to == addr {
-                            bal = bal.checked_add(tx.rewards)?;
                         }
                     }
                     TxVariantV0::TransferTx(tx) => {
@@ -262,7 +256,6 @@ impl Blockchain {
                     TxVariant::V0(tx) => match tx {
                         TxVariantV0::OwnerTx(_) => false,
                         TxVariantV0::MintTx(_) => false,
-                        TxVariantV0::RewardTx(_) => false,
                         TxVariantV0::TransferTx(tx) => &tx.from == addr,
                     },
                 };
@@ -317,12 +310,10 @@ impl Blockchain {
     }
 
     pub fn insert_block(&self, block: Block) -> Result<(), BlockErr> {
-        static SKIP_FLAGS: SkipFlags = SKIP_NONE | SKIP_REWARD_TX;
+        static SKIP_FLAGS: SkipFlags = SKIP_NONE;
         self.verify_block(&block, &self.get_chain_head(), SKIP_FLAGS)?;
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
-        for r in block.receipts() {
-            Self::index_receipt(&mut batch, r);
-        }
+        self.index_block(&mut batch, &block);
         self.store.lock().insert(&mut batch, block);
         batch.commit();
 
@@ -376,7 +367,7 @@ impl Blockchain {
         &self,
         data: &TxPrecompData,
         additional_receipts: &[Receipt],
-        skip_flags: SkipFlags,
+        _skip_flags: SkipFlags,
     ) -> Result<Vec<LogEntry>, TxErr> {
         macro_rules! check_zero_fee {
             ($asset:expr) => {
@@ -465,22 +456,6 @@ impl Blockchain {
 
                     Ok(vec![])
                 }
-                TxVariantV0::RewardTx(tx) => {
-                    check_pos_amt!(tx.rewards);
-
-                    if skip_flags & SKIP_REWARD_TX == 0 {
-                        return Err(TxErr::TxProhibited);
-                    }
-                    // Reward transactions are internally generated, thus should panic on failure
-                    if tx.fee.amount != 0 {
-                        panic!("reward tx must have no fee");
-                    } else if !tx.signature_pairs.is_empty() {
-                        panic!("reward tx must not be signed");
-                    } else if tx.expiry != 0 {
-                        panic!("reward tx must have an expiry timestamp of 0");
-                    }
-                    Ok(vec![])
-                }
                 TxVariantV0::TransferTx(transfer) => {
                     if transfer.memo.len() > MAX_MEMO_BYTE_SIZE {
                         return Err(TxErr::TxTooLarge);
@@ -514,6 +489,22 @@ impl Blockchain {
         }
     }
 
+    fn index_block(&self, batch: &mut WriteBatch, block: &Block) {
+        for r in block.receipts() {
+            Self::index_receipt(batch, r);
+        }
+        let owner_tx = match batch.get_owner() {
+            Some(tx) => tx.clone(),
+            None => self.get_owner(),
+        };
+        match owner_tx {
+            TxVariant::V0(TxVariantV0::OwnerTx(tx)) => {
+                batch.add_bal(&tx.wallet, block.rewards());
+            }
+            _ => panic!("expected owner transaction"),
+        };
+    }
+
     fn index_receipt(batch: &mut WriteBatch, receipt: &Receipt) {
         let tx = &receipt.tx;
         match tx {
@@ -524,9 +515,6 @@ impl Blockchain {
                 TxVariantV0::MintTx(tx) => {
                     batch.add_token_supply(tx.amount);
                     batch.add_bal(&tx.to, tx.amount);
-                }
-                TxVariantV0::RewardTx(tx) => {
-                    batch.add_bal(&tx.to, tx.rewards);
                 }
                 TxVariantV0::TransferTx(tx) => {
                     batch.sub_bal(&tx.from, tx.fee.checked_add(tx.amount).unwrap());
@@ -573,6 +561,7 @@ impl Blockchain {
                 timestamp,
             },
             signer: None,
+            rewards: Asset::default(),
             receipts,
         });
         block.sign(&info.minter_key);

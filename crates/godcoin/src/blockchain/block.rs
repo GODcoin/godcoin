@@ -1,7 +1,9 @@
 use crate::{
+    asset::Asset,
     blockchain::Receipt,
     crypto::{double_sha256, Digest, DoubleSha256, KeyPair, ScriptHash, SigPair},
     serializer::*,
+    tx::TxVariant,
 };
 use std::{collections::BTreeSet, io::Cursor, ops::Deref, sync::Arc};
 
@@ -37,6 +39,13 @@ impl Block {
     pub fn timestamp(&self) -> u64 {
         match self {
             Block::V0(block) => block.timestamp,
+        }
+    }
+
+    #[inline]
+    pub fn rewards(&self) -> Asset {
+        match self {
+            Block::V0(block) => block.rewards,
         }
     }
 
@@ -95,6 +104,7 @@ impl Block {
                         .as_ref()
                         .expect("block must be signed to serialize"),
                 );
+                buf.push_asset(block.rewards);
                 buf.push_u32(block.receipts.len() as u32);
                 for r in &block.receipts {
                     r.serialize(buf)
@@ -108,6 +118,7 @@ impl Block {
         match header {
             BlockHeader::V0(header) => {
                 let signer = Some(cur.take_sig_pair().ok()?);
+                let rewards = cur.take_asset().ok()?;
 
                 let len = cur.take_u32().ok()?;
                 let mut receipts = Vec::with_capacity(len as usize);
@@ -118,6 +129,7 @@ impl Block {
                 Some(Block::V0(BlockV0 {
                     header,
                     signer,
+                    rewards,
                     receipts,
                 }))
             }
@@ -185,6 +197,7 @@ impl BlockHeaderV0 {
 pub struct BlockV0 {
     pub header: BlockHeaderV0,
     pub signer: Option<SigPair>,
+    pub rewards: Asset,
     pub receipts: Vec<Receipt>,
 }
 
@@ -194,6 +207,11 @@ impl BlockV0 {
         let height = self.header.height + 1;
         let receipt_root = calc_receipt_root(&receipts);
         let timestamp = crate::get_epoch_time();
+        let rewards = receipts
+            .iter()
+            .fold(Asset::default(), |acc, receipt| match &receipt.tx {
+                TxVariant::V0(tx) => acc.checked_add(tx.fee).unwrap(),
+            });
         Block::V0(BlockV0 {
             header: BlockHeaderV0 {
                 previous_hash,
@@ -202,6 +220,7 @@ impl BlockV0 {
                 receipt_root,
             },
             signer: None,
+            rewards,
             receipts,
         })
     }
@@ -241,15 +260,19 @@ mod tests {
     fn serialize_block_v0() {
         let keys = KeyPair::gen();
         let receipts = vec![Receipt {
-            tx: TxVariant::V0(TxVariantV0::RewardTx(RewardTx {
+            tx: TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: Tx {
                     nonce: 111,
                     expiry: 1234567890,
                     fee: Asset::default(),
                     signature_pairs: Vec::new(),
                 },
-                to: keys.0.clone().into(),
-                rewards: Asset::default(),
+                from: (&keys.0).into(),
+                script: keys.0.clone().into(),
+                call_fn: 0,
+                args: vec![],
+                amount: "1.00000 TEST".parse().unwrap(),
+                memo: vec![0x00, 0x01, 0x02, 0x03],
             })),
             log: vec![],
         }];
@@ -262,6 +285,7 @@ mod tests {
                 receipt_root,
             },
             signer: None,
+            rewards: "1.00000 TEST".parse().unwrap(),
             receipts,
         });
         block.sign(&keys);
@@ -285,6 +309,7 @@ mod tests {
                 receipt_root: double_sha256(&[0; 0]),
             },
             signer: None,
+            rewards: Asset::default(),
             receipts: vec![],
         });
         assert!(block.verify_receipt_root());
@@ -308,6 +333,7 @@ mod tests {
                 receipt_root: double_sha256(&[0; 0]),
             },
             signer: None,
+            rewards: Asset::default(),
             receipts: vec![],
         });
 
@@ -319,6 +345,7 @@ mod tests {
                 receipt_root: double_sha256(&[0; 0]),
             },
             signer: None,
+            rewards: Asset::default(),
             receipts: vec![],
         });
 
@@ -330,6 +357,7 @@ mod tests {
                 receipt_root: double_sha256(&[0; 0]),
             },
             signer: None,
+            rewards: Asset::default(),
             receipts: vec![],
         });
 
