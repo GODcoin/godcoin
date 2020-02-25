@@ -12,7 +12,7 @@ pub enum BuildError {
     Other(String),
 }
 
-pub fn build(ops: &[String]) -> Result<Script, BuildError> {
+pub fn build(ops: &[&str]) -> Result<Script, BuildError> {
     let mut builder = Builder::new();
     let mut fn_builder = None;
     let mut fn_id = 0u8;
@@ -20,7 +20,7 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
     let mut iter = ops.iter();
     while let Some(op) = iter.next() {
         // Handle function definition
-        if op == "OP_DEFINE" {
+        if op == &"OP_DEFINE" {
             if let Some(fnb) = fn_builder {
                 builder = builder.push(fnb);
             }
@@ -40,22 +40,24 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
                             let key = PublicKey::from_wif(key).map_err(BuildError::WifError)?;
                             builder.push(OpFrame::PubKey(key))
                         }
-                        None => return Err(BuildError::MissingArgForOp(op.to_owned())),
+                        None => return Err(BuildError::MissingArgForOp(op.to_string())),
                     },
                     "OP_SCRIPTHASH" => match iter.next() {
                         Some(hash) => {
                             let hash = ScriptHash::from_wif(hash).map_err(BuildError::WifError)?;
                             builder.push(OpFrame::ScriptHash(hash))
                         }
-                        None => return Err(BuildError::MissingArgForOp(op.to_owned())),
+                        None => return Err(BuildError::MissingArgForOp(op.to_string())),
                     },
                     "OP_ASSET" => match iter.next() {
                         Some(asset) => {
                             let asset = asset.parse().map_err(BuildError::AssetParseError)?;
                             builder.push(OpFrame::Asset(asset))
                         }
-                        None => return Err(BuildError::MissingArgForOp(op.to_owned())),
+                        None => return Err(BuildError::MissingArgForOp(op.to_string())),
                     },
+                    // Events
+                    "OP_TRANSFER" => builder.push(OpFrame::OpTransfer),
                     // Arithmetic
                     "OP_LOADAMT" => builder.push(OpFrame::OpLoadAmt),
                     "OP_LOADREMAMT" => builder.push(OpFrame::OpLoadRemAmt),
@@ -75,14 +77,14 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
                     "OP_CHECKMULTISIG" => {
                         let threshold = iter
                             .next()
-                            .ok_or_else(|| BuildError::MissingArgForOp(op.to_owned()))?
+                            .ok_or_else(|| BuildError::MissingArgForOp(op.to_string()))?
                             .parse()
                             .map_err(|e: ParseIntError| {
                                 BuildError::Other(e.description().to_owned())
                             })?;
                         let key_count = iter
                             .next()
-                            .ok_or_else(|| BuildError::MissingArgForOp(op.to_owned()))?
+                            .ok_or_else(|| BuildError::MissingArgForOp(op.to_string()))?
                             .parse()
                             .map_err(|e: ParseIntError| {
                                 BuildError::Other(e.description().to_owned())
@@ -92,27 +94,30 @@ pub fn build(ops: &[String]) -> Result<Script, BuildError> {
                     "OP_CHECKMULTISIGFASTFAIL" => {
                         let threshold = iter
                             .next()
-                            .ok_or_else(|| BuildError::MissingArgForOp(op.to_owned()))?
+                            .ok_or_else(|| BuildError::MissingArgForOp(op.to_string()))?
                             .parse()
                             .map_err(|e: ParseIntError| {
                                 BuildError::Other(e.description().to_owned())
                             })?;
                         let key_count = iter
                             .next()
-                            .ok_or_else(|| BuildError::MissingArgForOp(op.to_owned()))?
+                            .ok_or_else(|| BuildError::MissingArgForOp(op.to_string()))?
                             .parse()
                             .map_err(|e: ParseIntError| {
                                 BuildError::Other(e.description().to_owned())
                             })?;
                         builder.push(OpFrame::OpCheckMultiSigFastFail(threshold, key_count))
                     }
-                    _ => return Err(BuildError::UnknownOp(op.to_owned())),
+                    _ => return Err(BuildError::UnknownOp(op.to_string())),
                 })
             }
             None => return Err(BuildError::ExpectedFnDefinition),
         }
     }
 
+    if let Some(fnb) = fn_builder {
+        builder = builder.push(fnb);
+    }
     builder
         .build()
         .map_err(|total_bytes| BuildError::ScriptSizeOverflow(total_bytes))

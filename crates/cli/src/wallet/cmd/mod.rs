@@ -1,4 +1,5 @@
 use super::*;
+use clap::ArgMatches;
 use godcoin::{constants::*, prelude::*};
 use std::{
     fs::File,
@@ -12,11 +13,11 @@ pub mod account;
 
 use util::{send_print_rpc_req, send_rpc_req};
 
-pub fn create_wallet(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
+pub fn create_wallet(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
     let state = wallet.db.state();
     if state != DbState::New {
         if state == DbState::Locked {
-            println!("Use unlock to use the existing wallet");
+            println!("Wallet is locked, use unlock to use the existing wallet");
             return Ok(());
         } else if state == DbState::Unlocked {
             println!("Existing wallet already unlocked");
@@ -26,14 +27,13 @@ pub fn create_wallet(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
         }
     }
 
-    check_args!(args, 1);
-    let pass = &args[1].as_ref();
-    wallet.db.set_password(pass);
+    let pass = args.value_of("password").unwrap();
+    wallet.db.set_password(pass.as_bytes());
     wallet.prompt = "locked>> ".to_owned();
     Ok(())
 }
 
-pub fn unlock(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
+pub fn unlock(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
     let state = wallet.db.state();
     if state != DbState::Locked {
         if state == DbState::New {
@@ -46,9 +46,8 @@ pub fn unlock(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String>
         return Err(format!("Unknown state: {:?}", state));
     }
 
-    check_args!(args, 1);
-    let pass = &args[1].as_ref();
-    if wallet.db.unlock(pass) {
+    let pass = args.value_of("password").unwrap();
+    if wallet.db.unlock(pass.as_bytes()) {
         wallet.prompt = "unlocked>> ".to_owned();
     } else {
         println!("Failed to unlock wallet...incorrect password");
@@ -56,8 +55,9 @@ pub fn unlock(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String>
     Ok(())
 }
 
-pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
-    let script = script_builder::build(&args[1..]);
+pub fn build_script(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
+    let ops: Vec<&str> = args.values_of("ops").unwrap().collect();
+    let script = script_builder::build(&ops);
     match script {
         Ok(script) => {
             if script.len() > MAX_SCRIPT_BYTE_SIZE {
@@ -76,9 +76,9 @@ pub fn build_script(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
     Ok(())
 }
 
-pub fn check_script_size(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
-    check_args!(args, 1);
-    let script = Script::new(hex_to_bytes!(args[1])?);
+pub fn check_script_size(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
+    let hex = args.value_of("hex").unwrap();
+    let script = Script::new(hex_to_bytes!(hex)?);
     if script.len() > MAX_SCRIPT_BYTE_SIZE {
         println!(
             "WARNING: Script exceeds the max byte size {}",
@@ -90,18 +90,17 @@ pub fn check_script_size(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
     Ok(())
 }
 
-pub fn script_to_p2sh(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
-    check_args!(args, 1);
-    let hash: ScriptHash = Script::new(hex_to_bytes!(args[1])?).into();
+pub fn script_to_p2sh(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
+    let hex = args.value_of("hex").unwrap();
+    let hash: ScriptHash = Script::new(hex_to_bytes!(hex)?).into();
     println!("P2SH address => {}", hash.to_wif());
 
     Ok(())
 }
 
-pub fn decode_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
-    check_args!(args, 1);
-
-    let tx_bytes = hex_to_bytes!(args[1])?;
+pub fn decode_tx(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
+    let hex = args.value_of("hex").unwrap();
+    let tx_bytes = hex_to_bytes!(hex)?;
     let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
     let tx = TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?;
     println!("{:#?}", tx);
@@ -109,17 +108,18 @@ pub fn decode_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), Str
     Ok(())
 }
 
-pub fn sign_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
+pub fn sign_tx(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
     check_unlocked!(wallet);
-    check_at_least_args!(args, 2);
+    let hex = args.value_of("hex").unwrap();
+    let accounts: Vec<&str> = args.values_of("account").unwrap().collect();
 
-    let mut tx_bytes = hex_to_bytes!(args[1])?;
+    let mut tx_bytes = hex_to_bytes!(hex)?;
     let mut tx = {
         let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
         TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?
     };
 
-    for account in &args[2..] {
+    for account in accounts {
         let account = wallet
             .db
             .get_account(account)
@@ -135,13 +135,14 @@ pub fn sign_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String
     Ok(())
 }
 
-pub fn unsign_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
-    check_args!(args, 2);
-    let sig_pos: usize = args[1]
+pub fn unsign_tx(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
+    let sig_pos: usize = args
+        .value_of("index")
+        .unwrap()
         .parse()
         .map_err(|_| "Failed to parse signature position".to_owned())?;
 
-    let mut tx_bytes = hex_to_bytes!(args[2])?;
+    let mut tx_bytes = hex_to_bytes!(args.value_of("hex").unwrap())?;
     let mut tx = {
         let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
         TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?
@@ -158,9 +159,9 @@ pub fn unsign_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), Str
     Ok(())
 }
 
-pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
-    check_args!(args, 1);
-    let tx_bytes = hex_to_bytes!(args[1])?;
+pub fn broadcast(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
+    let hex = args.value_of("hex").unwrap();
+    let tx_bytes = hex_to_bytes!(hex)?;
     let tx = {
         let cursor = &mut Cursor::<&[u8]>::new(&tx_bytes);
         TxVariant::deserialize(cursor).ok_or("Failed to decode tx")?
@@ -170,9 +171,7 @@ pub fn broadcast(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), Stri
     Ok(())
 }
 
-pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
-    check_args!(args, 4);
-
+pub fn build_mint_tx(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
     let nonce: u32 = {
         let mut nonce = [0; 4];
         sodiumoxide::randombytes::randombytes_into(&mut nonce);
@@ -180,14 +179,20 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
     };
 
     let expiry: u64 = {
-        let expiry: u64 = args[1]
+        let expiry: u64 = args
+            .value_of("expiry")
+            .unwrap()
             .parse()
             .map_err(|_| "Failed to parse expiry ms".to_owned())?;
         godcoin::get_epoch_time() + expiry
     };
 
-    let amount = args[2].parse().map_err(|_| "Failed to parse asset")?;
-    let script: Script = hex_to_bytes!(args[3])?.into();
+    let amount = args
+        .value_of("amount")
+        .unwrap()
+        .parse()
+        .map_err(|_| "Failed to parse asset")?;
+    let script: Script = hex_to_bytes!(args.value_of("owner_script").unwrap())?.into();
 
     let res = send_rpc_req(wallet, rpc::Request::GetProperties)?;
     let owner = match res.body {
@@ -201,24 +206,23 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
         },
     };
 
-    let (attachment, attachment_name) = if !args[4].is_empty() {
-        let path = Path::new(&args[4]);
-        let mut file = File::open(path).map_err(|e| {
-            let cur_dir = std::env::current_dir().unwrap();
-            format!("Failed to open file: {:?} (cwd: {:?})", e, cur_dir)
-        })?;
-        let meta = file
-            .metadata()
-            .map_err(|e| format!("Failed to query file metadata: {:?}", e))?;
-        let mut buf = Vec::with_capacity(meta.len() as usize);
-        file.read_to_end(&mut buf)
-            .map_err(|e| format!("Failed to read file entirely: {:?}", e))?;
-
-        let file_name = path.file_name().unwrap().to_str().unwrap();
-        (buf, file_name.to_owned())
-    } else {
-        (vec![], "".to_owned())
-    };
+    let (attachment, attachment_name) =
+        if let Some(attachment_path) = args.value_of("attachment_path") {
+            let path = Path::new(attachment_path);
+            let mut file = File::open(path).map_err(|e| {
+                let cur_dir = std::env::current_dir().unwrap();
+                format!("Failed to open file: {:?} (cwd: {:?})", e, cur_dir)
+            })?;
+            let meta = file
+                .metadata()
+                .map_err(|e| format!("Failed to query file metadata: {:?}", e))?;
+            let mut buf = Vec::with_capacity(meta.len() as usize);
+            file.read_to_end(&mut buf)
+                .map_err(|e| format!("Failed to read file entirely: {:?}", e))?;
+            (buf, args.value_of("attachment_name").unwrap())
+        } else {
+            (vec![], "")
+        };
 
     let mint_tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: Tx {
@@ -230,7 +234,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
         to: owner_wallet.clone(),
         amount,
         attachment,
-        attachment_name,
+        attachment_name: attachment_name.to_owned(),
         script,
     }));
     let mut buf = Vec::with_capacity(4096);
@@ -240,9 +244,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), 
     Ok(())
 }
 
-pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
-    check_args!(args, 6);
-
+pub fn build_transfer_tx(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
     let nonce: u32 = {
         let mut nonce = [0; 4];
         sodiumoxide::randombytes::randombytes_into(&mut nonce);
@@ -250,24 +252,38 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
     };
 
     let expiry: u64 = {
-        let expiry: u64 = args[1]
+        let expiry: u64 = args
+            .value_of("expiry")
+            .unwrap()
             .parse()
             .map_err(|_| "Failed to parse expiry ms".to_owned())?;
         godcoin::get_epoch_time() + expiry
     };
 
-    let from_script = Script::new(hex_to_bytes!(args[2])?);
+    let from_script = Script::new(hex_to_bytes!(args.value_of("from_script").unwrap())?);
 
-    let call_fn = args[3]
+    let call_fn = args
+        .value_of("call_fn")
+        .unwrap()
         .parse()
         .map_err(|e| format!("Failed to parse call_fn id: {}", e))?;
-    let call_args = hex_to_bytes!(args[4])?;
+    let call_args = if let Some(args) = args.value_of("args") {
+        hex_to_bytes!(args)?
+    } else {
+        vec![]
+    };
 
-    let amount = args[5]
+    let amount = args
+        .value_of("amount")
+        .unwrap()
         .parse()
         .map_err(|_| "Failed to parse asset amount")?;
-    let fee = args[6].parse().map_err(|_| "Failed to parse asset fee")?;
-    let memo = args[7].as_bytes();
+    let fee = args
+        .value_of("fee")
+        .unwrap()
+        .parse()
+        .map_err(|_| "Failed to parse asset fee")?;
+    let memo = args.value_of("memo").unwrap_or("").as_bytes();
 
     let transfer_tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
         base: Tx {
@@ -291,14 +307,15 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &mut Vec<String>) -> Result
     Ok(())
 }
 
-pub fn get_properties(wallet: &mut Wallet, _args: &mut Vec<String>) -> Result<(), String> {
+pub fn get_properties(wallet: &mut Wallet, _args: &ArgMatches) -> Result<(), String> {
     send_print_rpc_req(wallet, rpc::Request::GetProperties);
     Ok(())
 }
 
-pub fn get_block(wallet: &mut Wallet, args: &mut Vec<String>) -> Result<(), String> {
-    check_args!(args, 1);
-    let height: u64 = args[1]
+pub fn get_block(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
+    let height: u64 = args
+        .value_of("height")
+        .unwrap()
         .parse()
         .map_err(|_| "Failed to parse height argument".to_owned())?;
 

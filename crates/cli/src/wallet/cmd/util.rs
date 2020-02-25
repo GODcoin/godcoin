@@ -16,24 +16,6 @@ macro_rules! check_unlocked {
     };
 }
 
-macro_rules! check_args {
-    ($args:expr, $count:expr) => {
-        if $args.len() != $count + 1 {
-            let word = if $count == 1 { "argument" } else { "arguments" };
-            return Err(format!("Expected {} {}", $count, word));
-        }
-    };
-}
-
-macro_rules! check_at_least_args {
-    ($args:expr, $count:expr) => {
-        if $args.len() < $count + 1 {
-            let word = if $count == 1 { "argument" } else { "arguments" };
-            return Err(format!("Expected at least {} {}", $count, word));
-        }
-    };
-}
-
 macro_rules! hex_to_bytes {
     ($string:expr) => {{
         let len = $string.len() / 2;
