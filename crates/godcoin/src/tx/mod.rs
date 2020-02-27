@@ -18,9 +18,9 @@ mod util;
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum TxType {
-    OWNER = 0x00,
-    MINT = 0x01,
-    TRANSFER = 0x02,
+    Owner = 0x00,
+    Mint = 0x01,
+    Transfer = 0x02,
 }
 
 pub trait SerializeTx {
@@ -201,9 +201,9 @@ impl TxVariant {
             0x00 => {
                 let (base, tx_type) = Tx::deserialize_header(cur)?;
                 let mut tx = match tx_type {
-                    TxType::OWNER => TxVariantV0::OwnerTx(OwnerTx::deserialize(cur, base)?),
-                    TxType::MINT => TxVariantV0::MintTx(MintTx::deserialize(cur, base)?),
-                    TxType::TRANSFER => {
+                    TxType::Owner => TxVariantV0::OwnerTx(OwnerTx::deserialize(cur, base)?),
+                    TxType::Mint => TxVariantV0::MintTx(MintTx::deserialize(cur, base)?),
+                    TxType::Transfer => {
                         TxVariantV0::TransferTx(TransferTx::deserialize(cur, base)?)
                     }
                 };
@@ -281,9 +281,9 @@ impl Tx {
 
     fn deserialize_header(cur: &mut Cursor<&[u8]>) -> Option<(Tx, TxType)> {
         let tx_type = match cur.take_u8().ok()? {
-            t if t == TxType::OWNER as u8 => TxType::OWNER,
-            t if t == TxType::MINT as u8 => TxType::MINT,
-            t if t == TxType::TRANSFER as u8 => TxType::TRANSFER,
+            t if t == TxType::Owner as u8 => TxType::Owner,
+            t if t == TxType::Mint as u8 => TxType::Mint,
+            t if t == TxType::Transfer as u8 => TxType::Transfer,
             _ => return None,
         };
         let nonce = cur.take_u32().ok()?;
@@ -310,7 +310,7 @@ pub struct OwnerTx {
 
 impl SerializeTx for OwnerTx {
     fn serialize(&self, v: &mut Vec<u8>) {
-        v.push(TxType::OWNER as u8);
+        v.push(TxType::Owner as u8);
         self.serialize_header(v);
         v.push_pub_key(&self.minter);
         v.push_scripthash(&self.wallet);
@@ -344,7 +344,7 @@ pub struct MintTx {
 
 impl SerializeTx for MintTx {
     fn serialize(&self, v: &mut Vec<u8>) {
-        v.push(TxType::MINT as u8);
+        v.push(TxType::Mint as u8);
         self.serialize_header(v);
         v.push_scripthash(&self.to);
         v.push_asset(self.amount);
@@ -388,7 +388,7 @@ pub struct TransferTx {
 
 impl SerializeTx for TransferTx {
     fn serialize(&self, v: &mut Vec<u8>) {
-        v.push(TxType::TRANSFER as u8);
+        v.push(TxType::Transfer as u8);
         self.serialize_header(v);
         v.push_scripthash(&self.from);
         v.push_bytes(&self.script);
@@ -493,7 +493,7 @@ mod tests {
         assert_eq!(owner_tx, dec);
 
         cmp_base_tx!(dec, 1230, "123.00000 TEST");
-        assert_eq!(tx_type, TxType::OWNER);
+        assert_eq!(tx_type, TxType::Owner);
         assert_eq!(owner_tx.minter, dec.minter);
         assert_eq!(owner_tx.wallet, dec.wallet);
     }
@@ -523,7 +523,7 @@ mod tests {
         let dec = MintTx::deserialize(&mut c, base).unwrap();
 
         cmp_base_tx!(dec, 1234, "123.00000 TEST");
-        assert_eq!(tx_type, TxType::MINT);
+        assert_eq!(tx_type, TxType::Mint);
         assert_eq!(mint_tx.to, dec.to);
         assert_eq!(mint_tx.amount, dec.amount);
         assert_eq!(mint_tx, dec);
@@ -555,7 +555,7 @@ mod tests {
         let dec = TransferTx::deserialize(&mut c, base).unwrap();
 
         cmp_base_tx!(dec, 1234567890, "1.23000 TEST");
-        assert_eq!(tx_type, TxType::TRANSFER);
+        assert_eq!(tx_type, TxType::Transfer);
         assert_eq!(transfer_tx.from, dec.from);
         assert_eq!(transfer_tx.script, vec![1, 2, 3, 4].into());
         assert_eq!(transfer_tx.amount.to_string(), dec.amount.to_string());
