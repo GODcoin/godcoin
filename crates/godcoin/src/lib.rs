@@ -4,6 +4,7 @@ pub mod asset;
 pub mod crypto;
 pub mod tx;
 
+pub mod account;
 pub mod blockchain;
 pub mod constants;
 pub mod net;
@@ -22,6 +23,7 @@ pub fn get_epoch_time() -> u64 {
 }
 
 pub mod prelude {
+    pub use super::account::{Account, AccountId, IMMUTABLE_ACCOUNT_THRESHOLD};
     pub use super::asset::{self, Asset, AssetError, AssetErrorKind};
     pub use super::blockchain::{
         self, index::IndexStatus, AddressInfo, Block, BlockFilter, BlockHeader, BlockHeaderV0,
