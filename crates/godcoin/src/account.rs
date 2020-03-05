@@ -20,16 +20,16 @@ impl Account {
         buf.push_u64(self.id);
         buf.push_asset(self.balance);
         buf.push_bytes(&self.script);
-        buf.push(self.destroyed as u8);
         self.permissions.serialize(buf);
+        buf.push(self.destroyed as u8);
     }
 
     pub fn deserialize(cur: &mut Cursor<&[u8]>) -> io::Result<Self> {
         let id = cur.take_u64()?;
         let balance = cur.take_asset()?;
         let script = Script::new(cur.take_bytes()?);
-        let destroyed = cur.take_u8()? != 0;
         let permissions = Permissions::deserialize(cur)?;
+        let destroyed = cur.take_u8()? != 0;
         Ok(Self {
             id,
             balance,
