@@ -64,6 +64,7 @@ impl<'a> ScriptEngine<'a> {
             TxVariant::V0(tx) => match tx {
                 TxVariantV0::OwnerTx(_) => 0,
                 TxVariantV0::MintTx(_) => 0,
+                TxVariantV0::CreateAccountTx(_) => 0,
                 TxVariantV0::TransferTx(tx) => tx.call_fn,
             },
         };
@@ -95,6 +96,7 @@ impl<'a> ScriptEngine<'a> {
                         TxVariant::V0(tx) => match tx {
                             TxVariantV0::OwnerTx(_) => &[],
                             TxVariantV0::MintTx(_) => &[],
+                            TxVariantV0::CreateAccountTx(_) => &[],
                             TxVariantV0::TransferTx(tx) => &tx.args,
                         },
                     });

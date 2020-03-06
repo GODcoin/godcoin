@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{
+    account::{Account, AccountId},
     asset::Asset,
     constants::CHAIN_ID,
     crypto::{Digest, DoubleSha256, KeyPair, PublicKey, ScriptHash, SigPair},
@@ -15,12 +16,13 @@ use crate::{
 #[macro_use]
 mod util;
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum TxType {
     Owner = 0x00,
     Mint = 0x01,
-    Transfer = 0x02,
+    CreateAccount = 0x02,
+    Transfer = 0x03,
 }
 
 pub trait SerializeTx {
@@ -122,11 +124,13 @@ impl TxVariant {
         }
     }
 
+    #[inline]
     pub fn script(&self) -> Option<&Script> {
         match self {
             TxVariant::V0(var) => match var {
                 TxVariantV0::OwnerTx(tx) => Some(&tx.script),
                 TxVariantV0::MintTx(tx) => Some(&tx.script),
+                TxVariantV0::CreateAccountTx(tx) => Some(&tx.account.script),
                 TxVariantV0::TransferTx(tx) => Some(&tx.script),
             },
         }
@@ -174,6 +178,7 @@ impl TxVariant {
                 match var {
                     TxVariantV0::OwnerTx(tx) => serialize_sigs!(tx),
                     TxVariantV0::MintTx(tx) => serialize_sigs!(tx),
+                    TxVariantV0::CreateAccountTx(tx) => serialize_sigs!(tx),
                     TxVariantV0::TransferTx(tx) => serialize_sigs!(tx),
                 }
             }
@@ -189,6 +194,7 @@ impl TxVariant {
                 match var {
                     TxVariantV0::OwnerTx(tx) => tx.serialize(buf),
                     TxVariantV0::MintTx(tx) => tx.serialize(buf),
+                    TxVariantV0::CreateAccountTx(tx) => tx.serialize(buf),
                     TxVariantV0::TransferTx(tx) => tx.serialize(buf),
                 }
             }
@@ -203,6 +209,9 @@ impl TxVariant {
                 let mut tx = match tx_type {
                     TxType::Owner => TxVariantV0::OwnerTx(OwnerTx::deserialize(cur, base)?),
                     TxType::Mint => TxVariantV0::MintTx(MintTx::deserialize(cur, base)?),
+                    TxType::CreateAccount => {
+                        TxVariantV0::CreateAccountTx(CreateAccountTx::deserialize(cur, base)?)
+                    }
                     TxType::Transfer => {
                         TxVariantV0::TransferTx(TransferTx::deserialize(cur, base)?)
                     }
@@ -238,6 +247,7 @@ impl<'a> Into<Cow<'a, TxVariant>> for &'a TxVariant {
 pub enum TxVariantV0 {
     OwnerTx(OwnerTx),
     MintTx(MintTx),
+    CreateAccountTx(CreateAccountTx),
     TransferTx(TransferTx),
 }
 
@@ -248,6 +258,7 @@ impl Deref for TxVariantV0 {
         match self {
             TxVariantV0::OwnerTx(tx) => &tx.base,
             TxVariantV0::MintTx(tx) => &tx.base,
+            TxVariantV0::CreateAccountTx(tx) => &tx.base,
             TxVariantV0::TransferTx(tx) => &tx.base,
         }
     }
@@ -258,6 +269,7 @@ impl DerefMut for TxVariantV0 {
         match self {
             TxVariantV0::OwnerTx(tx) => &mut tx.base,
             TxVariantV0::MintTx(tx) => &mut tx.base,
+            TxVariantV0::CreateAccountTx(tx) => &mut tx.base,
             TxVariantV0::TransferTx(tx) => &mut tx.base,
         }
     }
@@ -376,6 +388,34 @@ impl DeserializeTx<MintTx> for MintTx {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CreateAccountTx {
+    pub base: Tx,
+    pub creator: AccountId,
+    pub account: Account,
+}
+
+impl SerializeTx for CreateAccountTx {
+    fn serialize(&self, buf: &mut Vec<u8>) {
+        buf.push(TxType::CreateAccount as u8);
+        self.serialize_header(buf);
+        buf.push_u64(self.creator);
+        self.account.serialize(buf);
+    }
+}
+
+impl DeserializeTx<CreateAccountTx> for CreateAccountTx {
+    fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<Self> {
+        let creator = cur.take_u64().ok()?;
+        let account = Account::deserialize(cur).ok()?;
+        Some(Self {
+            base: tx,
+            creator,
+            account,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransferTx {
     pub base: Tx,
     pub from: ScriptHash,
@@ -421,6 +461,7 @@ impl DeserializeTx<TransferTx> for TransferTx {
 
 tx_deref!(OwnerTx);
 tx_deref!(MintTx);
+tx_deref!(CreateAccountTx);
 tx_deref!(TransferTx);
 
 #[cfg(test)]

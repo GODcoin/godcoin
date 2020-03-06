@@ -17,7 +17,14 @@ pub use self::{
     store::{BlockStore, ReindexOpts},
 };
 
-use crate::{asset::Asset, constants::*, crypto::*, script::*, tx::*};
+use crate::{
+    account::{IMMUTABLE_ACCOUNT_THRESHOLD, MAX_PERM_KEYS},
+    asset::Asset,
+    constants::*,
+    crypto::*,
+    script::*,
+    tx::*,
+};
 use skip_flags::*;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -165,6 +172,10 @@ impl Blockchain {
                                 let hash = ScriptHash::from(&mint_tx.script);
                                 filter.contains(&hash) || filter.contains(&mint_tx.to)
                             }
+                            TxVariantV0::CreateAccountTx(create_acc_tx) => {
+                                // TODO HIGH PRIORITY update to handle account ids
+                                todo!()
+                            }
                             TxVariantV0::TransferTx(transfer_tx) => {
                                 if filter.contains(&transfer_tx.from) {
                                     return true;
@@ -204,6 +215,10 @@ impl Blockchain {
                         if &tx.to == addr {
                             bal = bal.checked_add(tx.amount)?;
                         }
+                    }
+                    TxVariantV0::CreateAccountTx(tx) => {
+                        // TODO HIGH PRIORITY update to handle account ids
+                        todo!()
                     }
                     TxVariantV0::TransferTx(tx) => {
                         if &tx.from == addr {
@@ -256,6 +271,8 @@ impl Blockchain {
                     TxVariant::V0(tx) => match tx {
                         TxVariantV0::OwnerTx(_) => false,
                         TxVariantV0::MintTx(_) => false,
+                        // TODO HIGH PRIORITY change this to tx.creator == addr/account
+                        TxVariantV0::CreateAccountTx(tx) => todo!(),
                         TxVariantV0::TransferTx(tx) => &tx.from == addr,
                     },
                 };
@@ -456,6 +473,67 @@ impl Blockchain {
 
                     Ok(vec![])
                 }
+                TxVariantV0::CreateAccountTx(create_account_tx) => {
+                    let account = &create_account_tx.account;
+
+                    {
+                        let perms = &account.permissions;
+                        // Validity rules:
+                        // (1) Immutable accounts must have a threshold set to the immutable bits
+                        // with an empty keys array.
+                        // (2) Threshold count must not exceed the maximum allowed keys (exclusive
+                        // of immutable bits).
+                        // (3) Threshold count must not exceed the length of keys provided.
+                        // (4) Provided keys must not exceed the maximum allowed keys.
+                        if perms.threshold == IMMUTABLE_ACCOUNT_THRESHOLD && !perms.keys.is_empty()
+                        {
+                            return Err(TxErr::InvalidAccountPermissions);
+                        } else if perms.keys.len() > usize::from(MAX_PERM_KEYS)
+                            || usize::from(perms.threshold) > perms.keys.len()
+                        {
+                            return Err(TxErr::InvalidAccountPermissions);
+                        }
+                    }
+
+                    for receipt in additional_receipts {
+                        match &receipt.tx {
+                            TxVariant::V0(tx) => match tx {
+                                TxVariantV0::CreateAccountTx(tx) => {
+                                    if tx.account.id == account.id {
+                                        return Err(TxErr::AccountAlreadyExists);
+                                    }
+                                }
+                                _ => {}
+                            },
+                        }
+                    }
+
+                    if self.indexer.get_account(account.id).is_some() {
+                        return Err(TxErr::AccountAlreadyExists);
+                    }
+
+                    let creator_account = match self.indexer.get_account(create_account_tx.creator)
+                    {
+                        Some(account) => account,
+                        None => return Err(TxErr::AccountNotFound),
+                    };
+
+                    let txid = data.txid();
+                    if !creator_account
+                        .permissions
+                        .verify(txid.as_ref(), &create_account_tx.signature_pairs)
+                    {
+                        return Err(TxErr::ScriptEval(EvalErr::new(
+                            0,
+                            EvalErrType::ScriptRetFalse,
+                        )));
+                    }
+
+                    // TODO HIGH PRIORITY check the fee is twice the required fee paid by the creator
+                    // TODO HIGH PRIORITY check the initial balance is twice the fee
+                    // TODO HIGH PRIORITY check if the creator account has enough funds
+                    todo!();
+                }
                 TxVariantV0::TransferTx(transfer) => {
                     if transfer.memo.len() > MAX_MEMO_BYTE_SIZE {
                         return Err(TxErr::TxTooLarge);
@@ -515,6 +593,10 @@ impl Blockchain {
                 TxVariantV0::MintTx(tx) => {
                     batch.add_token_supply(tx.amount);
                     batch.add_bal(&tx.to, tx.amount);
+                }
+                TxVariantV0::CreateAccountTx(tx) => {
+                    // TODO HIGH PRIORITY subtract fees and balance from the creator account
+                    batch.insert_or_update_account(tx.account.clone());
                 }
                 TxVariantV0::TransferTx(tx) => {
                     batch.sub_bal(&tx.from, tx.fee.checked_add(tx.amount).unwrap());

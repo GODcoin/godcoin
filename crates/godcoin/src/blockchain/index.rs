@@ -2,6 +2,7 @@ use rocksdb::{ColumnFamilyDescriptor, DBRecoveryMode, IteratorMode, Options, DB}
 use std::{collections::HashMap, convert::TryInto, io::Cursor, mem, path::Path, sync::Arc};
 
 use crate::{
+    account::{Account, AccountId},
     asset::Asset,
     crypto::ScriptHash,
     serializer::*,
@@ -9,7 +10,9 @@ use crate::{
 };
 
 const CF_BLOCK_BYTE_POS: &str = "block_byte_pos";
+#[deprecated]
 const CF_ADDR_BAL: &str = "address_balance";
+const CF_ACCOUNT: &str = "account";
 const CF_TX_EXPIRY: &str = "tx_expiry";
 
 const KEY_NET_OWNER: &[u8] = b"network_owner";
@@ -33,6 +36,7 @@ impl Indexer {
         let col_families = vec![
             ColumnFamilyDescriptor::new(CF_BLOCK_BYTE_POS, Options::default()),
             ColumnFamilyDescriptor::new(CF_ADDR_BAL, Options::default()),
+            ColumnFamilyDescriptor::new(CF_ACCOUNT, Options::default()),
             ColumnFamilyDescriptor::new(CF_TX_EXPIRY, Options::default()),
         ];
         let db = DB::open_cf_descriptors(&db_opts, path, col_families).unwrap();
@@ -95,6 +99,14 @@ impl Indexer {
         Some(bal)
     }
 
+    pub fn get_account(&self, id: AccountId) -> Option<Account> {
+        let cf = self.db.cf_handle(CF_ACCOUNT).unwrap();
+        let buf = self.db.get_pinned_cf(cf, id.to_be_bytes()).unwrap()?;
+        let cur = &mut Cursor::<&[u8]>::new(&buf);
+        let account = Account::deserialize(cur).expect("Failed to deserialize indexed account");
+        Some(account)
+    }
+
     pub fn get_token_supply(&self) -> Asset {
         let supply_buf = self.db.get_pinned(KEY_TOKEN_SUPPLY).unwrap();
         match supply_buf {
@@ -113,6 +125,7 @@ pub struct WriteBatch {
     chain_height: Option<u64>,
     owner: Option<TxVariant>,
     balances: HashMap<ScriptHash, Asset>,
+    accounts: HashMap<AccountId, Account>,
     token_supply: Option<Asset>,
 }
 
@@ -124,6 +137,7 @@ impl WriteBatch {
             chain_height: None,
             owner: None,
             balances: HashMap::with_capacity(64),
+            accounts: HashMap::with_capacity(64),
             token_supply: None,
         }
     }
@@ -168,6 +182,16 @@ impl WriteBatch {
             for (addr, bal) in self.balances {
                 buf.push_asset(bal);
                 batch.put_cf(cf, addr.as_ref(), &buf).unwrap();
+                buf.clear();
+            }
+        }
+
+        {
+            let cf = self.indexer.db.cf_handle(CF_ACCOUNT).unwrap();
+            let mut buf = Vec::with_capacity(mem::size_of::<Account>());
+            for (id, account) in self.accounts {
+                account.serialize(&mut buf);
+                batch.put_cf(cf, id.to_be_bytes(), &buf).unwrap();
                 buf.clear();
             }
         }
@@ -245,6 +269,11 @@ impl WriteBatch {
                 self.balances.insert(addr.clone(), bal);
             }
         }
+    }
+
+    #[inline]
+    pub fn insert_or_update_account(&mut self, account: Account) {
+        self.accounts.insert(account.id, account);
     }
 }
 

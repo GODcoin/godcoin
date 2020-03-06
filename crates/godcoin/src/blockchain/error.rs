@@ -20,6 +20,9 @@ pub enum BlockErr {
 pub enum TxErr {
     ScriptEval(EvalErr),
     ScriptHashMismatch,
+    AccountNotFound,
+    AccountAlreadyExists,
+    InvalidAccountPermissions,
     Arithmetic,
     InvalidAmount,
     InvalidFeeAmount,
@@ -39,14 +42,17 @@ impl TxErr {
                 buf.push(err.err as u8);
             }
             TxErr::ScriptHashMismatch => buf.push(0x01),
-            TxErr::Arithmetic => buf.push(0x02),
-            TxErr::InvalidAmount => buf.push(0x03),
-            TxErr::InvalidFeeAmount => buf.push(0x04),
-            TxErr::TooManySignatures => buf.push(0x05),
-            TxErr::TxTooLarge => buf.push(0x06),
-            TxErr::TxProhibited => buf.push(0x07),
-            TxErr::TxExpired => buf.push(0x08),
-            TxErr::TxDupe => buf.push(0x09),
+            TxErr::AccountNotFound => buf.push(0x02),
+            TxErr::AccountAlreadyExists => buf.push(0x03),
+            TxErr::InvalidAccountPermissions => buf.push(0x04),
+            TxErr::Arithmetic => buf.push(0x05),
+            TxErr::InvalidAmount => buf.push(0x06),
+            TxErr::InvalidFeeAmount => buf.push(0x07),
+            TxErr::TooManySignatures => buf.push(0x08),
+            TxErr::TxTooLarge => buf.push(0x09),
+            TxErr::TxProhibited => buf.push(0x0A),
+            TxErr::TxExpired => buf.push(0x0B),
+            TxErr::TxDupe => buf.push(0x0C),
         }
     }
 
@@ -64,14 +70,17 @@ impl TxErr {
                 TxErr::ScriptEval(EvalErr::new(pos, kind))
             }
             0x01 => TxErr::ScriptHashMismatch,
-            0x02 => TxErr::Arithmetic,
-            0x03 => TxErr::InvalidAmount,
-            0x04 => TxErr::InvalidFeeAmount,
-            0x05 => TxErr::TooManySignatures,
-            0x06 => TxErr::TxTooLarge,
-            0x07 => TxErr::TxProhibited,
-            0x08 => TxErr::TxExpired,
-            0x09 => TxErr::TxDupe,
+            0x02 => TxErr::AccountNotFound,
+            0x03 => TxErr::AccountAlreadyExists,
+            0x04 => TxErr::InvalidAccountPermissions,
+            0x05 => TxErr::Arithmetic,
+            0x06 => TxErr::InvalidAmount,
+            0x07 => TxErr::InvalidFeeAmount,
+            0x08 => TxErr::TooManySignatures,
+            0x09 => TxErr::TxTooLarge,
+            0x0A => TxErr::TxProhibited,
+            0x0B => TxErr::TxExpired,
+            0x0C => TxErr::TxDupe,
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
