@@ -4,14 +4,11 @@ use std::{collections::HashMap, convert::TryInto, io::Cursor, mem, path::Path, s
 use crate::{
     account::{Account, AccountId},
     asset::Asset,
-    crypto::ScriptHash,
     serializer::*,
     tx::{TxId, TxVariant, TxVariantV0},
 };
 
 const CF_BLOCK_BYTE_POS: &str = "block_byte_pos";
-#[deprecated]
-const CF_ADDR_BAL: &str = "address_balance";
 const CF_ACCOUNT: &str = "account";
 const CF_TX_EXPIRY: &str = "tx_expiry";
 
@@ -35,7 +32,6 @@ impl Indexer {
 
         let col_families = vec![
             ColumnFamilyDescriptor::new(CF_BLOCK_BYTE_POS, Options::default()),
-            ColumnFamilyDescriptor::new(CF_ADDR_BAL, Options::default()),
             ColumnFamilyDescriptor::new(CF_ACCOUNT, Options::default()),
             ColumnFamilyDescriptor::new(CF_TX_EXPIRY, Options::default()),
         ];
@@ -91,14 +87,6 @@ impl Indexer {
         }
     }
 
-    pub fn get_balance(&self, hash: &ScriptHash) -> Option<Asset> {
-        let cf = self.db.cf_handle(CF_ADDR_BAL).unwrap();
-        let bal_buf = self.db.get_pinned_cf(cf, hash.as_ref()).unwrap()?;
-        let cur = &mut Cursor::<&[u8]>::new(&bal_buf);
-        let bal = cur.take_asset().unwrap();
-        Some(bal)
-    }
-
     pub fn get_account(&self, id: AccountId) -> Option<Account> {
         let cf = self.db.cf_handle(CF_ACCOUNT).unwrap();
         let buf = self.db.get_pinned_cf(cf, id.to_be_bytes()).unwrap()?;
@@ -124,7 +112,6 @@ pub struct WriteBatch {
     block_byte_pos: HashMap<u64, u64>,
     chain_height: Option<u64>,
     owner: Option<TxVariant>,
-    balances: HashMap<ScriptHash, Asset>,
     accounts: HashMap<AccountId, Account>,
     token_supply: Option<Asset>,
 }
@@ -136,7 +123,6 @@ impl WriteBatch {
             block_byte_pos: HashMap::with_capacity(1),
             chain_height: None,
             owner: None,
-            balances: HashMap::with_capacity(64),
             accounts: HashMap::with_capacity(64),
             token_supply: None,
         }
@@ -174,16 +160,6 @@ impl WriteBatch {
                 buf
             };
             batch.put(KEY_TOKEN_SUPPLY, &val).unwrap();
-        }
-
-        {
-            let cf = self.indexer.db.cf_handle(CF_ADDR_BAL).unwrap();
-            let mut buf = Vec::with_capacity(mem::size_of::<Asset>());
-            for (addr, bal) in self.balances {
-                buf.push_asset(bal);
-                batch.put_cf(cf, addr.as_ref(), &buf).unwrap();
-                buf.clear();
-            }
         }
 
         {
@@ -237,36 +213,28 @@ impl WriteBatch {
         }
     }
 
-    pub fn add_bal(&mut self, addr: &ScriptHash, amount: Asset) {
-        match self.balances.get_mut(addr) {
-            Some(bal) => {
-                *bal = bal.checked_add(amount).unwrap();
+    pub fn add_bal(&mut self, id: AccountId, amount: Asset) {
+        match self.accounts.get_mut(&id) {
+            Some(account) => {
+                account.balance = account.balance.checked_add(amount).unwrap();
             }
             None => {
-                let bal = self
-                    .indexer
-                    .get_balance(addr)
-                    .unwrap_or_else(Default::default)
-                    .checked_add(amount)
-                    .unwrap();
-                self.balances.insert(addr.clone(), bal);
+                let mut account = self.indexer.get_account(id).unwrap();
+                account.balance = account.balance.checked_add(amount).unwrap();
+                self.accounts.insert(id, account);
             }
         }
     }
 
-    pub fn sub_bal(&mut self, addr: &ScriptHash, amount: Asset) {
-        match self.balances.get_mut(addr) {
-            Some(bal) => {
-                *bal = bal.checked_sub(amount).unwrap();
+    pub fn sub_bal(&mut self, id: AccountId, amount: Asset) {
+        match self.accounts.get_mut(&id) {
+            Some(account) => {
+                account.balance = account.balance.checked_sub(amount).unwrap();
             }
             None => {
-                let bal = self
-                    .indexer
-                    .get_balance(addr)
-                    .unwrap_or_else(Default::default)
-                    .checked_sub(amount)
-                    .unwrap();
-                self.balances.insert(addr.clone(), bal);
+                let mut account = self.indexer.get_account(id).unwrap();
+                account.balance = account.balance.checked_sub(amount).unwrap();
+                self.accounts.insert(id, account);
             }
         }
     }
