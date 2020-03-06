@@ -19,6 +19,7 @@ pub enum BlockErr {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum TxErr {
     ScriptEval(EvalErr),
+    #[deprecated]
     ScriptHashMismatch,
     AccountNotFound,
     AccountAlreadyExists,
