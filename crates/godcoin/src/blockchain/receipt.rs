@@ -1,5 +1,6 @@
-use super::{index::TxManager, skip_flags, AddressInfo, Blockchain, TxErr};
+use super::{index::TxManager, skip_flags, AccountInfo, Blockchain, TxErr};
 use crate::{
+    account::AccountId,
     asset::Asset,
     constants::TX_MAX_EXPIRY_TIME,
     crypto::ScriptHash,
@@ -27,8 +28,8 @@ impl ReceiptPool {
     }
 
     #[inline]
-    pub fn get_address_info(&self, addr: &ScriptHash) -> Option<AddressInfo> {
-        self.chain.get_address_info(addr, &self.receipts)
+    pub fn get_account_info(&self, id: AccountId) -> Option<AccountInfo> {
+        self.chain.get_account_info(id, &self.receipts)
     }
 
     pub fn push(

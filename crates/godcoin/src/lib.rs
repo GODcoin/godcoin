@@ -26,7 +26,7 @@ pub mod prelude {
     pub use super::account::{Account, AccountId, IMMUTABLE_ACCOUNT_THRESHOLD};
     pub use super::asset::{self, Asset, AssetError, AssetErrorKind};
     pub use super::blockchain::{
-        self, index::IndexStatus, AddressInfo, Block, BlockFilter, BlockHeader, BlockHeaderV0,
+        self, index::IndexStatus, AccountInfo, Block, BlockFilter, BlockHeader, BlockHeaderV0,
         BlockV0, Blockchain, FilteredBlock, LogEntry, Properties, Receipt, ReceiptPool,
     };
     pub use super::crypto::{

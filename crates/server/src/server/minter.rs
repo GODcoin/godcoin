@@ -112,10 +112,10 @@ impl Minter {
             .push(tx.precompute(), blockchain::skip_flags::SKIP_NONE)
     }
 
-    pub fn get_addr_info(&self, addr: &ScriptHash) -> Result<AddressInfo, blockchain::TxErr> {
+    pub fn get_account_info(&self, id: AccountId) -> Result<AccountInfo, blockchain::TxErr> {
         self.receipt_pool
             .lock()
-            .get_address_info(addr)
+            .get_account_info(id)
             .ok_or(blockchain::TxErr::Arithmetic)
     }
 }

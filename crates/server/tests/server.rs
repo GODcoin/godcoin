@@ -509,12 +509,12 @@ fn get_block_range_filter_all() {
 }
 
 #[test]
-fn get_address_info() {
+fn get_account_info() {
     let minter = TestMinter::new();
     let addr = (&minter.genesis_info().script).into();
     let res = minter.send_req(rpc::Request::GetAddressInfo(addr)).unwrap();
 
-    let expected = Ok(rpc::Response::GetAddressInfo(AddressInfo {
+    let expected = Ok(rpc::Response::GetAccountInfo(AccountInfo {
         net_fee: constants::GRAEL_FEE_MIN,
         addr_fee: constants::GRAEL_FEE_MIN
             .checked_mul(constants::GRAEL_FEE_MULT)
@@ -616,7 +616,7 @@ fn response_id_matches_request() {
 
     let expected = Msg {
         id: 123456789,
-        body: Body::Response(rpc::Response::GetAddressInfo(AddressInfo {
+        body: Body::Response(rpc::Response::GetAccountInfo(AccountInfo {
             net_fee: constants::GRAEL_FEE_MIN,
             addr_fee: constants::GRAEL_FEE_MIN
                 .checked_mul(constants::GRAEL_FEE_MULT)

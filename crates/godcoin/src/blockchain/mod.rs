@@ -18,7 +18,7 @@ pub use self::{
 };
 
 use crate::{
-    account::{IMMUTABLE_ACCOUNT_THRESHOLD, MAX_PERM_KEYS},
+    account::{Account, AccountId, IMMUTABLE_ACCOUNT_THRESHOLD, MAX_PERM_KEYS},
     asset::Asset,
     constants::*,
     crypto::*,
@@ -36,13 +36,13 @@ pub struct Properties {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct AddressInfo {
+pub struct AccountInfo {
+    pub account: Account,
     pub net_fee: Asset,
     pub addr_fee: Asset,
-    pub balance: Asset,
 }
 
-impl AddressInfo {
+impl AccountInfo {
     pub fn total_fee(&self) -> Option<Asset> {
         self.net_fee.checked_add(self.addr_fee)
     }
@@ -205,15 +205,15 @@ impl Blockchain {
         }
     }
 
-    pub fn get_balance(&self, addr: &ScriptHash, additional_receipts: &[Receipt]) -> Option<Asset> {
-        let mut bal = self.indexer.get_balance(addr).unwrap_or_default();
+    pub fn get_account(&self, id: AccountId, additional_receipts: &[Receipt]) -> Option<Account> {
+        let mut acc = self.indexer.get_account(id)?;
         for receipt in additional_receipts {
             match &receipt.tx {
                 TxVariant::V0(tx) => match tx {
                     TxVariantV0::OwnerTx(_) => {}
                     TxVariantV0::MintTx(tx) => {
                         if &tx.to == addr {
-                            bal = bal.checked_add(tx.amount)?;
+                            acc.balance = acc.balance.checked_add(tx.amount)?;
                         }
                     }
                     TxVariantV0::CreateAccountTx(tx) => {
@@ -222,14 +222,14 @@ impl Blockchain {
                     }
                     TxVariantV0::TransferTx(tx) => {
                         if &tx.from == addr {
-                            bal = bal.checked_sub(tx.fee)?;
-                            bal = bal.checked_sub(tx.amount)?;
+                            acc.balance =
+                                acc.balance.checked_sub(tx.fee)?.checked_sub(tx.amount)?;
                         }
                         for entry in &receipt.log {
                             match entry {
                                 LogEntry::Transfer(to_addr, amount) => {
                                     if to_addr == addr {
-                                        bal = bal.checked_add(*amount)?;
+                                        acc.balance = acc.balance.checked_add(*amount)?;
                                     }
                                 }
                             }
@@ -239,29 +239,25 @@ impl Blockchain {
             }
         }
 
-        Some(bal)
+        Some(acc)
     }
 
-    pub fn get_address_info(
+    pub fn get_account_info(
         &self,
-        addr: &ScriptHash,
+        id: AccountId,
         additional_receipts: &[Receipt],
-    ) -> Option<AddressInfo> {
+    ) -> Option<AccountInfo> {
+        let account = self.get_account(id, additional_receipts)?;
         let net_fee = self.get_network_fee()?;
-        let addr_fee = self.get_address_fee(addr, additional_receipts)?;
-        let balance = self.get_balance(addr, additional_receipts)?;
-        Some(AddressInfo {
+        let addr_fee = self.get_account_fee(id, additional_receipts)?;
+        Some(AccountInfo {
+            account,
             net_fee,
             addr_fee,
-            balance,
         })
     }
 
-    pub fn get_address_fee(
-        &self,
-        addr: &ScriptHash,
-        additional_receipts: &[Receipt],
-    ) -> Option<Asset> {
+    pub fn get_account_fee(&self, id: AccountId, additional_receipts: &[Receipt]) -> Option<Asset> {
         let mut count = 1;
         let mut delta = 0;
 
@@ -461,11 +457,6 @@ impl Blockchain {
                     }
 
                     // Sanity check to ensure too many new coins can't be minted
-                    self.get_balance(&mint_tx.to, additional_receipts)
-                        .ok_or(TxErr::Arithmetic)?
-                        .checked_add(mint_tx.amount)
-                        .ok_or(TxErr::Arithmetic)?;
-
                     self.indexer
                         .get_token_supply()
                         .checked_add(mint_tx.amount)
@@ -541,8 +532,8 @@ impl Blockchain {
                     check_pos_amt!(transfer.amount);
 
                     let info = self
-                        .get_address_info(&transfer.from, additional_receipts)
-                        .ok_or(TxErr::Arithmetic)?;
+                        .get_account_info(&transfer.from, additional_receipts)
+                        .ok_or(TxErr::AccountNotFound)?;
                     let total_fee = info.total_fee().ok_or(TxErr::Arithmetic)?;
                     if tx.fee < total_fee {
                         return Err(TxErr::InvalidFeeAmount);
@@ -551,6 +542,7 @@ impl Blockchain {
                     }
 
                     let bal = info
+                        .account
                         .balance
                         .checked_sub(transfer.fee)
                         .ok_or(TxErr::Arithmetic)?

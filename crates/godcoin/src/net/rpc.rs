@@ -21,7 +21,7 @@ pub enum RpcType {
     GetBlock = 0x21,
     GetFullBlock = 0x22,
     GetBlockRange = 0x23,
-    GetAddressInfo = 0x24,
+    GetAccountInfo = 0x24,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -35,7 +35,7 @@ pub enum Request {
     GetBlock(u64),           // height
     GetFullBlock(u64),       // height
     GetBlockRange(u64, u64), // min height, max height
-    GetAddressInfo(ScriptHash),
+    GetAccountInfo(ScriptHash),
 }
 
 impl Request {
@@ -74,9 +74,9 @@ impl Request {
                 buf.push_u64(*min_height);
                 buf.push_u64(*max_height);
             }
-            Self::GetAddressInfo(addr) => {
+            Self::GetAccountInfo(addr) => {
                 buf.reserve_exact(33);
-                buf.push(RpcType::GetAddressInfo as u8);
+                buf.push(RpcType::GetAccountInfo as u8);
                 buf.push_scripthash(&addr);
             }
         }
@@ -115,9 +115,9 @@ impl Request {
                 let max_height = cursor.take_u64()?;
                 Ok(Self::GetBlockRange(min_height, max_height))
             }
-            t if t == RpcType::GetAddressInfo as u8 => {
+            t if t == RpcType::GetAccountInfo as u8 => {
                 let addr = ScriptHash(cursor.take_digest()?);
-                Ok(Self::GetAddressInfo(addr))
+                Ok(Self::GetAccountInfo(addr))
             }
             _ => Err(Error::new(
                 io::ErrorKind::InvalidData,
@@ -138,7 +138,7 @@ pub enum Response {
     GetBlock(FilteredBlock),
     GetFullBlock(Arc<Block>),
     GetBlockRange,
-    GetAddressInfo(AddressInfo),
+    GetAccountInfo(AccountInfo),
 }
 
 impl Response {
@@ -182,12 +182,12 @@ impl Response {
                 block.serialize(buf);
             }
             Self::GetBlockRange => buf.push(RpcType::GetBlockRange as u8),
-            Self::GetAddressInfo(info) => {
+            Self::GetAccountInfo(info) => {
                 buf.reserve_exact(1 + (mem::size_of::<Asset>() * 3));
-                buf.push(RpcType::GetAddressInfo as u8);
+                buf.push(RpcType::GetAccountInfo as u8);
+                info.account.serialize(buf);
                 buf.push_asset(info.net_fee);
                 buf.push_asset(info.addr_fee);
-                buf.push_asset(info.balance);
             }
         }
     }
@@ -253,14 +253,14 @@ impl Response {
                 Ok(Self::GetFullBlock(Arc::new(block)))
             }
             t if t == RpcType::GetBlockRange as u8 => Ok(Self::GetBlockRange),
-            t if t == RpcType::GetAddressInfo as u8 => {
+            t if t == RpcType::GetAccountInfo as u8 => {
+                let account = Account::deserialize(cursor)?;
                 let net_fee = cursor.take_asset()?;
                 let addr_fee = cursor.take_asset()?;
-                let balance = cursor.take_asset()?;
-                Ok(Self::GetAddressInfo(AddressInfo {
+                Ok(Self::GetAccountInfo(AccountInfo {
+                    account,
                     net_fee,
                     addr_fee,
-                    balance,
                 }))
             }
             _ => Err(Error::new(
