@@ -129,7 +129,7 @@ impl TxVariant {
         match self {
             TxVariant::V0(var) => match var {
                 TxVariantV0::OwnerTx(tx) => Some(&tx.script),
-                TxVariantV0::MintTx(tx) => Some(&tx.script),
+                TxVariantV0::MintTx(tx) => unimplemented!(),
                 TxVariantV0::CreateAccountTx(tx) => Some(&tx.account.script),
                 TxVariantV0::TransferTx(tx) => Some(&tx.script),
             },
@@ -347,42 +347,38 @@ impl DeserializeTx<OwnerTx> for OwnerTx {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MintTx {
     pub base: Tx,
-    pub to: ScriptHash,
+    pub to: AccountId,
     pub amount: Asset,
     pub attachment: Vec<u8>,
     pub attachment_name: String,
-    pub script: Script,
 }
 
 impl SerializeTx for MintTx {
     fn serialize(&self, v: &mut Vec<u8>) {
         v.push(TxType::Mint as u8);
         self.serialize_header(v);
-        v.push_scripthash(&self.to);
+        v.push_u64(self.to);
         v.push_asset(self.amount);
         v.push_bytes(&self.attachment);
         v.push_bytes(self.attachment_name.as_bytes());
-        v.push_bytes(&self.script);
     }
 }
 
 impl DeserializeTx<MintTx> for MintTx {
     fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<Self> {
-        let to = ScriptHash(cur.take_digest().ok()?);
+        let to = cur.take_u64().ok()?;
         let amount = cur.take_asset().ok()?;
         let attachment = cur.take_bytes().ok()?;
         let attachment_name = {
             let bytes = cur.take_bytes().ok()?;
             String::from_utf8(bytes).ok()?
         };
-        let script = Script::from(cur.take_bytes().ok()?);
         Some(Self {
             base: tx,
             to,
             amount,
             attachment,
             attachment_name,
-            script,
         })
     }
 }
@@ -549,11 +545,10 @@ mod tests {
                 fee: get_asset("123.00000 TEST"),
                 signature_pairs: vec![],
             },
-            to: wallet.0.clone().into(),
+            to: 12345,
             amount: get_asset("10.00000 TEST"),
             attachment: vec![1, 2, 3],
             attachment_name: "abc.pdf".to_owned(),
-            script: wallet.0.into(),
         };
 
         let mut v = vec![];

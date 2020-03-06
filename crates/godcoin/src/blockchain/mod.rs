@@ -168,10 +168,7 @@ impl Blockchain {
                                 let hash = ScriptHash::from(&owner_tx.script);
                                 filter.contains(&owner_tx.wallet) || filter.contains(&hash)
                             }
-                            TxVariantV0::MintTx(mint_tx) => {
-                                let hash = ScriptHash::from(&mint_tx.script);
-                                filter.contains(&hash) || filter.contains(&mint_tx.to)
-                            }
+                            TxVariantV0::MintTx(mint_tx) => filter.contains(&mint_tx.to),
                             TxVariantV0::CreateAccountTx(create_acc_tx) => {
                                 // TODO HIGH PRIORITY update to handle account ids
                                 todo!()
@@ -212,7 +209,7 @@ impl Blockchain {
                 TxVariant::V0(tx) => match tx {
                     TxVariantV0::OwnerTx(_) => {}
                     TxVariantV0::MintTx(tx) => {
-                        if &tx.to == addr {
+                        if tx.to == id {
                             acc.balance = acc.balance.checked_add(tx.amount)?;
                         }
                     }
@@ -584,7 +581,7 @@ impl Blockchain {
                 }
                 TxVariantV0::MintTx(tx) => {
                     batch.add_token_supply(tx.amount);
-                    batch.add_bal(&tx.to, tx.amount);
+                    batch.add_bal(tx.to, tx.amount);
                 }
                 TxVariantV0::CreateAccountTx(tx) => {
                     // TODO HIGH PRIORITY subtract fees and balance from the creator account
