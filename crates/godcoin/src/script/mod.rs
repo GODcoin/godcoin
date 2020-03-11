@@ -65,10 +65,11 @@ impl From<Vec<u8>> for Script {
     }
 }
 
+// TODO Create a default script for accounts
 impl From<PublicKey> for Script {
     fn from(key: PublicKey) -> Self {
         let builder = Builder::new().push(
-            FnBuilder::new(0x00, OpFrame::OpDefine(vec![Arg::ScriptHash, Arg::Asset]))
+            FnBuilder::new(0x00, OpFrame::OpDefine(vec![Arg::AccountId, Arg::Asset]))
                 .push(OpFrame::PubKey(key))
                 .push(OpFrame::OpCheckSigFastFail)
                 .push(OpFrame::OpTransfer)

@@ -8,7 +8,7 @@ use crate::{
     account::{Account, AccountId},
     asset::Asset,
     constants::CHAIN_ID,
-    crypto::{Digest, DoubleSha256, KeyPair, PublicKey, ScriptHash, SigPair},
+    crypto::{Digest, DoubleSha256, KeyPair, PublicKey, SigPair},
     script::Script,
     serializer::*,
 };
@@ -131,7 +131,7 @@ impl TxVariant {
                 TxVariantV0::OwnerTx(tx) => unimplemented!(),
                 TxVariantV0::MintTx(tx) => unimplemented!(),
                 TxVariantV0::CreateAccountTx(tx) => Some(&tx.account.script),
-                TxVariantV0::TransferTx(tx) => Some(&tx.script),
+                TxVariantV0::TransferTx(tx) => unimplemented!(),
             },
         }
     }
@@ -410,8 +410,7 @@ impl DeserializeTx<CreateAccountTx> for CreateAccountTx {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransferTx {
     pub base: Tx,
-    pub from: ScriptHash,
-    pub script: Script,
+    pub from: AccountId,
     pub call_fn: u8,
     pub args: Vec<u8>,
     pub amount: Asset,
@@ -422,8 +421,7 @@ impl SerializeTx for TransferTx {
     fn serialize(&self, v: &mut Vec<u8>) {
         v.push(TxType::Transfer as u8);
         self.serialize_header(v);
-        v.push_scripthash(&self.from);
-        v.push_bytes(&self.script);
+        v.push_u64(self.from);
         v.push(self.call_fn);
         v.push_bytes(&self.args);
         v.push_asset(self.amount);
@@ -433,8 +431,7 @@ impl SerializeTx for TransferTx {
 
 impl DeserializeTx<TransferTx> for TransferTx {
     fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<TransferTx> {
-        let from = ScriptHash(cur.take_digest().ok()?);
-        let script = cur.take_bytes().ok()?.into();
+        let from = cur.take_u64().ok()?;
         let call_fn = cur.take_u8().ok()?;
         let args = cur.take_bytes().ok()?;
         let amount = cur.take_asset().ok()?;
@@ -442,7 +439,6 @@ impl DeserializeTx<TransferTx> for TransferTx {
         Some(TransferTx {
             base: tx,
             from,
-            script,
             call_fn,
             args,
             amount,
@@ -459,10 +455,7 @@ tx_deref!(TransferTx);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        crypto,
-        script::{Arg, Builder, FnBuilder, OpFrame},
-    };
+    use crate::crypto;
 
     macro_rules! cmp_base_tx {
         ($id:ident, $expiry:expr, $fee:expr) => {
@@ -561,7 +554,6 @@ mod tests {
 
     #[test]
     fn serialize_transfer() {
-        let from = crypto::KeyPair::gen();
         let transfer_tx = TransferTx {
             base: Tx {
                 nonce: 123,
@@ -569,10 +561,9 @@ mod tests {
                 fee: get_asset("1.23000 TEST"),
                 signature_pairs: vec![],
             },
-            from: from.0.into(),
-            script: vec![1, 2, 3, 4].into(),
+            from: 12345,
             call_fn: 0,
-            args: vec![],
+            args: vec![0x00, 0xFF, 0x10],
             amount: get_asset("1.00456 TEST"),
             memo: Vec::from(String::from("Hello world!").as_bytes()),
         };
@@ -587,7 +578,6 @@ mod tests {
         cmp_base_tx!(dec, 1234567890, "1.23000 TEST");
         assert_eq!(tx_type, TxType::Transfer);
         assert_eq!(transfer_tx.from, dec.from);
-        assert_eq!(transfer_tx.script, vec![1, 2, 3, 4].into());
         assert_eq!(transfer_tx.amount.to_string(), dec.amount.to_string());
         assert_eq!(transfer_tx.memo, dec.memo);
     }
@@ -660,13 +650,7 @@ mod tests {
                 fee: get_asset("10.00000 TEST"),
                 signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
             },
-            from: KeyPair::gen().0.into(),
-            script: Builder::new()
-                .push(
-                    FnBuilder::new(0, OpFrame::OpDefine(vec![Arg::ScriptHash])).push(OpFrame::True),
-                )
-                .build()
-                .unwrap(),
+            from: 100,
             call_fn: 0,
             args: vec![],
             amount: get_asset("1.00000 TEST"),
@@ -685,14 +669,7 @@ mod tests {
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
-        tx_b.from = KeyPair::gen().0.into();
-        assert_ne!(tx_a, tx_b);
-
-        let mut tx_b = tx_a.clone();
-        tx_b.script = Builder::new()
-            .push(FnBuilder::new(0, OpFrame::OpDefine(vec![Arg::ScriptHash])).push(OpFrame::False))
-            .build()
-            .unwrap();
+        tx_b.from = tx_a.from + 1;
         assert_ne!(tx_a, tx_b);
 
         let mut tx_b = tx_a.clone();
@@ -713,11 +690,7 @@ mod tests {
                 fee: get_asset("10.00000 TEST"),
                 signature_pairs: vec![KeyPair::gen().sign(b"hello world")],
             },
-            from: KeyPair::gen().0.into(),
-            script: Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::True))
-                .build()
-                .unwrap(),
+            from: 100,
             call_fn: 0,
             args: vec![],
             amount: get_asset("1.00000 TEST"),

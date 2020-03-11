@@ -3,7 +3,6 @@ use crate::{
     account::AccountId,
     asset::Asset,
     constants::TX_MAX_EXPIRY_TIME,
-    crypto::ScriptHash,
     serializer::*,
     tx::{TxPrecompData, TxVariant},
 };
@@ -93,15 +92,15 @@ impl Receipt {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LogEntry {
-    Transfer(ScriptHash, Asset), // To address, amount
+    Transfer(AccountId, Asset), // To account, amount
 }
 
 impl LogEntry {
     pub fn serialize(&self, buf: &mut Vec<u8>) {
         match self {
-            Self::Transfer(addr, amt) => {
+            Self::Transfer(acc, amt) => {
                 buf.push(0x00);
-                buf.push_scripthash(&addr);
+                buf.push_u64(*acc);
                 buf.push_asset(*amt);
             }
         }
@@ -111,9 +110,9 @@ impl LogEntry {
         let tag = cur.take_u8().ok()?;
         match tag {
             0x00 => {
-                let addr = ScriptHash(cur.take_digest().ok()?);
+                let acc = cur.take_u64().ok()?;
                 let amt = cur.take_asset().ok()?;
-                Some(Self::Transfer(addr, amt))
+                Some(Self::Transfer(acc, amt))
             }
             _ => None,
         }
@@ -123,12 +122,10 @@ impl LogEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{crypto::KeyPair, script::Script, tx::*};
+    use crate::tx::*;
 
     #[test]
     fn serialize_receipt() {
-        let from_keys = KeyPair::gen();
-        let to_keys = KeyPair::gen();
         let amount = "123.45678 TEST".parse().unwrap();
         let receipt = Receipt {
             tx: TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
@@ -138,14 +135,13 @@ mod tests {
                     fee: Asset::default(),
                     signature_pairs: Vec::new(),
                 },
-                from: from_keys.0.into(),
-                script: Script::new(vec![21, 22, 23, 24]),
+                from: 0xFFFF,
                 call_fn: 0,
                 args: vec![0x01, 0x02, 0x03, 0x04, 0x05],
                 amount,
                 memo: vec![1, 2, 3, 4],
             })),
-            log: vec![LogEntry::Transfer(to_keys.0.into(), amount)],
+            log: vec![LogEntry::Transfer(123456, amount)],
         };
 
         let mut buf = Vec::with_capacity(4096);

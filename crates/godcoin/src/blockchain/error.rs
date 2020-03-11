@@ -19,8 +19,6 @@ pub enum BlockErr {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum TxErr {
     ScriptEval(EvalErr),
-    #[deprecated]
-    ScriptHashMismatch,
     AccountNotFound,
     AccountAlreadyExists,
     InvalidAccountPermissions,
@@ -42,18 +40,17 @@ impl TxErr {
                 buf.push_u32(err.pos);
                 buf.push(err.err as u8);
             }
-            TxErr::ScriptHashMismatch => buf.push(0x01),
-            TxErr::AccountNotFound => buf.push(0x02),
-            TxErr::AccountAlreadyExists => buf.push(0x03),
-            TxErr::InvalidAccountPermissions => buf.push(0x04),
-            TxErr::Arithmetic => buf.push(0x05),
-            TxErr::InvalidAmount => buf.push(0x06),
-            TxErr::InvalidFeeAmount => buf.push(0x07),
-            TxErr::TooManySignatures => buf.push(0x08),
-            TxErr::TxTooLarge => buf.push(0x09),
-            TxErr::TxProhibited => buf.push(0x0A),
-            TxErr::TxExpired => buf.push(0x0B),
-            TxErr::TxDupe => buf.push(0x0C),
+            TxErr::AccountNotFound => buf.push(0x01),
+            TxErr::AccountAlreadyExists => buf.push(0x02),
+            TxErr::InvalidAccountPermissions => buf.push(0x03),
+            TxErr::Arithmetic => buf.push(0x04),
+            TxErr::InvalidAmount => buf.push(0x05),
+            TxErr::InvalidFeeAmount => buf.push(0x06),
+            TxErr::TooManySignatures => buf.push(0x07),
+            TxErr::TxTooLarge => buf.push(0x08),
+            TxErr::TxProhibited => buf.push(0x09),
+            TxErr::TxExpired => buf.push(0x0A),
+            TxErr::TxDupe => buf.push(0x0B),
         }
     }
 
@@ -70,18 +67,17 @@ impl TxErr {
                 })?;
                 TxErr::ScriptEval(EvalErr::new(pos, kind))
             }
-            0x01 => TxErr::ScriptHashMismatch,
-            0x02 => TxErr::AccountNotFound,
-            0x03 => TxErr::AccountAlreadyExists,
-            0x04 => TxErr::InvalidAccountPermissions,
-            0x05 => TxErr::Arithmetic,
-            0x06 => TxErr::InvalidAmount,
-            0x07 => TxErr::InvalidFeeAmount,
-            0x08 => TxErr::TooManySignatures,
-            0x09 => TxErr::TxTooLarge,
-            0x0A => TxErr::TxProhibited,
-            0x0B => TxErr::TxExpired,
-            0x0C => TxErr::TxDupe,
+            0x01 => TxErr::AccountNotFound,
+            0x02 => TxErr::AccountAlreadyExists,
+            0x03 => TxErr::InvalidAccountPermissions,
+            0x04 => TxErr::Arithmetic,
+            0x05 => TxErr::InvalidAmount,
+            0x06 => TxErr::InvalidFeeAmount,
+            0x07 => TxErr::TooManySignatures,
+            0x08 => TxErr::TxTooLarge,
+            0x09 => TxErr::TxProhibited,
+            0x0A => TxErr::TxExpired,
+            0x0B => TxErr::TxDupe,
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,

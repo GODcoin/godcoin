@@ -176,8 +176,8 @@ impl Blockchain {
                                 }
                                 for entry in &receipt.log {
                                     match entry {
-                                        LogEntry::Transfer(to_addr, _) => {
-                                            if filter.contains(to_addr) {
+                                        LogEntry::Transfer(to_acc, _) => {
+                                            if filter.contains(to_acc) {
                                                 return true;
                                             }
                                         }
@@ -215,14 +215,14 @@ impl Blockchain {
                         todo!()
                     }
                     TxVariantV0::TransferTx(tx) => {
-                        if &tx.from == addr {
+                        if tx.from == id {
                             acc.balance =
                                 acc.balance.checked_sub(tx.fee)?.checked_sub(tx.amount)?;
                         }
                         for entry in &receipt.log {
                             match entry {
-                                LogEntry::Transfer(to_addr, amount) => {
-                                    if to_addr == addr {
+                                LogEntry::Transfer(to_acc, amount) => {
+                                    if *to_acc == id {
                                         acc.balance = acc.balance.checked_add(*amount)?;
                                     }
                                 }
@@ -263,7 +263,7 @@ impl Blockchain {
                         TxVariantV0::MintTx(_) => false,
                         // TODO HIGH PRIORITY change this to tx.creator == addr/account
                         TxVariantV0::CreateAccountTx(tx) => todo!(),
-                        TxVariantV0::TransferTx(tx) => &tx.from == addr,
+                        TxVariantV0::TransferTx(tx) => tx.from == id,
                     },
                 };
                 if has_match {
@@ -528,13 +528,11 @@ impl Blockchain {
                     check_pos_amt!(transfer.amount);
 
                     let info = self
-                        .get_account_info(&transfer.from, additional_receipts)
+                        .get_account_info(transfer.from, additional_receipts)
                         .ok_or(TxErr::AccountNotFound)?;
                     let total_fee = info.total_fee().ok_or(TxErr::Arithmetic)?;
                     if tx.fee < total_fee {
                         return Err(TxErr::InvalidFeeAmount);
-                    } else if transfer.from != (&transfer.script).into() {
-                        return Err(TxErr::ScriptHashMismatch);
                     }
 
                     let bal = info
@@ -546,7 +544,7 @@ impl Blockchain {
                         .ok_or(TxErr::Arithmetic)?;
                     check_suf_bal!(bal);
 
-                    let log = ScriptEngine::new(data, &transfer.script)
+                    let log = ScriptEngine::new(data, &info.account.script)
                         .eval()
                         .map_err(|e| TxErr::ScriptEval(e))?;
                     Ok(log)
@@ -587,10 +585,10 @@ impl Blockchain {
                     batch.insert_or_update_account(tx.account.clone());
                 }
                 TxVariantV0::TransferTx(tx) => {
-                    batch.sub_bal(&tx.from, tx.fee.checked_add(tx.amount).unwrap());
+                    batch.sub_bal(tx.from, tx.fee.checked_add(tx.amount).unwrap());
                     for entry in &receipt.log {
                         match entry {
-                            LogEntry::Transfer(to_addr, amount) => batch.add_bal(to_addr, *amount),
+                            LogEntry::Transfer(to_acc, amount) => batch.add_bal(*to_acc, *amount),
                         }
                     }
                 }
@@ -693,7 +691,7 @@ impl GenesisBlockInfo {
             )
             .push(
                 // Standard transfer function
-                FnBuilder::new(1, OpFrame::OpDefine(vec![Arg::ScriptHash, Arg::Asset]))
+                FnBuilder::new(1, OpFrame::OpDefine(vec![Arg::AccountId, Arg::Asset]))
                     .push(OpFrame::AccountId(owner_acc))
                     .push(OpFrame::OpCheckPermsFastFail)
                     .push(OpFrame::OpTransfer)

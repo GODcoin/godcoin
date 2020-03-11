@@ -109,7 +109,7 @@ impl From<bool> for OpFrame {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Arg {
-    ScriptHash = 0x00,
+    AccountId = 0x00,
     Asset = 0x01,
 }
 
@@ -118,7 +118,7 @@ impl TryFrom<u8> for Arg {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         Ok(match value {
-            t if t == Self::ScriptHash as u8 => Self::ScriptHash,
+            t if t == Self::AccountId as u8 => Self::AccountId,
             t if t == Self::Asset as u8 => Self::Asset,
             _ => return Err(()),
         })
