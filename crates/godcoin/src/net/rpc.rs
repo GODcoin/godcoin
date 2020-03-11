@@ -35,7 +35,7 @@ pub enum Request {
     GetBlock(u64),           // height
     GetFullBlock(u64),       // height
     GetBlockRange(u64, u64), // min height, max height
-    GetAccountInfo(ScriptHash),
+    GetAccountInfo(AccountId),
 }
 
 impl Request {
@@ -47,11 +47,11 @@ impl Request {
                 tx.serialize(buf);
             }
             Self::SetBlockFilter(filter) => {
-                buf.reserve_exact(1 + (filter.len() * mem::size_of::<ScriptHash>()));
+                buf.reserve_exact(1 + (filter.len() * mem::size_of::<AccountId>()));
                 buf.push(RpcType::SetBlockFilter as u8);
                 buf.push(filter.len() as u8);
-                for addr in filter {
-                    buf.push_scripthash(&addr);
+                for acc in filter {
+                    buf.push_u64(*acc);
                 }
             }
             Self::ClearBlockFilter => buf.push(RpcType::ClearBlockFilter as u8),
@@ -74,10 +74,10 @@ impl Request {
                 buf.push_u64(*min_height);
                 buf.push_u64(*max_height);
             }
-            Self::GetAccountInfo(addr) => {
+            Self::GetAccountInfo(acc) => {
                 buf.reserve_exact(33);
                 buf.push(RpcType::GetAccountInfo as u8);
-                buf.push_scripthash(&addr);
+                buf.push_u64(*acc);
             }
         }
     }
@@ -91,10 +91,10 @@ impl Request {
                 Ok(Self::Broadcast(tx))
             }
             t if t == RpcType::SetBlockFilter as u8 => {
-                let addr_len = usize::from(cursor.take_u8()?);
+                let acc_len = usize::from(cursor.take_u8()?);
                 let mut filter = BlockFilter::new();
-                for _ in 0..addr_len {
-                    filter.insert(ScriptHash(cursor.take_digest()?));
+                for _ in 0..acc_len {
+                    filter.insert(cursor.take_u64()?);
                 }
                 Ok(Self::SetBlockFilter(filter))
             }
@@ -116,8 +116,8 @@ impl Request {
                 Ok(Self::GetBlockRange(min_height, max_height))
             }
             t if t == RpcType::GetAccountInfo as u8 => {
-                let addr = ScriptHash(cursor.take_digest()?);
-                Ok(Self::GetAccountInfo(addr))
+                let acc = cursor.take_u64()?;
+                Ok(Self::GetAccountInfo(acc))
             }
             _ => Err(Error::new(
                 io::ErrorKind::InvalidData,

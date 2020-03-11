@@ -1,13 +1,14 @@
 use crate::{
+    account::AccountId,
     asset::Asset,
     blockchain::Receipt,
-    crypto::{double_sha256, Digest, DoubleSha256, KeyPair, ScriptHash, SigPair},
+    crypto::{double_sha256, Digest, DoubleSha256, KeyPair, SigPair},
     serializer::*,
     tx::TxVariant,
 };
 use std::{collections::BTreeSet, io::Cursor, ops::Deref, sync::Arc};
 
-pub type BlockFilter = BTreeSet<ScriptHash>;
+pub type BlockFilter = BTreeSet<AccountId>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FilteredBlock {
