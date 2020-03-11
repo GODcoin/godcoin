@@ -7,6 +7,7 @@ pub const SCRIPT_HASH_BYTES: usize = DIGEST_BYTES;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(transparent)]
+#[deprecated]
 pub struct ScriptHash(pub Digest);
 
 impl ScriptHash {
