@@ -128,7 +128,7 @@ impl TxVariant {
     pub fn script(&self) -> Option<&Script> {
         match self {
             TxVariant::V0(var) => match var {
-                TxVariantV0::OwnerTx(tx) => Some(&tx.script),
+                TxVariantV0::OwnerTx(tx) => unimplemented!(),
                 TxVariantV0::MintTx(tx) => unimplemented!(),
                 TxVariantV0::CreateAccountTx(tx) => Some(&tx.account.script),
                 TxVariantV0::TransferTx(tx) => Some(&tx.script),
@@ -315,9 +315,8 @@ impl Tx {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OwnerTx {
     pub base: Tx,
-    pub minter: PublicKey,  // Key that signs blocks
-    pub wallet: ScriptHash, // Hot wallet that receives rewards
-    pub script: Script,     // Hot wallet previous script
+    pub minter: PublicKey, // Key that signs blocks
+    pub wallet: AccountId, // Hot wallet that receives rewards
 }
 
 impl SerializeTx for OwnerTx {
@@ -325,21 +324,18 @@ impl SerializeTx for OwnerTx {
         v.push(TxType::Owner as u8);
         self.serialize_header(v);
         v.push_pub_key(&self.minter);
-        v.push_scripthash(&self.wallet);
-        v.push_bytes(&self.script);
+        v.push_u64(self.wallet);
     }
 }
 
 impl DeserializeTx<OwnerTx> for OwnerTx {
     fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<OwnerTx> {
         let minter = cur.take_pub_key().ok()?;
-        let wallet = ScriptHash(cur.take_digest().ok()?);
-        let script = cur.take_bytes().ok()?.into();
+        let wallet = cur.take_u64().ok()?;
         Some(OwnerTx {
             base: tx,
             minter,
             wallet,
-            script,
         })
     }
 }
@@ -487,8 +483,7 @@ mod tests {
                 signature_pairs: vec![],
             },
             minter: minter.0.clone(),
-            wallet: wallet.0.clone().into(),
-            script: wallet.0.clone().into(),
+            wallet: 0xFF,
         }));
 
         owner_tx.append_sign(&minter);
@@ -517,8 +512,7 @@ mod tests {
                 signature_pairs: vec![],
             },
             minter: minter.0,
-            wallet: wallet.0.clone().into(),
-            script: wallet.0.into(),
+            wallet: 123,
         };
 
         let mut v = vec![];

@@ -91,7 +91,7 @@ impl Indexer {
         let cf = self.db.cf_handle(CF_ACCOUNT).unwrap();
         let buf = self.db.get_pinned_cf(cf, id.to_be_bytes()).unwrap()?;
         let cur = &mut Cursor::<&[u8]>::new(&buf);
-        let account = Account::deserialize(cur).expect("Failed to deserialize indexed account");
+        let account = Account::deserialize(cur).expect("failed to deserialize indexed account");
         Some(account)
     }
 

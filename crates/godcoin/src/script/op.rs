@@ -1,4 +1,5 @@
 use crate::{
+    account::AccountId,
     asset::Asset,
     crypto::{PublicKey, ScriptHash},
 };
@@ -16,9 +17,10 @@ pub enum Operand {
     // Push value
     PushFalse = 0x20,
     PushTrue = 0x21,
-    PushPubKey = 0x22,
-    PushScriptHash = 0x23,
-    PushAsset = 0x24,
+    PushAccountId = 0x22,
+    PushAsset = 0x23,
+    PushPubKey = 0x24,
+    PushScriptHash = 0x25,
 
     // Arithmetic
     OpLoadAmt = 0x30,
@@ -36,10 +38,14 @@ pub enum Operand {
     OpReturn = 0x44,
 
     // Crypto
-    OpCheckSig = 0x50,
-    OpCheckSigFastFail = 0x51,
-    OpCheckMultiSig = 0x52,
-    OpCheckMultiSigFastFail = 0x53,
+    OpCheckPerms = 0x50,
+    OpCheckPermsFastFail = 0x51,
+    OpCheckMultiPerms = 0x52,
+    OpCheckMultiPermsFastFail = 0x53,
+    OpCheckSig = 0x54,
+    OpCheckSigFastFail = 0x55,
+    OpCheckMultiSig = 0x56,
+    OpCheckMultiSigFastFail = 0x57,
 }
 
 impl From<Operand> for u8 {
@@ -59,9 +65,10 @@ pub enum OpFrame {
     // Push value
     False,
     True,
+    AccountId(AccountId),
+    Asset(Asset),
     PubKey(PublicKey),
     ScriptHash(ScriptHash),
-    Asset(Asset),
 
     // Arithmetic
     OpLoadAmt,
@@ -79,6 +86,10 @@ pub enum OpFrame {
     OpReturn,
 
     // Crypto
+    OpCheckPerms,
+    OpCheckPermsFastFail,
+    OpCheckMultiPerms(u8, u8), // M of N: minimum threshold to number of accounts
+    OpCheckMultiPermsFastFail(u8, u8),
     OpCheckSig,
     OpCheckSigFastFail,
     OpCheckMultiSig(u8, u8), // M of N: minimum threshold to number of keys

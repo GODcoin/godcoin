@@ -18,7 +18,7 @@ pub use self::{
 };
 
 use crate::{
-    account::{Account, AccountId, IMMUTABLE_ACCOUNT_THRESHOLD, MAX_PERM_KEYS},
+    account::{Account, AccountId, Permissions, IMMUTABLE_ACCOUNT_THRESHOLD, MAX_PERM_KEYS},
     asset::Asset,
     constants::*,
     crypto::*,
@@ -164,10 +164,7 @@ impl Blockchain {
                 } else {
                     block.receipts().iter().any(|receipt| match &receipt.tx {
                         TxVariant::V0(tx) => match tx {
-                            TxVariantV0::OwnerTx(owner_tx) => {
-                                let hash = ScriptHash::from(&owner_tx.script);
-                                filter.contains(&owner_tx.wallet) || filter.contains(&hash)
-                            }
+                            TxVariantV0::OwnerTx(owner_tx) => filter.contains(&owner_tx.wallet),
                             TxVariantV0::MintTx(mint_tx) => filter.contains(&mint_tx.to),
                             TxVariantV0::CreateAccountTx(create_acc_tx) => {
                                 // TODO HIGH PRIORITY update to handle account ids
@@ -417,19 +414,23 @@ impl Blockchain {
             TxVariant::V0(tx) => match tx {
                 TxVariantV0::OwnerTx(new_owner) => {
                     check_zero_fee!(tx.fee);
-
-                    match self.get_owner() {
-                        TxVariant::V0(tx) => match tx {
-                            TxVariantV0::OwnerTx(owner) => {
-                                if owner.wallet != (&new_owner.script).into() {
-                                    return Err(TxErr::ScriptHashMismatch);
-                                }
-                            }
-                            _ => unreachable!(),
-                        },
+                    if self
+                        .get_account(new_owner.wallet, additional_receipts)
+                        .is_none()
+                    {
+                        return Err(TxErr::AccountNotFound);
                     }
 
-                    if let Err(e) = ScriptEngine::new(data, &new_owner.script).eval() {
+                    let prev_owner = match self.get_owner() {
+                        TxVariant::V0(tx) => match tx {
+                            TxVariantV0::OwnerTx(owner) => self
+                                .get_account(owner.wallet, additional_receipts)
+                                .expect("failed to get owner wallet account"),
+                            _ => unreachable!(),
+                        },
+                    };
+
+                    if let Err(e) = ScriptEngine::new(data, &prev_owner.script).eval() {
                         return Err(TxErr::ScriptEval(e));
                     }
                     Ok(vec![])
@@ -438,18 +439,16 @@ impl Blockchain {
                     check_zero_fee!(tx.fee);
                     check_pos_amt!(mint_tx.amount);
 
-                    match self.get_owner() {
+                    let owner = match self.get_owner() {
                         TxVariant::V0(tx) => match tx {
-                            TxVariantV0::OwnerTx(owner) => {
-                                if owner.wallet != (&mint_tx.script).into() {
-                                    return Err(TxErr::ScriptHashMismatch);
-                                }
-                            }
+                            TxVariantV0::OwnerTx(owner) => self
+                                .get_account(owner.wallet, additional_receipts)
+                                .expect("failed to get owner wallet account"),
                             _ => unreachable!(),
                         },
-                    }
+                    };
 
-                    if let Err(e) = ScriptEngine::new(data, &mint_tx.script).eval() {
+                    if let Err(e) = ScriptEngine::new(data, &owner.script).eval() {
                         return Err(TxErr::ScriptEval(e));
                     }
 
@@ -566,7 +565,7 @@ impl Blockchain {
         };
         match owner_tx {
             TxVariant::V0(TxVariantV0::OwnerTx(tx)) => {
-                batch.add_bal(&tx.wallet, block.rewards());
+                batch.add_bal(tx.wallet, block.rewards());
             }
             _ => panic!("expected owner transaction"),
         };
@@ -600,8 +599,29 @@ impl Blockchain {
     }
 
     pub fn create_genesis_block(&self, minter_key: KeyPair) -> GenesisBlockInfo {
-        let info = GenesisBlockInfo::new(minter_key);
+        let owner_id: AccountId = 0;
+        let info = GenesisBlockInfo::new(minter_key, owner_id);
         let timestamp = crate::get_epoch_time();
+
+        let create_account_tx = TxVariant::V0(TxVariantV0::CreateAccountTx(CreateAccountTx {
+            base: Tx {
+                nonce: 0,
+                expiry: timestamp + 1,
+                fee: Asset::default(),
+                signature_pairs: Vec::new(),
+            },
+            account: Account {
+                id: owner_id,
+                balance: Asset::default(),
+                script: info.script,
+                permissions: Permissions {
+                    threshold: 2,
+                    keys: info.wallet_keys.iter().map(|kp| kp.0).collect(),
+                },
+                destroyed: false,
+            },
+            creator: 0,
+        }));
 
         let owner_tx = TxVariant::V0(TxVariantV0::OwnerTx(OwnerTx {
             base: Tx {
@@ -611,17 +631,19 @@ impl Blockchain {
                 signature_pairs: Vec::new(),
             },
             minter: info.minter_key.0.clone(),
-            wallet: (&info.script).into(),
-            script: Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::False))
-                .build()
-                .unwrap(),
+            wallet: owner_id,
         }));
 
-        let receipts = vec![Receipt {
-            tx: owner_tx.clone(),
-            log: vec![],
-        }];
+        let receipts = vec![
+            Receipt {
+                tx: create_account_tx,
+                log: vec![],
+            },
+            Receipt {
+                tx: owner_tx.clone(),
+                log: vec![],
+            },
+        ];
         let receipt_root = calc_receipt_root(&receipts);
 
         let mut block = Block::V0(BlockV0 {
@@ -654,7 +676,7 @@ pub struct GenesisBlockInfo {
 }
 
 impl GenesisBlockInfo {
-    pub fn new(minter_key: KeyPair) -> Self {
+    pub fn new(minter_key: KeyPair, owner_acc: AccountId) -> Self {
         let wallet_keys = [
             KeyPair::gen(),
             KeyPair::gen(),
@@ -666,20 +688,14 @@ impl GenesisBlockInfo {
             .push(
                 // The purpose of this function is to be used for minting transactions
                 FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::PubKey(wallet_keys[0].0.clone()))
-                    .push(OpFrame::PubKey(wallet_keys[1].0.clone()))
-                    .push(OpFrame::PubKey(wallet_keys[2].0.clone()))
-                    .push(OpFrame::PubKey(wallet_keys[3].0.clone()))
-                    .push(OpFrame::OpCheckMultiSig(2, 4)),
+                    .push(OpFrame::AccountId(owner_acc))
+                    .push(OpFrame::OpCheckPerms),
             )
             .push(
                 // Standard transfer function
                 FnBuilder::new(1, OpFrame::OpDefine(vec![Arg::ScriptHash, Arg::Asset]))
-                    .push(OpFrame::PubKey(wallet_keys[0].0.clone()))
-                    .push(OpFrame::PubKey(wallet_keys[1].0.clone()))
-                    .push(OpFrame::PubKey(wallet_keys[2].0.clone()))
-                    .push(OpFrame::PubKey(wallet_keys[3].0.clone()))
-                    .push(OpFrame::OpCheckMultiSigFastFail(2, 4))
+                    .push(OpFrame::AccountId(owner_acc))
+                    .push(OpFrame::OpCheckPermsFastFail)
                     .push(OpFrame::OpTransfer)
                     .push(OpFrame::True),
             )
