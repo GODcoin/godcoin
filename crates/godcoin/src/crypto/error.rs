@@ -1,4 +1,7 @@
-use std::error::Error;
+use std::{
+    error::Error,
+    fmt::{self, Display},
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum WifErrorKind {
@@ -19,23 +22,16 @@ impl WifError {
     }
 }
 
-impl Error for WifError {
-    fn description(&self) -> &str {
-        match self.kind {
+impl Error for WifError {}
+
+impl Display for WifError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let desc = match self.kind {
             WifErrorKind::InvalidLen => "invalid length",
             WifErrorKind::InvalidPrefix => "invalid prefix",
             WifErrorKind::InvalidChecksum => "invalid checksum",
             WifErrorKind::InvalidBs58Encoding => "invalid bs58 encoding",
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn Error> {
-        None
-    }
-}
-
-impl std::fmt::Display for WifError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.description())
+        };
+        write!(f, "{}", desc)
     }
 }

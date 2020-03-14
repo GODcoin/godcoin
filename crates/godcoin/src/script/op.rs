@@ -1,8 +1,4 @@
-use crate::{
-    account::AccountId,
-    asset::Asset,
-    crypto::{PublicKey, ScriptHash},
-};
+use crate::{account::AccountId, asset::Asset};
 use std::convert::TryFrom;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

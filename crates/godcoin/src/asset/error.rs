@@ -1,4 +1,7 @@
-use std::error::Error;
+use std::{
+    error::Error,
+    fmt::{self, Display},
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum AssetErrorKind {
@@ -13,23 +16,16 @@ pub struct AssetError {
     pub kind: AssetErrorKind,
 }
 
-impl Error for AssetError {
-    fn description(&self) -> &str {
-        match self.kind {
+impl Error for AssetError {}
+
+impl Display for AssetError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let desc = match self.kind {
             AssetErrorKind::InvalidFormat => "invalid format",
             AssetErrorKind::InvalidAssetType => "invalid asset type",
             AssetErrorKind::InvalidAmount => "invalid amount",
             AssetErrorKind::StrTooLarge => "asset string too large",
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn Error> {
-        None
-    }
-}
-
-impl std::fmt::Display for AssetError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.description())
+        };
+        write!(f, "{}", desc)
     }
 }

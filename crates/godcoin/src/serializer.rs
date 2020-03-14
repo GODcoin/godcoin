@@ -1,11 +1,12 @@
+use crate::{
+    asset::Asset,
+    crypto::{Digest, PublicKey, SigPair, Signature},
+};
 use sodiumoxide::crypto::{
     hash::sha256::DIGESTBYTES,
     sign::{PUBLICKEYBYTES, SIGNATUREBYTES},
 };
 use std::io::{Cursor, Error, ErrorKind, Read};
-
-use crate::asset::Asset;
-use crate::crypto::{Digest, PublicKey, ScriptHash, SigPair, Signature};
 
 macro_rules! read_exact_bytes {
     ($self:expr, $len:expr) => {{
@@ -36,7 +37,6 @@ pub trait BufWrite {
     fn push_u64(&mut self, value: u64);
     fn push_bytes(&mut self, value: &[u8]);
     fn push_digest(&mut self, value: &Digest);
-    fn push_scripthash(&mut self, value: &ScriptHash);
     fn push_pub_key(&mut self, value: &PublicKey);
     fn push_sig_pair(&mut self, value: &SigPair);
     fn push_asset(&mut self, value: Asset);
@@ -94,10 +94,6 @@ impl BufWrite for Vec<u8> {
         self.extend_from_slice(value.as_ref());
     }
 
-    fn push_scripthash(&mut self, value: &ScriptHash) {
-        self.extend_from_slice(value.as_ref());
-    }
-
     fn push_pub_key(&mut self, value: &PublicKey) {
         self.extend_from_slice(value.as_ref());
     }
@@ -121,7 +117,6 @@ pub trait BufRead {
     fn take_u64(&mut self) -> Result<u64, Error>;
     fn take_bytes(&mut self) -> Result<Vec<u8>, Error>;
     fn take_digest(&mut self) -> Result<Digest, Error>;
-    fn take_scripthash(&mut self) -> Result<ScriptHash, Error>;
     fn take_pub_key(&mut self) -> Result<PublicKey, Error>;
     fn take_sig_pair(&mut self) -> Result<SigPair, Error>;
     fn take_asset(&mut self) -> Result<Asset, Error>;
@@ -190,11 +185,6 @@ impl<T: AsRef<[u8]> + Read> BufRead for Cursor<T> {
     fn take_digest(&mut self) -> Result<Digest, Error> {
         let buf = read_exact_bytes!(self, DIGESTBYTES);
         Digest::from_slice(&buf).ok_or_else(|| Error::new(ErrorKind::Other, "digest length"))
-    }
-
-    fn take_scripthash(&mut self) -> Result<ScriptHash, Error> {
-        let digest = self.take_digest()?;
-        Ok(ScriptHash(digest))
     }
 
     fn take_pub_key(&mut self) -> Result<PublicKey, Error> {
@@ -299,14 +289,12 @@ mod tests {
 
     #[test]
     fn var_i64_serialization_overflow() {
-        use std::error;
-
         let buf = vec![
             0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0,
         ];
         let mut c = Cursor::<&[u8]>::new(&buf);
         assert_eq!(
-            error::Error::description(&c.take_var_i64().unwrap_err()),
+            c.take_var_i64().unwrap_err().to_string(),
             "overflow taking varint"
         );
     }

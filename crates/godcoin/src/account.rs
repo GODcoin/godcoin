@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn verify_sigs_fail_with_none_matching() {
-        let (account, keys) = create_dummy_account(2, 4);
+        let (account, _) = create_dummy_account(2, 4);
         let mut sigs = Vec::new();
         let data = "Hello world".as_bytes();
         sigs.push(KeyPair::gen().sign(data));

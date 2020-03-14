@@ -6,12 +6,10 @@ use std::{
 
 pub mod error;
 pub mod key;
-pub mod script_hash;
 pub mod sigpair;
 
 pub use self::error::*;
 pub use self::key::*;
-pub use self::script_hash::*;
 pub use self::sigpair::*;
 
 pub const DIGEST_BYTES: usize = sha256::DIGESTBYTES;
