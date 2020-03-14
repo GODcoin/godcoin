@@ -9,7 +9,6 @@ use crate::{
     asset::Asset,
     constants::CHAIN_ID,
     crypto::{Digest, DoubleSha256, KeyPair, PublicKey, SigPair},
-    script::Script,
     serializer::*,
 };
 
@@ -121,18 +120,6 @@ impl TxVariant {
     pub fn sigs_mut(&mut self) -> &mut Vec<SigPair> {
         match self {
             TxVariant::V0(tx) => &mut tx.signature_pairs,
-        }
-    }
-
-    #[inline]
-    pub fn script(&self) -> Option<&Script> {
-        match self {
-            TxVariant::V0(var) => match var {
-                TxVariantV0::OwnerTx(tx) => unimplemented!(),
-                TxVariantV0::MintTx(tx) => unimplemented!(),
-                TxVariantV0::CreateAccountTx(tx) => Some(&tx.account.script),
-                TxVariantV0::TransferTx(tx) => unimplemented!(),
-            },
         }
     }
 
@@ -496,7 +483,6 @@ mod tests {
     #[test]
     fn serialize_owner() {
         let minter = crypto::KeyPair::gen();
-        let wallet = crypto::KeyPair::gen();
         let owner_tx = OwnerTx {
             base: Tx {
                 nonce: 123,
@@ -524,7 +510,6 @@ mod tests {
 
     #[test]
     fn serialize_mint() {
-        let wallet = crypto::KeyPair::gen();
         let mint_tx = MintTx {
             base: Tx {
                 nonce: 123,

@@ -405,10 +405,6 @@ impl Blockchain {
 
         if tx.sigs().len() > MAX_TX_SIGNATURES {
             return Err(TxErr::TooManySignatures);
-        } else if let Some(script) = tx.script() {
-            if script.len() > MAX_SCRIPT_BYTE_SIZE {
-                return Err(TxErr::TxTooLarge);
-            }
         }
 
         match tx {
@@ -465,6 +461,10 @@ impl Blockchain {
                 }
                 TxVariantV0::CreateAccountTx(create_account_tx) => {
                     let account = &create_account_tx.account;
+
+                    if account.script.len() > MAX_SCRIPT_BYTE_SIZE {
+                        return Err(TxErr::TxTooLarge);
+                    }
 
                     {
                         let perms = &account.permissions;
