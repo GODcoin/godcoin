@@ -71,6 +71,7 @@ impl Blockchain {
         self.store.lock().is_empty()
     }
 
+    #[inline]
     pub fn indexer(&self) -> Arc<Indexer> {
         Arc::clone(&self.indexer)
     }
@@ -430,7 +431,9 @@ impl Blockchain {
                         },
                     };
 
-                    if let Err(e) = ScriptEngine::new(data, &prev_owner.script).eval() {
+                    if let Err(e) =
+                        ScriptEngine::new(data, &prev_owner.script, self.indexer()).eval()
+                    {
                         return Err(TxErr::ScriptEval(e));
                     }
                     Ok(vec![])
@@ -448,7 +451,7 @@ impl Blockchain {
                         },
                     };
 
-                    if let Err(e) = ScriptEngine::new(data, &owner.script).eval() {
+                    if let Err(e) = ScriptEngine::new(data, &owner.script, self.indexer()).eval() {
                         return Err(TxErr::ScriptEval(e));
                     }
 
@@ -506,9 +509,10 @@ impl Blockchain {
                     };
 
                     let txid = data.txid();
-                    if !creator_account
+                    if creator_account
                         .permissions
                         .verify(txid.as_ref(), &create_account_tx.signature_pairs)
+                        .is_err()
                     {
                         return Err(TxErr::ScriptEval(EvalErr::new(
                             0,
@@ -544,7 +548,7 @@ impl Blockchain {
                         .ok_or(TxErr::Arithmetic)?;
                     check_suf_bal!(bal);
 
-                    let log = ScriptEngine::new(data, &info.account.script)
+                    let log = ScriptEngine::new(data, &info.account.script, self.indexer())
                         .eval()
                         .map_err(|e| TxErr::ScriptEval(e))?;
                     Ok(log)
@@ -611,10 +615,10 @@ impl Blockchain {
             account: Account {
                 id: owner_id,
                 balance: Asset::default(),
-                script: info.script,
+                script: info.script.clone(),
                 permissions: Permissions {
                     threshold: 2,
-                    keys: info.wallet_keys.iter().map(|kp| kp.0).collect(),
+                    keys: info.wallet_keys.iter().map(|kp| kp.0.clone()).collect(),
                 },
                 destroyed: false,
             },

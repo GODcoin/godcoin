@@ -1,5 +1,5 @@
 use super::*;
-use crate::crypto::{double_sha256, Digest, PublicKey, DIGEST_BYTES};
+use crate::crypto::{double_sha256, Digest, DIGEST_BYTES};
 use crate::script::Script;
 
 pub const SCRIPT_HASH_BUF_PREFIX: u8 = 0x03;
@@ -75,46 +75,8 @@ impl From<Script> for ScriptHash {
     }
 }
 
-impl From<PublicKey> for ScriptHash {
-    fn from(key: PublicKey) -> ScriptHash {
-        let script: Script = key.into();
-        script.into()
-    }
-}
-
-impl From<&PublicKey> for ScriptHash {
-    fn from(key: &PublicKey) -> ScriptHash {
-        let script: Script = key.clone().into();
-        script.into()
-    }
-}
-
 impl AsRef<[u8]> for ScriptHash {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn import_p2sh_from_wif() {
-        let kp =
-            PrivateKey::from_wif("3GAD3otqozDorfu1iDpMQJ1gzWp8PRFEjVHZivZdedKW3i3KtM").unwrap();
-
-        // When script opcode constants change, the P2SH WIF may change when converting a public key to the default
-        // built script provided by the library. We can print out if the address changed below.
-        println!(
-            "Derived script hash WIF: {}",
-            ScriptHash::from(Script::from(kp.0.clone())).to_wif()
-        );
-
-        // Use an explicit derived WIF to notify us if the default script changes.
-        let wif = "GOD81DgKeYytTvud5yEGu8vzHYt9iMmAoe1vHapGhpXpdSjKsBW9V";
-        let hash = ScriptHash::from_wif(&wif).unwrap();
-        assert_eq!(hash.to_wif().as_ref(), wif);
-        assert_eq!(ScriptHash::from(Script::from(kp.0)), hash);
     }
 }

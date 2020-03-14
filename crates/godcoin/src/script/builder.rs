@@ -96,13 +96,9 @@ impl FnBuilder {
             // Push value
             OpFrame::False => self.byte_code.push(Operand::PushFalse.into()),
             OpFrame::True => self.byte_code.push(Operand::PushTrue.into()),
-            OpFrame::PubKey(key) => {
-                self.byte_code.push(Operand::PushPubKey.into());
-                self.byte_code.extend(key.as_ref());
-            }
-            OpFrame::ScriptHash(hash) => {
-                self.byte_code.push(Operand::PushScriptHash.into());
-                self.byte_code.extend(hash.as_ref());
+            OpFrame::AccountId(acc) => {
+                self.byte_code.push(Operand::PushAccountId.into());
+                self.byte_code.extend(&acc.to_be_bytes());
             }
             OpFrame::Asset(asset) => {
                 self.byte_code.push(Operand::PushAsset.into());
@@ -122,16 +118,16 @@ impl FnBuilder {
             OpFrame::OpEndIf => self.byte_code.push(Operand::OpEndIf.into()),
             OpFrame::OpReturn => self.byte_code.push(Operand::OpReturn.into()),
             // Crypto
-            OpFrame::OpCheckSig => self.byte_code.push(Operand::OpCheckSig.into()),
-            OpFrame::OpCheckSigFastFail => {
-                self.byte_code.push(Operand::OpCheckSigFastFail.into());
+            OpFrame::OpCheckPerms => self.byte_code.push(Operand::OpCheckPerms.into()),
+            OpFrame::OpCheckPermsFastFail => {
+                self.byte_code.push(Operand::OpCheckPermsFastFail.into());
             }
-            OpFrame::OpCheckMultiSig(threshold, key_count) => {
+            OpFrame::OpCheckMultiPerms(threshold, key_count) => {
                 self.byte_code
-                    .extend(&[Operand::OpCheckMultiSig.into(), threshold, key_count]);
+                    .extend(&[Operand::OpCheckMultiPerms.into(), threshold, key_count]);
             }
-            OpFrame::OpCheckMultiSigFastFail(threshold, key_count) => self.byte_code.extend(&[
-                Operand::OpCheckMultiSigFastFail.into(),
+            OpFrame::OpCheckMultiPermsFastFail(threshold, key_count) => self.byte_code.extend(&[
+                Operand::OpCheckMultiPermsFastFail.into(),
                 threshold,
                 key_count,
             ]),

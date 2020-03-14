@@ -1,11 +1,10 @@
-use sodiumoxide::crypto::sign;
-use std::{borrow::Cow, convert::TryInto, mem};
+use std::{borrow::Cow, convert::TryInto, mem, sync::Arc};
 
 use super::{stack::*, *};
 use crate::{
+    account::{AccountId, PermsSigVerifyErr},
     asset::Asset,
-    blockchain::LogEntry,
-    crypto::{PublicKey, ScriptHash, SCRIPT_HASH_BYTES},
+    blockchain::{Indexer, LogEntry},
     serializer::BufRead,
     tx::{TxPrecompData, TxVariant, TxVariantV0},
 };
@@ -19,25 +18,25 @@ macro_rules! map_err_type {
 #[derive(Debug)]
 pub struct ScriptEngine<'a> {
     script: Cow<'a, Script>,
-    data: Cow<'a, TxPrecompData<'a>>,
+    tx_data: Cow<'a, TxPrecompData<'a>>,
+    indexer: Arc<Indexer>,
     pos: usize,
     stack: Stack,
-    sig_pair_pos: usize,
     log: Vec<LogEntry>,
     total_amt: Asset,
     remaining_amt: Asset,
 }
 
 impl<'a> ScriptEngine<'a> {
-    pub fn new<T, S>(data: T, script: S) -> Self
+    pub fn new<T, S>(tx_data: T, script: S, indexer: Arc<Indexer>) -> Self
     where
         T: Into<Cow<'a, TxPrecompData<'a>>>,
         S: Into<Cow<'a, Script>>,
     {
+        let tx_data = tx_data.into();
         let script = script.into();
-        let data = data.into();
 
-        let total_amt = match data.tx() {
+        let total_amt = match tx_data.tx() {
             TxVariant::V0(tx) => match tx {
                 TxVariantV0::TransferTx(tx) => tx.amount,
                 _ => Asset::default(),
@@ -46,10 +45,10 @@ impl<'a> ScriptEngine<'a> {
 
         Self {
             script,
-            data,
+            tx_data,
+            indexer,
             pos: 0,
             stack: Stack::new(),
-            sig_pair_pos: 0,
             log: vec![],
             total_amt,
             remaining_amt: total_amt,
@@ -60,7 +59,7 @@ impl<'a> ScriptEngine<'a> {
     /// will be aborted and return an error.
     #[inline]
     pub fn eval(mut self) -> Result<Vec<LogEntry>, EvalErr> {
-        let fn_id = match self.data.tx() {
+        let fn_id = match self.tx_data.tx() {
             TxVariant::V0(tx) => match tx {
                 TxVariantV0::OwnerTx(_) => 0,
                 TxVariantV0::MintTx(_) => 0,
@@ -72,16 +71,6 @@ impl<'a> ScriptEngine<'a> {
     }
 
     fn call_fn(&mut self, fn_id: u8) -> Result<Vec<LogEntry>, EvalErr> {
-        macro_rules! pop_multisig_keys {
-            ($self:expr, $key_count:expr) => {{
-                let mut vec = Vec::with_capacity(usize::from($key_count));
-                for _ in 0..$key_count {
-                    vec.push(map_err_type!($self, $self.stack.pop_pubkey())?);
-                }
-                vec
-            }};
-        }
-
         self.pos = self
             .script
             .get_fn_ptr(fn_id)
@@ -92,7 +81,7 @@ impl<'a> ScriptEngine<'a> {
             let op = self.consume_op()?;
             match op {
                 Some(OpFrame::OpDefine(args)) => {
-                    let mut bin_args = Cursor::<&[u8]>::new(match self.data.tx() {
+                    let mut bin_args = Cursor::<&[u8]>::new(match self.tx_data.tx() {
                         TxVariant::V0(tx) => match tx {
                             TxVariantV0::OwnerTx(_) => &[],
                             TxVariantV0::MintTx(_) => &[],
@@ -102,12 +91,11 @@ impl<'a> ScriptEngine<'a> {
                     });
                     for arg in args {
                         match arg {
-                            Arg::ScriptHash => {
-                                let digest = bin_args
-                                    .take_digest()
+                            Arg::AccountId => {
+                                let id = bin_args
+                                    .take_u64()
                                     .map_err(|_| self.new_err(EvalErrType::ArgDeserialization))?;
-                                let hash = ScriptHash(digest);
-                                map_err_type!(self, self.stack.push(OpFrame::ScriptHash(hash)))?;
+                                map_err_type!(self, self.stack.push(OpFrame::AccountId(id)))?;
                             }
                             Arg::Asset => {
                                 let asset = bin_args
@@ -134,7 +122,7 @@ impl<'a> ScriptEngine<'a> {
                 // Events
                 OpFrame::OpTransfer => {
                     let amt = map_err_type!(self, self.stack.pop_asset())?;
-                    let transfer_to = map_err_type!(self, self.stack.pop_scripthash())?;
+                    let transfer_to = map_err_type!(self, self.stack.pop_account_id())?;
                     if amt.amount < 0 || amt > self.remaining_amt {
                         return Err(self.new_err(EvalErrType::InvalidAmount));
                     }
@@ -147,8 +135,7 @@ impl<'a> ScriptEngine<'a> {
                 // Push
                 OpFrame::False => map_err_type!(self, self.stack.push(op))?,
                 OpFrame::True => map_err_type!(self, self.stack.push(op))?,
-                OpFrame::PubKey(_) => map_err_type!(self, self.stack.push(op))?,
-                OpFrame::ScriptHash(_) => map_err_type!(self, self.stack.push(op))?,
+                OpFrame::AccountId(_) => map_err_type!(self, self.stack.push(op))?,
                 OpFrame::Asset(_) => map_err_type!(self, self.stack.push(op))?,
                 // Arithmetic
                 OpFrame::OpLoadAmt => {
@@ -244,25 +231,37 @@ impl<'a> ScriptEngine<'a> {
                     break;
                 }
                 // Crypto
-                OpFrame::OpCheckSig => {
-                    let key = map_err_type!(self, self.stack.pop_pubkey())?;
-                    let success = self.check_sigs(1, &[key]);
+                OpFrame::OpCheckPerms => {
+                    let acc = map_err_type!(self, self.stack.pop_account_id())?;
+                    let success = self.check_acc_perms(1, &[acc])?;
                     map_err_type!(self, self.stack.push(success))?;
                 }
-                OpFrame::OpCheckSigFastFail => {
-                    let key = map_err_type!(self, self.stack.pop_pubkey())?;
-                    if !self.check_sigs(1, &[key]) {
+                OpFrame::OpCheckPermsFastFail => {
+                    let acc = map_err_type!(self, self.stack.pop_account_id())?;
+                    if !self.check_acc_perms(1, &[acc])? {
                         return Err(self.new_err(EvalErrType::ScriptRetFalse));
                     }
                 }
-                OpFrame::OpCheckMultiSig(threshold, key_count) => {
-                    let keys = pop_multisig_keys!(self, key_count);
-                    let success = self.check_sigs(usize::from(threshold), &keys);
+                OpFrame::OpCheckMultiPerms(threshold, acc_count) => {
+                    let accs = {
+                        let mut accs = Vec::with_capacity(usize::from(acc_count));
+                        for _ in 0..acc_count {
+                            accs.push(map_err_type!(self, self.stack.pop_account_id())?);
+                        }
+                        accs
+                    };
+                    let success = self.check_acc_perms(usize::from(threshold), &accs)?;
                     map_err_type!(self, self.stack.push(success))?;
                 }
-                OpFrame::OpCheckMultiSigFastFail(threshold, key_count) => {
-                    let keys = pop_multisig_keys!(self, key_count);
-                    if !self.check_sigs(usize::from(threshold), &keys) {
+                OpFrame::OpCheckMultiPermsFastFail(threshold, acc_count) => {
+                    let accs = {
+                        let mut accs = Vec::with_capacity(usize::from(acc_count));
+                        for _ in 0..acc_count {
+                            accs.push(map_err_type!(self, self.stack.pop_account_id())?);
+                        }
+                        accs
+                    };
+                    if !self.check_acc_perms(usize::from(threshold), &accs)? {
                         return Err(self.new_err(EvalErrType::ScriptRetFalse));
                     }
                 }
@@ -279,7 +278,7 @@ impl<'a> ScriptEngine<'a> {
             mem::swap(&mut self.log, &mut log);
             if self.remaining_amt.amount > 0 {
                 // Send back funds to the original sender
-                match self.data.tx() {
+                match self.tx_data.tx() {
                     TxVariant::V0(tx) => match tx {
                         TxVariantV0::TransferTx(tx) => {
                             log.push(LogEntry::Transfer(tx.from.clone(), self.remaining_amt))
@@ -364,15 +363,10 @@ impl<'a> ScriptEngine<'a> {
             // Push value
             o if o == Operand::PushFalse as u8 => Ok(Some(OpFrame::False)),
             o if o == Operand::PushTrue as u8 => Ok(Some(OpFrame::True)),
-            o if o == Operand::PushPubKey as u8 => {
-                let slice = read_bytes!(self, sign::PUBLICKEYBYTES);
-                let key = PublicKey::from_slice(slice).unwrap();
-                Ok(Some(OpFrame::PubKey(key)))
-            }
-            o if o == Operand::PushScriptHash as u8 => {
-                let slice = read_bytes!(self, SCRIPT_HASH_BYTES);
-                let hash = ScriptHash::from_slice(slice).unwrap();
-                Ok(Some(OpFrame::ScriptHash(hash)))
+            o if o == Operand::PushAccountId as u8 => {
+                let slice = read_bytes!(self, mem::size_of::<u64>());
+                let id = u64::from_be_bytes(slice.try_into().unwrap());
+                Ok(Some(OpFrame::AccountId(id)))
             }
             o if o == Operand::PushAsset as u8 => {
                 let slice = read_bytes!(self, mem::size_of::<i64>());
@@ -394,54 +388,59 @@ impl<'a> ScriptEngine<'a> {
             o if o == Operand::OpEndIf as u8 => Ok(Some(OpFrame::OpEndIf)),
             o if o == Operand::OpReturn as u8 => Ok(Some(OpFrame::OpReturn)),
             // Crypto
-            o if o == Operand::OpCheckSig as u8 => Ok(Some(OpFrame::OpCheckSig)),
-            o if o == Operand::OpCheckSigFastFail as u8 => Ok(Some(OpFrame::OpCheckSigFastFail)),
-            o if o == Operand::OpCheckMultiSig as u8 => {
-                let threshold = read_bytes!(self);
-                let key_count = read_bytes!(self);
-                Ok(Some(OpFrame::OpCheckMultiSig(threshold, key_count)))
+            o if o == Operand::OpCheckPerms as u8 => Ok(Some(OpFrame::OpCheckPerms)),
+            o if o == Operand::OpCheckPermsFastFail as u8 => {
+                Ok(Some(OpFrame::OpCheckPermsFastFail))
             }
-            o if o == Operand::OpCheckMultiSigFastFail as u8 => {
+            o if o == Operand::OpCheckMultiPerms as u8 => {
                 let threshold = read_bytes!(self);
-                let key_count = read_bytes!(self);
-                Ok(Some(OpFrame::OpCheckMultiSigFastFail(threshold, key_count)))
+                let acc_count = read_bytes!(self);
+                Ok(Some(OpFrame::OpCheckMultiPerms(threshold, acc_count)))
+            }
+            o if o == Operand::OpCheckMultiPermsFastFail as u8 => {
+                let threshold = read_bytes!(self);
+                let acc_count = read_bytes!(self);
+                Ok(Some(OpFrame::OpCheckMultiPermsFastFail(
+                    threshold, acc_count,
+                )))
             }
             _ => Err(self.new_err(EvalErrType::UnknownOp)),
         }
     }
 
-    fn check_sigs(&mut self, threshold: usize, keys: &[PublicKey]) -> bool {
+    fn check_acc_perms(&mut self, threshold: usize, accs: &[AccountId]) -> Result<bool, EvalErr> {
         if threshold == 0 {
-            return true;
-        } else if threshold > keys.len() || self.sig_pair_pos >= self.data.tx().sigs().len() {
-            return false;
+            return Ok(true);
+        } else if threshold > accs.len() {
+            return Ok(false);
         }
 
-        let txid = self.data.txid().as_ref();
-        let sigs = self.data.tx().sigs();
+        let txid = self.tx_data.txid().as_ref();
+        let sigs = self.tx_data.tx().sigs();
 
         let mut valid_threshold = 0;
-        let mut key_iter = keys.iter();
-        'pair_loop: for pair in &sigs[self.sig_pair_pos..] {
-            loop {
-                match key_iter.next() {
-                    Some(key) => {
-                        if key == &pair.pub_key {
-                            self.sig_pair_pos += 1;
-                            if key.verify(txid, &pair.signature) {
-                                valid_threshold += 1;
-                                continue 'pair_loop;
-                            } else {
-                                return false;
-                            }
-                        }
-                    }
-                    None => break 'pair_loop,
+        for acc_id in accs {
+            let account = self
+                .indexer
+                .get_account(*acc_id)
+                .ok_or_else(|| self.new_err(EvalErrType::AccountNotFound))?;
+            match account.permissions.verify(txid, sigs) {
+                Ok(_) => {}
+                Err(PermsSigVerifyErr::InsufficientThreshold)
+                | Err(PermsSigVerifyErr::InvalidSig) => {
+                    println!("HRRRM!!"); // DEBUG
+                    return Ok(false);
+                }
+                Err(PermsSigVerifyErr::NoMatchingSigs) => {
+                    println!("NO MATCHING SIGS ON ACCOUNT: {}", acc_id); // DEBUG
+                    continue;
                 }
             }
+            valid_threshold += 1;
         }
 
-        valid_threshold >= threshold
+        println!("OK: {} {}", valid_threshold, threshold); // DEBUG
+        Ok(valid_threshold >= threshold)
     }
 
     fn new_err(&self, err: EvalErrType) -> EvalErr {
@@ -452,9 +451,14 @@ impl<'a> ScriptEngine<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::{KeyPair, SigPair, Signature};
-    use crate::tx::{TransferTx, Tx, TxVariant, TxVariantV0};
-    use std::ops::DerefMut;
+    use crate::{
+        account::{Account, Permissions},
+        blockchain::WriteBatch,
+        crypto::{KeyPair, SigPair, Signature},
+        tx::{TransferTx, Tx, TxVariant, TxVariantV0},
+    };
+    use sodiumoxide::{crypto::sign, randombytes};
+    use std::{env, fs, ops::DerefMut, path::PathBuf};
 
     #[test]
     fn true_only_script() {
@@ -526,7 +530,7 @@ mod tests {
 
             let script = Builder::new()
                 .push(
-                    FnBuilder::new(0, OpFrame::OpDefine(vec![Arg::ScriptHash]))
+                    FnBuilder::new(0, OpFrame::OpDefine(vec![Arg::AccountId]))
                         .push(OpFrame::OpLoadRemAmt)
                         .push(OpFrame::OpTransfer)
                         .push(OpFrame::OpLoadRemAmt)
@@ -535,8 +539,8 @@ mod tests {
                 .build()
                 .unwrap();
             let mut args = vec![];
-            args.push_scripthash(&engine.to_addr.clone().0.into());
-            let tx = engine.new_transfer_tx(script.clone(), 0, args, &[]);
+            args.push_u64(engine.to_acc.id);
+            let tx = engine.new_transfer_tx(0, args, &[]);
 
             engine.init_direct(tx, script)
         };
@@ -678,23 +682,20 @@ mod tests {
     fn call_args_pushed_on_stack() {
         let script = Builder::new()
             .push(
-                FnBuilder::new(1, OpFrame::OpDefine(vec![Arg::ScriptHash, Arg::Asset]))
+                FnBuilder::new(1, OpFrame::OpDefine(vec![Arg::AccountId, Arg::Asset]))
                     .push(OpFrame::True),
             )
             .build()
             .unwrap();
-        let hash = {
-            let pub_key = KeyPair::gen().0;
-            ScriptHash::from(Script::from(pub_key))
-        };
+        let id = 1234;
         let asset = "1234.00000 TEST".parse().unwrap();
 
         let mut engine = {
             let mut args = vec![];
-            args.push_scripthash(&hash);
+            args.push_u64(id);
             args.push_asset(asset);
             let engine = TestEngine::new();
-            let tx = engine.new_transfer_tx(script.clone(), 1, args, &[]);
+            let tx = engine.new_transfer_tx(1, args, &[]);
             engine.init_direct(tx, script)
         };
         assert_eq!(
@@ -702,7 +703,7 @@ mod tests {
             vec![engine.from_transfer_entry("10.00000 TEST")]
         );
         assert_eq!(engine.stack.pop_asset(), Ok(asset));
-        assert_eq!(engine.stack.pop_scripthash(), Ok(hash));
+        assert_eq!(engine.stack.pop_account_id(), Ok(id));
         assert!(engine.stack.is_empty());
     }
 
@@ -716,21 +717,21 @@ mod tests {
 
         {
             let engine = TestEngine::new();
-            let tx = engine.new_transfer_tx(script.clone(), 0, vec![], &[]);
+            let tx = engine.new_transfer_tx(0, vec![], &[]);
             let engine = engine.init_direct(tx, script.clone());
             assert_eq!(engine.eval().unwrap_err().err, EvalErrType::ScriptRetFalse);
         }
         {
             let engine = TestEngine::new();
-            let tx = engine.new_transfer_tx(script.clone(), 1, vec![], &[]);
+            let tx = engine.new_transfer_tx(1, vec![], &[]);
             let engine = engine.init_direct(tx, script.clone());
             let from_entry = engine.from_transfer_entry("10.00000 TEST");
             assert_eq!(engine.eval().unwrap(), vec![from_entry]);
         }
         {
             let engine = TestEngine::new();
-            let tx = engine.new_transfer_tx(script.clone(), 2, vec![], &[]);
-            let engine = engine.init_direct(tx, script.clone());
+            let tx = engine.new_transfer_tx(2, vec![], &[]);
+            let engine = engine.init_direct(tx, script);
             assert_eq!(engine.eval().unwrap_err().err, EvalErrType::UnknownFn);
         }
     }
@@ -895,11 +896,11 @@ mod tests {
 
     #[test]
     fn fail_invalid_stack_on_return() {
-        let key = KeyPair::gen().0;
-        let mut engine = TestEngine::new().init(
-            Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::PubKey(key))),
-        );
+        let mut engine =
+            TestEngine::new()
+                .init(Builder::new().push(
+                    FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::AccountId(0)),
+                ));
         assert_eq!(
             engine.call_fn(0).unwrap_err().err,
             EvalErrType::InvalidItemOnStack
@@ -908,11 +909,10 @@ mod tests {
 
     #[test]
     fn fail_invalid_if_cmp() {
-        let key = KeyPair::gen().0;
         let mut engine = TestEngine::new().init(
             Builder::new().push(
                 FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::PubKey(key))
+                    .push(OpFrame::AccountId(0))
                     .push(OpFrame::OpIf),
             ),
         );
@@ -950,16 +950,14 @@ mod tests {
     }
 
     #[test]
-    fn checksig_pubkey_into_script_converted() {
-        let key = KeyPair::gen();
-        let script: Script = key.0.clone().into();
-
+    fn checkperms_default_account_script() {
         let engine = {
             let engine = TestEngine::new();
             let mut args = vec![];
-            args.push_scripthash(&engine.to_addr.clone().0.into());
+            args.push_u64(engine.to_acc.id);
             args.push_asset("10.00000 TEST".parse().unwrap());
-            let tx = engine.new_transfer_tx(script.clone(), 0, args, &[key]);
+            let tx = engine.new_transfer_tx(0, args, &[engine.from_key.clone()]);
+            let script = engine.from_acc.script.clone();
             engine.init_direct(tx, script)
         };
         let from_entry = engine.to_transfer_entry("10.00000 TEST");
@@ -967,63 +965,82 @@ mod tests {
     }
 
     #[test]
-    fn checksig() {
-        let key = KeyPair::gen();
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key.clone()],
-            Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::PubKey(key.0.clone()))
-                    .push(OpFrame::OpCheckSig),
-            ),
-        );
-        assert_eq!(
-            engine.call_fn(0).unwrap(),
-            vec![engine.from_transfer_entry("10.00000 TEST")]
-        );
+    fn checkperms() {
+        {
+            // Pass verification with the from key and checking the from account perms
+            let engine = TestEngine::new();
+            let from_key = engine.from_key.clone();
+            let from_acc_id = engine.from_acc.id;
+            let mut engine = engine.init_with_signers(
+                &[from_key],
+                Builder::new().push(
+                    FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                        .push(OpFrame::AccountId(from_acc_id))
+                        .push(OpFrame::OpCheckPerms),
+                ),
+            );
+            assert_eq!(
+                engine.call_fn(0).unwrap(),
+                vec![engine.from_transfer_entry("10.00000 TEST")]
+            );
+        }
 
-        let other = KeyPair::gen();
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key.clone()],
-            Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::PubKey(other.0.clone()))
-                    .push(OpFrame::OpCheckSig),
-            ),
-        );
-        assert_eq!(
-            engine.call_fn(0).unwrap_err().err,
-            EvalErrType::ScriptRetFalse
-        );
+        {
+            // Fail verification as the "to" account ID being checked doesn't meet the signatory
+            // threshold
+            let engine = TestEngine::new();
+            let from_key = engine.from_key.clone();
+            let to_acc_id = engine.to_acc.id;
+            let mut engine = engine.init_with_signers(
+                &[from_key],
+                Builder::new().push(
+                    FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                        .push(OpFrame::AccountId(to_acc_id))
+                        .push(OpFrame::OpCheckPerms),
+                ),
+            );
+            assert_eq!(
+                engine.call_fn(0).unwrap_err().err,
+                EvalErrType::ScriptRetFalse
+            );
+        }
 
-        let mut engine = TestEngine::new().init_with_signers(
-            &[other],
-            Builder::new().push(
-                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::PubKey(key.0))
-                    .push(OpFrame::OpCheckSig),
-            ),
-        );
-        assert_eq!(
-            engine.call_fn(0).unwrap_err().err,
-            EvalErrType::ScriptRetFalse
-        );
+        {
+            // Fail verification as the "from" account ID being checked doesn't meet the signatory
+            // threshold
+            let engine = TestEngine::new();
+            let to_key = engine.to_key.clone();
+            let from_acc_id = engine.from_acc.id;
+            let mut engine = engine.init_with_signers(
+                &[to_key],
+                Builder::new().push(
+                    FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                        .push(OpFrame::AccountId(from_acc_id))
+                        .push(OpFrame::OpCheckPerms),
+                ),
+            );
+            assert_eq!(
+                engine.call_fn(0).unwrap_err().err,
+                EvalErrType::ScriptRetFalse
+            );
+        }
     }
 
     #[test]
-    fn checkmultisig_equal_threshold() {
-        let key_1 = KeyPair::gen();
-        let key_2 = KeyPair::gen();
-        let key_3 = KeyPair::gen();
+    fn checkmultiperms_equal_threshold() {
+        let engine = TestEngine::new();
+        let (acc_1, key_1) = engine.create_account(11);
+        let (acc_2, _) = engine.create_account(12);
+        let (acc_3, key_3) = engine.create_account(13);
 
-        let mut engine = TestEngine::new().init_with_signers(
+        let mut engine = engine.init_with_signers(
             &[key_3.clone(), key_1.clone()],
             Builder::new().push(
                 FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::PubKey(key_1.0.clone()))
-                    .push(OpFrame::PubKey(key_2.0.clone()))
-                    .push(OpFrame::PubKey(key_3.0.clone()))
-                    .push(OpFrame::OpCheckMultiSig(2, 3)),
+                    .push(OpFrame::AccountId(acc_1.id))
+                    .push(OpFrame::AccountId(acc_2.id))
+                    .push(OpFrame::AccountId(acc_3.id))
+                    .push(OpFrame::OpCheckMultiPerms(2, 3)),
             ),
         );
         assert_eq!(
@@ -1033,19 +1050,20 @@ mod tests {
     }
 
     #[test]
-    fn checkmultisig_threshold_unmet() {
-        let key_1 = KeyPair::gen();
-        let key_2 = KeyPair::gen();
-        let key_3 = KeyPair::gen();
+    fn checkmultiperms_threshold_unmet() {
+        let engine = TestEngine::new();
+        let (acc_1, key_1) = engine.create_account(11);
+        let (acc_2, _) = engine.create_account(12);
+        let (acc_3, key_3) = engine.create_account(13);
 
-        let mut engine = TestEngine::new().init_with_signers(
+        let mut engine = engine.init_with_signers(
             &[key_3.clone(), key_1.clone()],
             Builder::new().push(
                 FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::PubKey(key_1.0.clone()))
-                    .push(OpFrame::PubKey(key_2.0.clone()))
-                    .push(OpFrame::PubKey(key_3.0.clone()))
-                    .push(OpFrame::OpCheckMultiSig(3, 3)),
+                    .push(OpFrame::AccountId(acc_1.id))
+                    .push(OpFrame::AccountId(acc_2.id))
+                    .push(OpFrame::AccountId(acc_3.id))
+                    .push(OpFrame::OpCheckMultiPerms(3, 3)),
             ),
         );
         assert_eq!(
@@ -1055,74 +1073,87 @@ mod tests {
     }
 
     #[test]
-    fn checkmultisig_return_true() {
-        let key_1 = KeyPair::gen();
-        let key_2 = KeyPair::gen();
-        let key_3 = KeyPair::gen();
+    fn checkmultiperms_return_true() {
+        let (acc_1, acc_2, acc_3) = (11, 12, 13);
         let builder = Builder::new().push(
             FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                .push(OpFrame::PubKey(key_1.0.clone()))
-                .push(OpFrame::PubKey(key_2.0.clone()))
-                .push(OpFrame::PubKey(key_3.0.clone()))
-                .push(OpFrame::OpCheckMultiSig(2, 3)),
+                .push(OpFrame::AccountId(acc_1))
+                .push(OpFrame::AccountId(acc_2))
+                .push(OpFrame::AccountId(acc_3))
+                .push(OpFrame::OpCheckMultiPerms(2, 3)),
         );
 
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_2.clone(), key_1.clone(), KeyPair::gen()],
-            builder.clone(),
-        );
-        // This should evaluate to true as the threshold is met, and the trailing signatures are
-        // ignored by the script engine.
-        assert_eq!(
-            engine.call_fn(0).unwrap(),
-            vec![engine.from_transfer_entry("10.00000 TEST")]
-        );
+        {
+            let engine = TestEngine::new();
+            let (_, key_1) = engine.create_account(acc_1);
+            let (_, key_2) = engine.create_account(acc_2);
+            let (_, _) = engine.create_account(acc_3);
 
-        let mut engine =
-            TestEngine::new().init_with_signers(&[key_3.clone(), key_1.clone()], builder.clone());
-        assert_eq!(
-            engine.call_fn(0).unwrap(),
-            vec![engine.from_transfer_entry("10.00000 TEST")]
-        );
+            let mut engine = engine.init_with_signers(
+                &[key_1.clone(), key_2.clone(), KeyPair::gen()],
+                builder.clone(),
+            );
+            // This should evaluate to true as the threshold is met, and the trailing signatures are
+            // ignored by the script engine.
+            assert_eq!(
+                engine.call_fn(0).unwrap(),
+                vec![engine.from_transfer_entry("10.00000 TEST")]
+            );
+        }
 
-        let mut engine =
-            TestEngine::new().init_with_signers(&[key_2.clone(), key_1.clone()], builder.clone());
-        assert_eq!(
-            engine.call_fn(0).unwrap(),
-            vec![engine.from_transfer_entry("10.00000 TEST")]
-        );
+        {
+            let engine = TestEngine::new();
+            let (_, key_1) = engine.create_account(11);
+            let (_, _) = engine.create_account(12);
+            let (_, key_3) = engine.create_account(13);
+            let mut engine = engine.init_with_signers(&[key_3, key_1], builder.clone());
+            assert_eq!(
+                engine.call_fn(0).unwrap(),
+                vec![engine.from_transfer_entry("10.00000 TEST")]
+            );
+        }
 
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_3.clone(), key_2.clone(), key_1.clone()],
-            builder.clone(),
-        );
-        assert_eq!(
-            engine.call_fn(0).unwrap(),
-            vec![engine.from_transfer_entry("10.00000 TEST")]
-        );
+        {
+            let engine = TestEngine::new();
+            let (_, key_1) = engine.create_account(11);
+            let (_, key_2) = engine.create_account(12);
+            let (_, _) = engine.create_account(13);
+            let mut engine = engine.init_with_signers(&[key_2, key_1], builder.clone());
+            assert_eq!(
+                engine.call_fn(0).unwrap(),
+                vec![engine.from_transfer_entry("10.00000 TEST")]
+            );
+        }
+
+        {
+            let engine = TestEngine::new();
+            let (_, key_1) = engine.create_account(11);
+            let (_, key_2) = engine.create_account(12);
+            let (_, key_3) = engine.create_account(13);
+            let mut engine = engine.init_with_signers(&[key_1, key_2, key_3], builder.clone());
+            assert_eq!(
+                engine.call_fn(0).unwrap(),
+                vec![engine.from_transfer_entry("10.00000 TEST")]
+            );
+        }
     }
 
     #[test]
-    fn checkmultisig_return_false() {
-        let key_1 = KeyPair::gen();
-        let key_2 = KeyPair::gen();
-        let key_3 = KeyPair::gen();
+    fn checkmultiperms_return_false() {
         let builder = Builder::new().push(
             FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                .push(OpFrame::PubKey(key_1.0.clone()))
-                .push(OpFrame::PubKey(key_2.0.clone()))
-                .push(OpFrame::PubKey(key_3.0.clone()))
-                .push(OpFrame::OpCheckMultiSig(2, 3)),
+                .push(OpFrame::AccountId(11))
+                .push(OpFrame::AccountId(12))
+                .push(OpFrame::AccountId(13))
+                .push(OpFrame::OpCheckMultiPerms(2, 3)),
         );
-
-        let engine = TestEngine::new().init_with_signers(
-            &[KeyPair::gen(), key_3.clone(), key_2.clone(), key_1.clone()],
-            builder.clone(),
-        );
-        assert_eq!(engine.eval().unwrap_err().err, EvalErrType::ScriptRetFalse);
 
         let engine = {
             let script = builder.build().unwrap();
+            let engine = TestEngine::new();
+            let (_, key_1) = engine.create_account(11);
+            let (_, key_2) = engine.create_account(12);
+            let (_, key_3) = engine.create_account(13);
 
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: Tx {
@@ -1135,8 +1166,7 @@ mod tests {
                         signature: Signature(sign::Signature([0; sign::SIGNATUREBYTES])),
                     }],
                 },
-                from: key_1.clone().0.into(),
-                script: script.clone(),
+                from: 0,
                 call_fn: 0,
                 args: vec![],
                 amount: "10.00000 TEST".parse().unwrap(),
@@ -1145,98 +1175,89 @@ mod tests {
             tx.append_sign(&key_2);
             tx.append_sign(&key_1);
 
-            ScriptEngine::new(tx.precompute(), script)
+            engine.init_direct(tx, script)
         };
         assert_eq!(engine.eval().unwrap_err().err, EvalErrType::ScriptRetFalse);
     }
 
     #[test]
-    fn checkmultisig_with_trailing_sig_fastfail() {
-        let key_0 = KeyPair::gen();
-        let key_1 = KeyPair::gen();
-        let key_2 = KeyPair::gen();
-        let key_3 = KeyPair::gen();
-        let key_4 = KeyPair::gen();
-        #[rustfmt::skip]
-        let builder = Builder::new()
-            .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                .push(OpFrame::PubKey(key_1.0.clone()))
-                .push(OpFrame::PubKey(key_2.0.clone()))
-                .push(OpFrame::PubKey(key_3.0.clone()))
-                .push(OpFrame::PubKey(key_4.0.clone()))
-                .push(OpFrame::OpCheckMultiSigFastFail(2, 4))
-                .push(OpFrame::PubKey(key_0.0.clone()))
-                .push(OpFrame::OpCheckSig));
+    fn checkmultiperms_with_trailing_sig_fastfail() {
+        fn create_engine<'a>(init_signers: Vec<usize>) -> TestEngine<'a> {
+            #[rustfmt::skip]
+            let builder = Builder::new()
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::AccountId(11))
+                    .push(OpFrame::AccountId(12))
+                    .push(OpFrame::AccountId(13))
+                    .push(OpFrame::AccountId(14))
+                    .push(OpFrame::OpCheckMultiPermsFastFail(2, 4))
+                    .push(OpFrame::AccountId(10))
+                    .push(OpFrame::OpCheckPerms));
 
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_3.clone(), key_2.clone(), key_1.clone(), key_0.clone()],
-            builder.clone(),
-        );
+            let engine = TestEngine::new();
+            let keys = [
+                engine.create_account(10).1,
+                engine.create_account(11).1,
+                engine.create_account(12).1,
+                engine.create_account(13).1,
+                engine.create_account(14).1,
+            ];
+            let mut signing_keys = Vec::with_capacity(init_signers.len());
+            for init in init_signers {
+                signing_keys.push(keys[init].clone());
+            }
+            engine.init_with_signers(&signing_keys, builder)
+        }
+
+        let mut engine = create_engine(vec![3, 2, 1, 0]);
         assert_eq!(
             engine.call_fn(0).unwrap(),
             vec![engine.from_transfer_entry("10.00000 TEST")]
         );
 
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_3.clone(), key_1.clone(), key_0.clone()],
-            builder.clone(),
-        );
+        let mut engine = create_engine(vec![3, 1, 0]);
         assert_eq!(
             engine.call_fn(0).unwrap(),
             vec![engine.from_transfer_entry("10.00000 TEST")]
         );
 
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_4.clone(), key_1.clone(), key_0.clone()],
-            builder.clone(),
-        );
+        let mut engine = create_engine(vec![4, 1, 0]);
         assert_eq!(
             engine.call_fn(0).unwrap(),
             vec![engine.from_transfer_entry("10.00000 TEST")]
         );
 
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_3.clone(), key_2.clone(), key_0.clone()],
-            builder.clone(),
-        );
+        let mut engine = create_engine(vec![3, 2, 0]);
         assert_eq!(
             engine.call_fn(0).unwrap(),
             vec![engine.from_transfer_entry("10.00000 TEST")]
         );
 
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_2.clone(), key_1.clone(), key_0.clone()],
-            builder.clone(),
-        );
+        let mut engine = create_engine(vec![2, 1, 0]);
         assert_eq!(
             engine.call_fn(0).unwrap(),
             vec![engine.from_transfer_entry("10.00000 TEST")]
         );
 
-        let mut engine =
-            TestEngine::new().init_with_signers(&[key_2.clone(), key_1.clone()], builder.clone());
+        let mut engine = create_engine(vec![2, 1]);
         assert_eq!(
             engine.call_fn(0).unwrap_err().err,
             EvalErrType::ScriptRetFalse
         );
 
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_4.clone(), key_3.clone(), key_2.clone(), key_1.clone()],
-            builder.clone(),
-        );
+        let mut engine = create_engine(vec![4, 3, 2, 1]);
         assert_eq!(
             engine.call_fn(0).unwrap_err().err,
             EvalErrType::ScriptRetFalse
         );
 
-        let mut engine =
-            TestEngine::new().init_with_signers(&[key_4.clone(), key_0.clone()], builder.clone());
+        let mut engine = create_engine(vec![4, 0]);
         assert_eq!(
             engine.call_fn(0).unwrap_err().err,
             EvalErrType::ScriptRetFalse
         );
 
-        let mut engine = TestEngine::new().init(builder.clone());
+        let mut engine = create_engine(vec![]);
         assert_eq!(
             engine.call_fn(0).unwrap_err().err,
             EvalErrType::ScriptRetFalse
@@ -1244,27 +1265,35 @@ mod tests {
     }
 
     #[test]
-    fn checkmultisig_with_trailing_sig_ignore_multisig_res() {
-        let key_0 = KeyPair::gen();
-        let key_1 = KeyPair::gen();
-        let key_2 = KeyPair::gen();
-        let key_3 = KeyPair::gen();
-        let key_4 = KeyPair::gen();
-        #[rustfmt::skip]
-        let builder = Builder::new()
-            .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                .push(OpFrame::PubKey(key_1.0.clone()))
-                .push(OpFrame::PubKey(key_2.0.clone()))
-                .push(OpFrame::PubKey(key_3.0.clone()))
-                .push(OpFrame::PubKey(key_4.0.clone()))
-                .push(OpFrame::OpCheckMultiSig(3, 4))
-                .push(OpFrame::PubKey(key_0.0.clone()))
-                .push(OpFrame::OpCheckSig));
+    fn checkmultiperms_with_trailing_sig_ignore_multiperms_res() {
+        fn create_engine<'a>(init_signers: Vec<usize>) -> TestEngine<'a> {
+            #[rustfmt::skip]
+            let builder = Builder::new()
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::AccountId(11))
+                    .push(OpFrame::AccountId(12))
+                    .push(OpFrame::AccountId(13))
+                    .push(OpFrame::AccountId(14))
+                    .push(OpFrame::OpCheckMultiPerms(3, 4))
+                    .push(OpFrame::AccountId(10))
+                    .push(OpFrame::OpCheckPerms));
 
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_2.clone(), key_1.clone(), key_0.clone()],
-            builder.clone(),
-        );
+            let engine = TestEngine::new();
+            let keys = [
+                engine.create_account(10).1,
+                engine.create_account(11).1,
+                engine.create_account(12).1,
+                engine.create_account(13).1,
+                engine.create_account(14).1,
+            ];
+            let mut signing_keys = Vec::with_capacity(init_signers.len());
+            for init in init_signers {
+                signing_keys.push(keys[init].clone());
+            }
+            engine.init_with_signers(&signing_keys, builder)
+        }
+
+        let mut engine = create_engine(vec![2, 1, 0]);
         assert_eq!(
             engine.call_fn(0).unwrap(),
             vec![engine.from_transfer_entry("10.00000 TEST")]
@@ -1272,8 +1301,7 @@ mod tests {
         assert!(!engine.stack.pop_bool().unwrap());
         assert!(engine.stack.is_empty());
 
-        let mut engine =
-            TestEngine::new().init_with_signers(&[key_2.clone(), key_0.clone()], builder.clone());
+        let mut engine = create_engine(vec![2, 0]);
         assert_eq!(
             engine.call_fn(0).unwrap(),
             vec![engine.from_transfer_entry("10.00000 TEST")]
@@ -1281,16 +1309,7 @@ mod tests {
         assert!(!engine.stack.pop_bool().unwrap());
         assert!(engine.stack.is_empty());
 
-        let mut engine =
-            TestEngine::new().init_with_signers(&[key_0.clone(), KeyPair::gen()], builder.clone());
-        assert_eq!(
-            engine.call_fn(0).unwrap(),
-            vec![engine.from_transfer_entry("10.00000 TEST")]
-        );
-        assert!(!engine.stack.pop_bool().unwrap());
-        assert!(engine.stack.is_empty());
-
-        let mut engine = TestEngine::new().init_with_signers(&[key_0.clone()], builder.clone());
+        let mut engine = create_engine(vec![0]);
         assert_eq!(
             engine.call_fn(0).unwrap(),
             vec![engine.from_transfer_entry("10.00000 TEST")]
@@ -1300,46 +1319,52 @@ mod tests {
     }
 
     #[test]
-    fn checksig_and_checkmultisig_with_if() {
-        let key_0 = KeyPair::gen();
-        let key_1 = KeyPair::gen();
-        let key_2 = KeyPair::gen();
-        let key_3 = KeyPair::gen();
-        #[rustfmt::skip]
-        let builder = Builder::new()
-            .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                .push(OpFrame::PubKey(key_0.0.clone()))
-                .push(OpFrame::OpCheckSig)
-                .push(OpFrame::OpIf)
-                    .push(OpFrame::PubKey(key_1.0.clone()))
-                    .push(OpFrame::PubKey(key_2.0.clone()))
-                    .push(OpFrame::PubKey(key_3.0.clone()))
-                    .push(OpFrame::OpCheckMultiSig(2, 3))
-                    .push(OpFrame::OpReturn)
-                .push(OpFrame::OpEndIf)
-                .push(OpFrame::False));
+    fn checkperms_and_checkmultiperms_with_if() {
+        fn create_engine<'a>(init_signers: Vec<usize>) -> TestEngine<'a> {
+            #[rustfmt::skip]
+            let builder = Builder::new()
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::AccountId(10))
+                    .push(OpFrame::OpCheckPerms)
+                    .push(OpFrame::OpIf)
+                        .push(OpFrame::AccountId(11))
+                        .push(OpFrame::AccountId(12))
+                        .push(OpFrame::AccountId(13))
+                        .push(OpFrame::OpCheckMultiPerms(2, 3))
+                        .push(OpFrame::OpReturn)
+                    .push(OpFrame::OpEndIf)
+                    .push(OpFrame::False));
+
+            let engine = TestEngine::new();
+            let keys = [
+                engine.create_account(10).1,
+                engine.create_account(11).1,
+                engine.create_account(12).1,
+                engine.create_account(13).1,
+            ];
+            let mut signing_keys = Vec::with_capacity(init_signers.len());
+            for init in init_signers {
+                signing_keys.push(keys[init].clone());
+            }
+            engine.init_with_signers(&signing_keys, builder)
+        }
 
         // Test threshold is met and tx is signed with key_0
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_0.clone(), key_2.clone(), key_1.clone()],
-            builder.clone(),
-        );
+        let mut engine = create_engine(vec![0, 2, 1]);
         assert_eq!(
             engine.call_fn(0).unwrap(),
             vec![engine.from_transfer_entry("10.00000 TEST")]
         );
 
         // Test tx must be signed with key_0 but threshold is met
-        let mut engine =
-            TestEngine::new().init_with_signers(&[key_1.clone(), key_2.clone()], builder.clone());
+        let mut engine = create_engine(vec![2, 1]);
         assert_eq!(
             engine.call_fn(0).unwrap_err().err,
             EvalErrType::ScriptRetFalse
         );
 
         // Test multisig threshold not met
-        let mut engine =
-            TestEngine::new().init_with_signers(&[key_0.clone(), key_1.clone()], builder);
+        let mut engine = create_engine(vec![0, 1]);
         assert_eq!(
             engine.call_fn(0).unwrap_err().err,
             EvalErrType::ScriptRetFalse
@@ -1347,47 +1372,53 @@ mod tests {
     }
 
     #[test]
-    fn checksig_and_checkmultisig_with_if_not() {
-        let key_0 = KeyPair::gen();
-        let key_1 = KeyPair::gen();
-        let key_2 = KeyPair::gen();
-        let key_3 = KeyPair::gen();
-        #[rustfmt::skip]
-        let builder = Builder::new()
-            .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                .push(OpFrame::PubKey(key_0.0.clone()))
-                .push(OpFrame::OpCheckSig)
-                .push(OpFrame::OpNot)
-                .push(OpFrame::OpIf)
-                    .push(OpFrame::False)
-                    .push(OpFrame::OpReturn)
-                .push(OpFrame::OpEndIf)
-                .push(OpFrame::PubKey(key_1.0.clone()))
-                .push(OpFrame::PubKey(key_2.0.clone()))
-                .push(OpFrame::PubKey(key_3.0.clone()))
-                .push(OpFrame::OpCheckMultiSig(2, 3)));
+    fn checkperms_and_checkmultiperms_with_if_not() {
+        fn create_engine<'a>(init_signers: Vec<usize>) -> TestEngine<'a> {
+            #[rustfmt::skip]
+            let builder = Builder::new()
+                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::AccountId(10))
+                    .push(OpFrame::OpCheckPerms)
+                    .push(OpFrame::OpNot)
+                    .push(OpFrame::OpIf)
+                        .push(OpFrame::False)
+                        .push(OpFrame::OpReturn)
+                    .push(OpFrame::OpEndIf)
+                    .push(OpFrame::AccountId(11))
+                    .push(OpFrame::AccountId(12))
+                    .push(OpFrame::AccountId(13))
+                    .push(OpFrame::OpCheckMultiPerms(2, 3)));
+
+            let engine = TestEngine::new();
+            let keys = [
+                engine.create_account(10).1,
+                engine.create_account(11).1,
+                engine.create_account(12).1,
+                engine.create_account(13).1,
+            ];
+            let mut signing_keys = Vec::with_capacity(init_signers.len());
+            for init in init_signers {
+                signing_keys.push(keys[init].clone());
+            }
+            engine.init_with_signers(&signing_keys, builder)
+        }
 
         // Test threshold is met and tx is signed with key_0
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_0.clone(), key_2.clone(), key_1.clone()],
-            builder.clone(),
-        );
+        let mut engine = create_engine(vec![0, 2, 1]);
         assert_eq!(
             engine.call_fn(0).unwrap(),
             vec![engine.from_transfer_entry("10.00000 TEST")]
         );
 
         // Test tx must be signed with key_0 but threshold is met
-        let mut engine =
-            TestEngine::new().init_with_signers(&[key_1.clone(), key_2.clone()], builder.clone());
+        let mut engine = create_engine(vec![1, 2]);
         assert_eq!(
             engine.call_fn(0).unwrap_err().err,
             EvalErrType::ScriptRetFalse
         );
 
         // Test multisig threshold not met
-        let mut engine =
-            TestEngine::new().init_with_signers(&[key_0.clone(), key_1.clone()], builder);
+        let mut engine = create_engine(vec![0, 1]);
         assert_eq!(
             engine.call_fn(0).unwrap_err().err,
             EvalErrType::ScriptRetFalse
@@ -1395,102 +1426,168 @@ mod tests {
     }
 
     #[test]
-    fn checksig_and_checkmultisig_with_fast_fail() {
-        let key_0 = KeyPair::gen();
-        let key_1 = KeyPair::gen();
-        let key_2 = KeyPair::gen();
-        let key_3 = KeyPair::gen();
+    fn checkperms_and_checkmultiperms_with_fast_fail() {
+        {
+            // Test tx must be signed with key_0 but threshold is met
+            let engine = TestEngine::new();
+            let (acc_0, _) = engine.create_account(10);
+            let (acc_1, key_1) = engine.create_account(11);
+            let (acc_2, key_2) = engine.create_account(12);
+            let (acc_3, _) = engine.create_account(13);
 
-        // Test tx must be signed with key_0 but threshold is met
-        #[rustfmt::skip]
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_1.clone(), key_2.clone()],
-            Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::PubKey(key_0.0.clone()))
-                    .push(OpFrame::OpCheckSigFastFail)
-                    .push(OpFrame::PubKey(key_1.0.clone()))
-                    .push(OpFrame::PubKey(key_2.0.clone()))
-                    .push(OpFrame::PubKey(key_3.0.clone()))
-                    .push(OpFrame::OpCheckMultiSig(2, 3))),
-        );
-        assert_eq!(
-            engine.call_fn(0).unwrap_err().err,
-            EvalErrType::ScriptRetFalse
-        );
+            #[rustfmt::skip]
+            let mut engine = engine.init_with_signers(
+                &[key_1.clone(), key_2.clone()],
+                Builder::new()
+                    .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                        .push(OpFrame::AccountId(acc_0.id))
+                        .push(OpFrame::OpCheckPermsFastFail)
+                        .push(OpFrame::AccountId(acc_1.id))
+                        .push(OpFrame::AccountId(acc_2.id))
+                        .push(OpFrame::AccountId(acc_3.id))
+                        .push(OpFrame::OpCheckMultiPerms(2, 3))),
+            );
+            assert_eq!(
+                engine.call_fn(0).unwrap_err().err,
+                EvalErrType::ScriptRetFalse
+            );
+        }
 
-        // Test multisig threshold not met
-        #[rustfmt::skip]
-        let mut engine = TestEngine::new().init_with_signers(
-            &[key_0.clone(), key_1.clone()],
-            Builder::new()
-                .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::PubKey(key_1.0.clone()))
-                    .push(OpFrame::PubKey(key_2.0.clone()))
-                    .push(OpFrame::PubKey(key_3.0.clone()))
-                    .push(OpFrame::OpCheckMultiSigFastFail(2, 3))
-                    .push(OpFrame::PubKey(key_0.0.clone()))
-                    .push(OpFrame::OpCheckSig)),
-        );
-        assert_eq!(
-            engine.call_fn(0).unwrap_err().err,
-            EvalErrType::ScriptRetFalse
-        );
+        {
+            // Test multisig threshold not met
+            let engine = TestEngine::new();
+            let (acc_0, key_0) = engine.create_account(10);
+            let (acc_1, key_1) = engine.create_account(11);
+            let (acc_2, _) = engine.create_account(12);
+            let (acc_3, _) = engine.create_account(13);
+
+            #[rustfmt::skip]
+            let mut engine = engine.init_with_signers(
+                &[key_0.clone(), key_1.clone()],
+                Builder::new()
+                    .push(FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                        .push(OpFrame::AccountId(acc_1.id))
+                        .push(OpFrame::AccountId(acc_2.id))
+                        .push(OpFrame::AccountId(acc_3.id))
+                        .push(OpFrame::OpCheckMultiPermsFastFail(2, 3))
+                        .push(OpFrame::AccountId(acc_0.id))
+                        .push(OpFrame::OpCheckPerms)),
+            );
+            assert_eq!(
+                engine.call_fn(0).unwrap_err().err,
+                EvalErrType::ScriptRetFalse
+            );
+        }
     }
 
     struct TestEngine<'a> {
         engine: Option<ScriptEngine<'a>>,
-        from_addr: KeyPair,
-        to_addr: KeyPair,
+        index_path: PathBuf,
+        indexer: Arc<Indexer>,
+        from_acc: Account,
+        from_key: KeyPair,
+        to_acc: Account,
+        to_key: KeyPair,
     }
 
     impl<'a> TestEngine<'a> {
         fn new() -> Self {
+            let tmp_dir = {
+                let mut tmp_dir = env::temp_dir();
+                let mut num: [u8; 8] = [0; 8];
+                randombytes::randombytes_into(&mut num);
+                tmp_dir.push(&format!("godcoin_test_{}", u64::from_be_bytes(num)));
+                tmp_dir
+            };
+            fs::create_dir(&tmp_dir).expect(&format!("Could not create temp dir {:?}", &tmp_dir));
+            let indexer = Arc::new(Indexer::new(&tmp_dir));
+
+            let from_key = KeyPair::gen();
+            let from_acc = Account::create_default(
+                0,
+                Permissions {
+                    threshold: 1,
+                    keys: vec![from_key.0.clone()],
+                },
+            );
+
+            let to_key = KeyPair::gen();
+            let to_acc = Account::create_default(
+                1,
+                Permissions {
+                    threshold: 1,
+                    keys: vec![to_key.0.clone()],
+                },
+            );
+
+            let mut batch = WriteBatch::new(Arc::clone(&indexer));
+            batch.insert_or_update_account(from_acc.clone());
+            batch.insert_or_update_account(to_acc.clone());
+            batch.commit();
+
             Self {
                 engine: None,
-                from_addr: KeyPair::gen(),
-                to_addr: KeyPair::gen(),
+                index_path: tmp_dir,
+                indexer,
+                from_acc,
+                from_key,
+                to_acc,
+                to_key,
             }
         }
 
+        fn create_account(&self, id: AccountId) -> (Account, KeyPair) {
+            let key = KeyPair::gen();
+            let acc = Account::create_default(
+                id,
+                Permissions {
+                    threshold: 1,
+                    keys: vec![key.0.clone()],
+                },
+            );
+
+            let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
+            batch.insert_or_update_account(acc.clone());
+            batch.commit();
+
+            (acc, key)
+        }
+
         fn from_transfer_entry(&self, amt: &str) -> LogEntry {
-            let p2sh: ScriptHash = self.from_addr.clone().0.into();
-            LogEntry::Transfer(p2sh, amt.parse().unwrap())
+            let p2a = self.from_acc.id;
+            LogEntry::Transfer(p2a, amt.parse().unwrap())
         }
 
         fn to_transfer_entry(&self, amt: &str) -> LogEntry {
-            let p2sh: ScriptHash = self.to_addr.clone().0.into();
-            LogEntry::Transfer(p2sh, amt.parse().unwrap())
+            let p2a = self.to_acc.id;
+            LogEntry::Transfer(p2a, amt.parse().unwrap())
         }
 
-        fn eval(self) -> Result<Vec<LogEntry>, EvalErr> {
-            let engine = self.engine.expect("engine not initialized");
+        fn eval(mut self) -> Result<Vec<LogEntry>, EvalErr> {
+            let mut engine = None;
+            mem::swap(&mut engine, &mut self.engine);
+            let engine = engine.expect("engine not initialized");
             engine.eval()
         }
 
         fn init(self, b: Builder) -> Self {
-            let from_addr = self.from_addr.clone();
-            self.init_with_signers(&[from_addr], b)
+            let from_key = self.from_key.clone();
+            self.init_with_signers(&[from_key], b)
         }
 
         fn init_with_signers(self, keys: &[KeyPair], b: Builder) -> Self {
             let script = b.build().unwrap();
-            let tx = self.new_transfer_tx(script.clone(), 0, vec![], keys);
+            let tx = self.new_transfer_tx(0, vec![], keys);
             self.init_direct(tx, script)
         }
 
         fn init_direct(mut self, tx: TxVariant, script: Script) -> Self {
-            self.engine = Some(ScriptEngine::new(tx.precompute(), script));
+            let indexer = Arc::clone(&self.indexer);
+            self.engine = Some(ScriptEngine::new(tx.precompute(), script, indexer));
             self
         }
 
-        fn new_transfer_tx(
-            &self,
-            script: Script,
-            call_fn: u8,
-            args: Vec<u8>,
-            keys: &[KeyPair],
-        ) -> TxVariant {
+        fn new_transfer_tx(&self, call_fn: u8, args: Vec<u8>, keys: &[KeyPair]) -> TxVariant {
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: Tx {
                     nonce: 0,
@@ -1498,8 +1595,7 @@ mod tests {
                     fee: "1.00000 TEST".parse().unwrap(),
                     signature_pairs: vec![],
                 },
-                from: self.from_addr.clone().0.into(),
-                script: script.clone(),
+                from: 0,
                 call_fn,
                 args,
                 amount: "10.00000 TEST".parse().unwrap(),
@@ -1507,6 +1603,12 @@ mod tests {
             }));
             keys.iter().for_each(|key| tx.append_sign(key));
             tx
+        }
+    }
+
+    impl<'a> Drop for TestEngine<'a> {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.index_path).expect("Failed to rm dir");
         }
     }
 

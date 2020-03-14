@@ -19,6 +19,7 @@ const KEY_INDEX_STATUS: &[u8] = b"index_status";
 
 const TX_EXPIRY_ADJUSTMENT: u64 = 30;
 
+#[derive(Debug)]
 pub struct Indexer {
     db: DB,
 }

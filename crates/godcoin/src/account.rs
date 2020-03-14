@@ -1,7 +1,7 @@
 use crate::{
     asset::Asset,
     crypto::{PublicKey, SigPair},
-    script::Script,
+    script::{Arg, Builder, FnBuilder, OpFrame, Script},
     serializer::*,
 };
 use std::io::{self, Cursor};
@@ -21,6 +21,25 @@ pub struct Account {
 }
 
 impl Account {
+    pub fn create_default(id: AccountId, perms: Permissions) -> Self {
+        Self {
+            id,
+            balance: Asset::default(),
+            script: Builder::new()
+                .push(
+                    FnBuilder::new(0x00, OpFrame::OpDefine(vec![Arg::AccountId, Arg::Asset]))
+                        .push(OpFrame::AccountId(id))
+                        .push(OpFrame::OpCheckPermsFastFail)
+                        .push(OpFrame::OpTransfer)
+                        .push(OpFrame::True),
+                )
+                .build()
+                .unwrap(),
+            permissions: perms,
+            destroyed: false,
+        }
+    }
+
     pub fn serialize(&self, buf: &mut Vec<u8>) {
         buf.push_u64(self.id);
         buf.push_asset(self.balance);
@@ -52,34 +71,36 @@ pub struct Permissions {
 }
 
 impl Permissions {
-    pub fn verify(&self, data: &[u8], sigs: &[SigPair]) -> bool {
+    pub fn verify(&self, data: &[u8], sigs: &[SigPair]) -> Result<(), PermsSigVerifyErr> {
         if self.threshold == 0 {
-            return true;
+            return Ok(());
         } else if usize::from(self.threshold) > sigs.len() {
-            return false;
+            return Err(PermsSigVerifyErr::InsufficientThreshold);
         }
 
         let mut valid_threshold = 0;
-        let mut key_iter = self.keys.iter();
         'sig_loop: for pair in sigs {
-            loop {
-                match key_iter.next() {
-                    Some(key) => {
-                        if key == &pair.pub_key {
-                            if key.verify(data, &pair.signature) {
-                                valid_threshold += 1;
-                                continue 'sig_loop;
-                            } else {
-                                return false;
-                            }
-                        }
+            for key in &self.keys {
+                if key == &pair.pub_key {
+                    if key.verify(data, &pair.signature) {
+                        valid_threshold += 1;
+                        continue 'sig_loop;
+                    } else {
+                        return Err(PermsSigVerifyErr::InvalidSig);
                     }
-                    None => break 'sig_loop,
                 }
             }
         }
 
-        valid_threshold >= self.threshold
+        if valid_threshold > 0 {
+            if valid_threshold >= self.threshold {
+                Ok(())
+            } else {
+                Err(PermsSigVerifyErr::InsufficientThreshold)
+            }
+        } else {
+            Err(PermsSigVerifyErr::NoMatchingSigs)
+        }
     }
 
     pub fn serialize(&self, buf: &mut Vec<u8>) {
@@ -101,10 +122,24 @@ impl Permissions {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PermsSigVerifyErr {
+    /// The given signatures did not meet the required threshold to succeed verification
+    InsufficientThreshold,
+    /// None of the signatures had valid public keys that could validate the data
+    NoMatchingSigs,
+    /// One of the signatures failed verification on the data
+    InvalidSig,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{crypto::KeyPair, script::Script};
+    use crate::{
+        crypto::{KeyPair, Signature},
+        script::Script,
+    };
+    use sodiumoxide::crypto::sign;
 
     #[test]
     fn verify_equal_threshold() {
@@ -116,7 +151,7 @@ mod tests {
         sigs.push(keys[2].sign(data));
         sigs.push(keys[3].sign(data));
 
-        assert!(account.permissions.verify(data, &sigs));
+        assert_eq!(account.permissions.verify(data, &sigs), Ok(()));
     }
 
     #[test]
@@ -126,14 +161,17 @@ mod tests {
         let data = "Hello world".as_bytes();
         sigs.push(keys[0].sign(data));
 
-        assert!(account.permissions.verify(data, &sigs));
+        assert_eq!(account.permissions.verify(data, &sigs), Ok(()));
     }
 
     #[test]
     fn verify_single_sig_fail_unment_threshold() {
         let (account, _) = create_dummy_account(1, 1);
         let data = "Hello world".as_bytes();
-        assert!(!account.permissions.verify(data, &[]));
+        assert_eq!(
+            account.permissions.verify(data, &[]),
+            Err(PermsSigVerifyErr::InsufficientThreshold)
+        );
     }
 
     #[test]
@@ -144,7 +182,7 @@ mod tests {
         sigs.push(keys[2].sign(data));
         sigs.push(keys[3].sign(data));
 
-        assert!(account.permissions.verify(data, &sigs));
+        assert_eq!(account.permissions.verify(data, &sigs), Ok(()));
     }
 
     #[test]
@@ -155,7 +193,7 @@ mod tests {
         sigs.push(keys[0].sign(data));
         sigs.push(keys[1].sign(data));
 
-        assert!(account.permissions.verify(data, &sigs));
+        assert_eq!(account.permissions.verify(data, &sigs), Ok(()));
     }
 
     #[test]
@@ -166,7 +204,7 @@ mod tests {
         sigs.push(keys[0].sign(data));
         sigs.push(keys[3].sign(data));
 
-        assert!(account.permissions.verify(data, &sigs));
+        assert_eq!(account.permissions.verify(data, &sigs), Ok(()));
     }
 
     #[test]
@@ -179,18 +217,31 @@ mod tests {
         sigs.push(keys[2].sign(data));
         sigs.push(keys[3].sign(data));
 
-        assert!(account.permissions.verify(data, &sigs));
+        assert_eq!(account.permissions.verify(data, &sigs), Ok(()));
     }
 
     #[test]
-    fn verify_sigs_fail_by_unmet_threshold_in_reverse_order() {
+    fn verify_sigs_with_unknown_trailing_sig() {
+        let (account, keys) = create_dummy_account(2, 4);
+        let mut sigs = Vec::new();
+        let data = "Hello world".as_bytes();
+        sigs.push(keys[0].sign(data));
+        sigs.push(keys[1].sign(data));
+        sigs.push(KeyPair::gen().sign(data));
+        sigs.push(KeyPair::gen().sign(data));
+
+        assert_eq!(account.permissions.verify(data, &sigs), Ok(()));
+    }
+
+    #[test]
+    fn verify_sigs_in_reverse_order() {
         let (account, keys) = create_dummy_account(2, 4);
         let mut sigs = Vec::new();
         let data = "Hello world".as_bytes();
         sigs.push(keys[1].sign(data));
         sigs.push(keys[0].sign(data));
 
-        assert!(!account.permissions.verify(data, &sigs));
+        assert_eq!(account.permissions.verify(data, &sigs), Ok(()));
     }
 
     #[test]
@@ -200,7 +251,43 @@ mod tests {
         let data = "Hello world".as_bytes();
         sigs.push(keys[0].sign(data));
 
-        assert!(!account.permissions.verify(data, &sigs));
+        assert_eq!(
+            account.permissions.verify(data, &sigs),
+            Err(PermsSigVerifyErr::InsufficientThreshold)
+        );
+    }
+
+    #[test]
+    fn verify_sigs_fail_with_invalid_sig() {
+        let (account, keys) = create_dummy_account(2, 4);
+        let mut sigs = Vec::new();
+        let data = "Hello world".as_bytes();
+        sigs.push(keys[0].sign(data));
+        sigs.push(keys[1].sign(data));
+        sigs.push(keys[2].sign(data));
+        sigs.push(keys[3].sign(data));
+
+        assert_eq!(account.permissions.verify(data, &sigs), Ok(()));
+
+        sigs[3].signature = Signature(sign::Signature([0u8; sign::SIGNATUREBYTES]));
+        assert_eq!(
+            account.permissions.verify(data, &sigs),
+            Err(PermsSigVerifyErr::InvalidSig)
+        );
+    }
+
+    #[test]
+    fn verify_sigs_fail_with_none_matching() {
+        let (account, keys) = create_dummy_account(2, 4);
+        let mut sigs = Vec::new();
+        let data = "Hello world".as_bytes();
+        sigs.push(KeyPair::gen().sign(data));
+        sigs.push(KeyPair::gen().sign(data));
+
+        assert_eq!(
+            account.permissions.verify(data, &sigs),
+            Err(PermsSigVerifyErr::NoMatchingSigs)
+        );
     }
 
     fn create_dummy_account(threshold: u8, key_count: u8) -> (Account, Vec<KeyPair>) {

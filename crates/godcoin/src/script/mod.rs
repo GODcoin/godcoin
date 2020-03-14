@@ -1,4 +1,4 @@
-use crate::{crypto::PublicKey, serializer::*};
+use crate::serializer::*;
 use std::{
     borrow::Cow,
     fmt::{self, Debug, Formatter},
@@ -62,22 +62,6 @@ impl From<Vec<u8>> for Script {
     #[inline]
     fn from(vec: Vec<u8>) -> Self {
         Script::new(vec)
-    }
-}
-
-// TODO Create a default script for accounts
-impl From<PublicKey> for Script {
-    fn from(key: PublicKey) -> Self {
-        let builder = Builder::new().push(
-            FnBuilder::new(0x00, OpFrame::OpDefine(vec![Arg::AccountId, Arg::Asset]))
-                .push(OpFrame::PubKey(key))
-                .push(OpFrame::OpCheckSigFastFail)
-                .push(OpFrame::OpTransfer)
-                .push(OpFrame::True),
-        );
-        builder
-            .build()
-            .expect("Failed to build default script for PublicKey")
     }
 }
 

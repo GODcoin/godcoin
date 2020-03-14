@@ -1,8 +1,5 @@
 use super::{error::*, OpFrame, MAX_FRAME_STACK};
-use crate::{
-    asset::Asset,
-    crypto::{PublicKey, ScriptHash},
-};
+use crate::{account::AccountId, asset::Asset};
 
 #[derive(Debug)]
 pub struct Stack {
@@ -41,18 +38,10 @@ impl Stack {
         }
     }
 
-    pub fn pop_pubkey(&mut self) -> Result<PublicKey, EvalErrType> {
+    pub fn pop_account_id(&mut self) -> Result<AccountId, EvalErrType> {
         let frame = self.pop()?;
         match frame {
-            OpFrame::PubKey(key) => Ok(key),
-            _ => Err(EvalErrType::InvalidItemOnStack),
-        }
-    }
-
-    pub fn pop_scripthash(&mut self) -> Result<ScriptHash, EvalErrType> {
-        let frame = self.pop()?;
-        match frame {
-            OpFrame::ScriptHash(hash) => Ok(hash),
+            OpFrame::AccountId(id) => Ok(id),
             _ => Err(EvalErrType::InvalidItemOnStack),
         }
     }

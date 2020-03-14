@@ -19,8 +19,6 @@ pub enum Operand {
     PushTrue = 0x21,
     PushAccountId = 0x22,
     PushAsset = 0x23,
-    PushPubKey = 0x24,
-    PushScriptHash = 0x25,
 
     // Arithmetic
     OpLoadAmt = 0x30,
@@ -42,10 +40,6 @@ pub enum Operand {
     OpCheckPermsFastFail = 0x51,
     OpCheckMultiPerms = 0x52,
     OpCheckMultiPermsFastFail = 0x53,
-    OpCheckSig = 0x54,
-    OpCheckSigFastFail = 0x55,
-    OpCheckMultiSig = 0x56,
-    OpCheckMultiSigFastFail = 0x57,
 }
 
 impl From<Operand> for u8 {
@@ -67,8 +61,6 @@ pub enum OpFrame {
     True,
     AccountId(AccountId),
     Asset(Asset),
-    PubKey(PublicKey),
-    ScriptHash(ScriptHash),
 
     // Arithmetic
     OpLoadAmt,
@@ -90,10 +82,6 @@ pub enum OpFrame {
     OpCheckPermsFastFail,
     OpCheckMultiPerms(u8, u8), // M of N: minimum threshold to number of accounts
     OpCheckMultiPermsFastFail(u8, u8),
-    OpCheckSig,
-    OpCheckSigFastFail,
-    OpCheckMultiSig(u8, u8), // M of N: minimum threshold to number of keys
-    OpCheckMultiSigFastFail(u8, u8),
 }
 
 impl From<bool> for OpFrame {
