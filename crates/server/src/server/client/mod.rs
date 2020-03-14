@@ -334,10 +334,10 @@ fn handle_rpc_request(
                 None => Body::Error(ErrorKind::InvalidHeight),
             }
         }
-        rpc::Request::GetAddressInfo(addr) => {
-            let res = data.minter.get_addr_info(&addr);
+        rpc::Request::GetAccountInfo(acc) => {
+            let res = data.minter.get_account_info(acc);
             match res {
-                Ok(info) => Body::Response(rpc::Response::GetAddressInfo(info)),
+                Ok(info) => Body::Response(rpc::Response::GetAccountInfo(info)),
                 Err(e) => Body::Error(ErrorKind::TxValidation(e)),
             }
         }

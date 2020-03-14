@@ -428,18 +428,15 @@ impl<'a> ScriptEngine<'a> {
                 Ok(_) => {}
                 Err(PermsSigVerifyErr::InsufficientThreshold)
                 | Err(PermsSigVerifyErr::InvalidSig) => {
-                    println!("HRRRM!!"); // DEBUG
                     return Ok(false);
                 }
                 Err(PermsSigVerifyErr::NoMatchingSigs) => {
-                    println!("NO MATCHING SIGS ON ACCOUNT: {}", acc_id); // DEBUG
                     continue;
                 }
             }
             valid_threshold += 1;
         }
 
-        println!("OK: {} {}", valid_threshold, threshold); // DEBUG
         Ok(valid_threshold >= threshold)
     }
 
