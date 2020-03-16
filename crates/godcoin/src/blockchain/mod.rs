@@ -632,8 +632,7 @@ impl Blockchain {
     }
 
     pub fn create_genesis_block(&self, minter_key: KeyPair) -> GenesisBlockInfo {
-        let owner_id: AccountId = 0;
-        let info = GenesisBlockInfo::new(minter_key, owner_id);
+        let info = GenesisBlockInfo::new(minter_key, 0);
         let timestamp = crate::get_epoch_time();
 
         let create_account_tx = TxVariant::V0(TxVariantV0::CreateAccountTx(CreateAccountTx {
@@ -644,7 +643,7 @@ impl Blockchain {
                 signature_pairs: Vec::new(),
             },
             account: Account {
-                id: owner_id,
+                id: info.owner_id,
                 balance: Asset::default(),
                 script: info.script.clone(),
                 permissions: Permissions {
@@ -664,7 +663,7 @@ impl Blockchain {
                 signature_pairs: Vec::new(),
             },
             minter: info.minter_key.0.clone(),
-            wallet: owner_id,
+            wallet: info.owner_id,
         }));
 
         let receipts = vec![
@@ -703,13 +702,14 @@ impl Blockchain {
 }
 
 pub struct GenesisBlockInfo {
+    pub owner_id: AccountId,
     pub minter_key: KeyPair,
     pub wallet_keys: [KeyPair; 4],
     pub script: Script,
 }
 
 impl GenesisBlockInfo {
-    pub fn new(minter_key: KeyPair, owner_acc: AccountId) -> Self {
+    pub fn new(minter_key: KeyPair, owner_id: AccountId) -> Self {
         let wallet_keys = [
             KeyPair::gen(),
             KeyPair::gen(),
@@ -721,13 +721,13 @@ impl GenesisBlockInfo {
             .push(
                 // The purpose of this function is to be used for minting transactions
                 FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::AccountId(owner_acc))
+                    .push(OpFrame::AccountId(owner_id))
                     .push(OpFrame::OpCheckPerms),
             )
             .push(
                 // Standard transfer function
                 FnBuilder::new(1, OpFrame::OpDefine(vec![Arg::AccountId, Arg::Asset]))
-                    .push(OpFrame::AccountId(owner_acc))
+                    .push(OpFrame::AccountId(owner_id))
                     .push(OpFrame::OpCheckPermsFastFail)
                     .push(OpFrame::OpTransfer)
                     .push(OpFrame::True),
@@ -736,6 +736,7 @@ impl GenesisBlockInfo {
             .unwrap();
 
         Self {
+            owner_id,
             minter_key,
             wallet_keys,
             script,
