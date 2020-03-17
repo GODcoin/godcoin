@@ -282,6 +282,7 @@ impl Tx {
         let tx_type = match cur.take_u8().ok()? {
             t if t == TxType::Owner as u8 => TxType::Owner,
             t if t == TxType::Mint as u8 => TxType::Mint,
+            t if t == TxType::CreateAccount as u8 => TxType::CreateAccount,
             t if t == TxType::Transfer as u8 => TxType::Transfer,
             _ => return None,
         };
