@@ -183,11 +183,11 @@ impl Response {
             }
             Self::GetBlockRange => buf.push(RpcType::GetBlockRange as u8),
             Self::GetAccountInfo(info) => {
-                buf.reserve_exact(1 + (mem::size_of::<Asset>() * 3));
+                buf.reserve_exact(1 + mem::size_of::<Account>());
                 buf.push(RpcType::GetAccountInfo as u8);
                 info.account.serialize(buf);
                 buf.push_asset(info.net_fee);
-                buf.push_asset(info.addr_fee);
+                buf.push_asset(info.account_fee);
             }
         }
     }
@@ -256,11 +256,11 @@ impl Response {
             t if t == RpcType::GetAccountInfo as u8 => {
                 let account = Account::deserialize(cursor)?;
                 let net_fee = cursor.take_asset()?;
-                let addr_fee = cursor.take_asset()?;
+                let account_fee = cursor.take_asset()?;
                 Ok(Self::GetAccountInfo(AccountInfo {
                     account,
                     net_fee,
-                    addr_fee,
+                    account_fee,
                 }))
             }
             _ => Err(Error::new(

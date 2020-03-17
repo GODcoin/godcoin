@@ -39,12 +39,12 @@ pub struct Properties {
 pub struct AccountInfo {
     pub account: Account,
     pub net_fee: Asset,
-    pub addr_fee: Asset,
+    pub account_fee: Asset,
 }
 
 impl AccountInfo {
     pub fn total_fee(&self) -> Option<Asset> {
-        self.net_fee.checked_add(self.addr_fee)
+        self.net_fee.checked_add(self.account_fee)
     }
 }
 
@@ -153,7 +153,7 @@ impl Blockchain {
     }
 
     /// Gets a filtered block using the `filter` at the specified `height`. This does not match
-    /// whether the `filter` contains an owner address to match block rewards.
+    /// whether the `filter` contains an owner account to match block rewards.
     pub fn get_filtered_block(&self, height: u64, filter: &BlockFilter) -> Option<FilteredBlock> {
         let store = self.store.lock();
         let block = store.get(height);
@@ -249,11 +249,11 @@ impl Blockchain {
     ) -> Option<AccountInfo> {
         let account = self.get_account(id, additional_receipts)?;
         let net_fee = self.get_network_fee()?;
-        let addr_fee = self.get_account_fee(id, additional_receipts)?;
+        let account_fee = self.get_account_fee(id, additional_receipts)?;
         Some(AccountInfo {
             account,
             net_fee,
-            addr_fee,
+            account_fee,
         })
     }
 
