@@ -635,6 +635,17 @@ impl Blockchain {
         let info = GenesisBlockInfo::new(minter_key, 0);
         let timestamp = crate::get_epoch_time();
 
+        let owner_wallet = Account {
+            id: info.owner_id,
+            balance: Asset::default(),
+            script: info.script.clone(),
+            permissions: Permissions {
+                threshold: 2,
+                keys: info.wallet_keys.iter().map(|kp| kp.0.clone()).collect(),
+            },
+            destroyed: false,
+        };
+
         let create_account_tx = TxVariant::V0(TxVariantV0::CreateAccountTx(CreateAccountTx {
             base: Tx {
                 nonce: 0,
@@ -642,16 +653,7 @@ impl Blockchain {
                 fee: Asset::default(),
                 signature_pairs: Vec::new(),
             },
-            account: Account {
-                id: info.owner_id,
-                balance: Asset::default(),
-                script: info.script.clone(),
-                permissions: Permissions {
-                    threshold: 2,
-                    keys: info.wallet_keys.iter().map(|kp| kp.0.clone()).collect(),
-                },
-                destroyed: false,
-            },
+            account: owner_wallet.clone(),
             creator: 0,
         }));
 
@@ -694,6 +696,7 @@ impl Blockchain {
         let mut batch = WriteBatch::new(Arc::clone(&self.indexer));
         self.store.lock().insert_genesis(&mut batch, block);
         batch.set_owner(owner_tx);
+        batch.insert_or_update_account(owner_wallet);
         batch.commit();
         self.indexer.set_index_status(IndexStatus::Complete);
 
