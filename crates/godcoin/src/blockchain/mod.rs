@@ -100,13 +100,12 @@ impl Blockchain {
                 assert_eq!(receipts.len(), 2);
                 for r in receipts {
                     match &r.tx {
-                        TxVariant::V0(tx) => match tx {
-                            TxVariantV0::CreateAccountTx(tx) => {
+                        TxVariant::V0(tx) => {
+                            if let TxVariantV0::CreateAccountTx(tx) = tx {
                                 let mut batch = WriteBatch::new(self.indexer());
                                 batch.insert_or_update_account(tx.account.clone());
                                 batch.commit();
                             }
-                            _ => {}
                         }
                     }
                 }
@@ -522,14 +521,13 @@ impl Blockchain {
 
                     for receipt in additional_receipts {
                         match &receipt.tx {
-                            TxVariant::V0(tx) => match tx {
-                                TxVariantV0::CreateAccountTx(tx) => {
+                            TxVariant::V0(tx) => {
+                                if let TxVariantV0::CreateAccountTx(tx) = tx {
                                     if tx.account.id == new_acc.id {
                                         return Err(TxErr::AccountAlreadyExists);
                                     }
                                 }
-                                _ => {}
-                            },
+                            }
                         }
                     }
 
@@ -605,7 +603,7 @@ impl Blockchain {
 
                     let log = ScriptEngine::new(data, &info.account.script, self.indexer())
                         .eval()
-                        .map_err(|e| TxErr::ScriptEval(e))?;
+                        .map_err(TxErr::ScriptEval)?;
                     Ok(log)
                 }
             },

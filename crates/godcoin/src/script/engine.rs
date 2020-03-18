@@ -281,7 +281,7 @@ impl<'a> ScriptEngine<'a> {
                 match self.tx_data.tx() {
                     TxVariant::V0(tx) => match tx {
                         TxVariantV0::TransferTx(tx) => {
-                            log.push(LogEntry::Transfer(tx.from.clone(), self.remaining_amt))
+                            log.push(LogEntry::Transfer(tx.from, self.remaining_amt))
                         }
                         _ => return Err(self.new_err(EvalErrType::InvalidAmount)),
                     },

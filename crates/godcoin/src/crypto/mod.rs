@@ -60,6 +60,7 @@ pub fn double_sha256(buf: &[u8]) -> Digest {
     Digest(sha256::hash(sha256::hash(buf).as_ref()))
 }
 
+#[derive(Default)]
 pub struct DoubleSha256(sha256::State);
 
 impl DoubleSha256 {
