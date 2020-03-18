@@ -177,7 +177,7 @@ impl BlockStore {
         self.init_state();
     }
 
-    fn read_from_disk(&self, height: u64) -> Option<Block> {
+    pub fn read_from_disk(&self, height: u64) -> Option<Block> {
         if height > self.height {
             return None;
         }
@@ -186,7 +186,7 @@ impl BlockStore {
         self.raw_read_from_disk(pos).ok()
     }
 
-    fn raw_read_from_disk(&self, pos: u64) -> Result<Block, ReadError> {
+    pub fn raw_read_from_disk(&self, pos: u64) -> Result<Block, ReadError> {
         let mut f = self.file.borrow_mut();
         f.seek(SeekFrom::Start(pos)).unwrap();
 
@@ -269,7 +269,7 @@ impl BlockStore {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-enum ReadError {
+pub enum ReadError {
     Eof,
     CorruptBlock,
 }

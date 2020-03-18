@@ -88,6 +88,30 @@ impl Blockchain {
             }
         }
         let mut store = self.store.lock();
+        if store.get_chain_height() == 0 {
+            // Attempt to read the raw block stored at byte position 0, which must _always_ be the
+            // genesis block. Then, we find the owner wallet account creation and forcibly index it.
+            // This will prevent the receipt index process from choking when the creation account is
+            // non-existent since the genesis block is the beginning of the chain.
+            if let Ok(genesis_block) = store.raw_read_from_disk(0) {
+                let receipts = genesis_block.receipts();
+                // Two transactions: the first is the creation of the owner wallet, and then second
+                // is the configuration of the owner transaction.
+                assert_eq!(receipts.len(), 2);
+                for r in receipts {
+                    match &r.tx {
+                        TxVariant::V0(tx) => match tx {
+                            TxVariantV0::CreateAccountTx(tx) => {
+                                let mut batch = WriteBatch::new(self.indexer());
+                                batch.insert_or_update_account(tx.account.clone());
+                                batch.commit();
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
         store.reindex_blocks(opts, |batch, block| {
             self.index_block(batch, block);
             if block.height() % 1000 == 0 {
