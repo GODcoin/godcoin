@@ -23,14 +23,7 @@ fn fresh_blockchain() {
     };
 
     assert_eq!(owner.minter, minter.genesis_info().minter_key.0);
-    assert_eq!(
-        owner.script,
-        script::Builder::new()
-            .push(script::FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::False))
-            .build()
-            .unwrap()
-    );
-    assert_eq!(owner.wallet, (&minter.genesis_info().script).into());
+    assert_eq!(owner.wallet, 0);
 
     assert!(chain.get_block(2).is_none());
     assert_eq!(chain.index_status(), IndexStatus::Complete);
@@ -40,21 +33,30 @@ fn fresh_blockchain() {
 fn reindexed_blockchain() {
     let mut minter = TestMinter::new();
 
-    let from_addr = ScriptHash::from(&minter.genesis_info().script);
-    let from_bal = minter.chain().get_balance(&from_addr, &[]).unwrap();
-    let to_addr = KeyPair::gen();
+    let from_acc = minter.genesis_info().owner_id;
+    let from_bal = minter.chain().get_account(from_acc, &[]).unwrap().balance;
+    let to_acc = {
+        let mut acc = Account::create_default(
+            1,
+            Permissions {
+                threshold: 1,
+                keys: vec![KeyPair::gen().0],
+            },
+        );
+        acc.balance = get_asset("4.00000 TEST");
+        minter.create_account(acc, "2.00000 TEST", false)
+    };
     let amount = get_asset("1.00000 TEST");
 
     // Create a tx we expect to be reindexed
     let tx = {
         let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
             base: create_tx_header("1.00000 TEST"),
-            from: from_addr.clone(),
-            script: minter.genesis_info().script.clone(),
+            from: from_acc,
             call_fn: 1,
             args: {
                 let mut args = vec![];
-                args.push_scripthash(&(&to_addr.0).into());
+                args.push_u64(to_acc.id);
                 args.push_asset(amount);
                 args
             },
@@ -82,6 +84,7 @@ fn reindexed_blockchain() {
 
         assert_eq!(chain.index_status(), IndexStatus::None);
         assert!(chain.get_block(0).is_none());
+        assert!(chain.get_account_info(0, &[]).is_none());
         assert!(!manager.has(tx_data.txid()));
     }
 
@@ -105,22 +108,25 @@ fn reindexed_blockchain() {
         },
     };
     assert_eq!(owner.minter, minter.genesis_info().minter_key.0);
+    assert_eq!(owner.wallet, 0);
+    assert!(chain.get_account_info(0, &[]).is_some());
+
+    let cur_bal = chain.get_account(to_acc.id, &[]).unwrap().balance;
+    // We add the balance that the account started with
+    assert_eq!(cur_bal, to_acc.balance.checked_add(amount).unwrap());
+
+    // The fee transfers back to the minter wallet in the form of a reward tx so it must not be
+    // subtracted during the assertion. We also subtract the balance that the account was created
+    // with.
+    let cur_bal = chain.get_account(from_acc, &[]).unwrap().balance;
     assert_eq!(
-        owner.script,
-        script::Builder::new()
-            .push(script::FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::False))
-            .build()
+        cur_bal,
+        from_bal
+            .checked_sub(amount)
+            .unwrap()
+            .checked_sub(to_acc.balance)
             .unwrap()
     );
-    assert_eq!(owner.wallet, (&minter.genesis_info().script).into());
-
-    let cur_bal = chain.get_balance(&to_addr.0.into(), &[]);
-    assert_eq!(cur_bal, Some(amount));
-
-    // The fee transfers back to the minter wallet in the form of a reward tx so it
-    // must not be subtracted during the assertion
-    let cur_bal = chain.get_balance(&from_addr, &[]);
-    assert_eq!(cur_bal, from_bal.checked_sub(amount));
 
     // Test to ensure that after a reindex the tx cannot be rebroadcasted
     let res = minter.send_req(rpc::Request::Broadcast(tx.clone()));
@@ -133,11 +139,10 @@ fn tx_dupe() {
     let minter = TestMinter::new();
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: create_tx_header("0.00000 TEST"),
-        to: (&minter.genesis_info().script).into(),
+        to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
-        script: minter.genesis_info().script.clone(),
     }));
 
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
@@ -157,11 +162,10 @@ fn tx_no_dupe_with_different_nonce() {
     let minter = TestMinter::new();
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: create_tx_header("0.00000 TEST"),
-        to: (&minter.genesis_info().script).into(),
+        to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
-        script: minter.genesis_info().script.clone(),
     }));
 
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
@@ -190,11 +194,10 @@ fn tx_sig_validation_err_with_different_nonce() {
     let minter = TestMinter::new();
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: create_tx_header("0.00000 TEST"),
-        to: (&minter.genesis_info().script).into(),
+        to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
-        script: minter.genesis_info().script.clone(),
     }));
 
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
@@ -226,11 +229,10 @@ fn tx_expired() {
 
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: create_tx_header_with_expiry("0.00000 TEST", expiry),
-        to: (&minter.genesis_info().script).into(),
+        to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
-        script: minter.genesis_info().script.clone(),
     }));
 
     let res = minter
@@ -257,32 +259,14 @@ fn tx_expiry_far_in_the_future() {
             "0.00000 TEST",
             expiry + constants::TX_MAX_EXPIRY_TIME + 1,
         ),
-        to: (&minter.genesis_info().script).into(),
+        to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
-        script: minter.genesis_info().script.clone(),
     }));
 
     let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
     assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::TxExpired)));
-}
-
-#[test]
-fn tx_script_too_large_err() {
-    let minter = TestMinter::new();
-
-    let tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
-        base: create_tx_header("0.00000 TEST"),
-        to: (&minter.genesis_info().script).into(),
-        amount: get_asset("10.00000 TEST"),
-        attachment: vec![],
-        attachment_name: "".to_owned(),
-        script: Script::new((0..=constants::MAX_SCRIPT_BYTE_SIZE).map(|_| 0).collect()),
-    }));
-
-    let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
-    assert_eq!(res, Err(ErrorKind::TxValidation(TxErr::TxTooLarge)));
 }
 
 #[test]
@@ -291,11 +275,10 @@ fn tx_too_many_signatures_err() {
 
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: create_tx_header("0.00000 TEST"),
-        to: (&minter.genesis_info().script).into(),
+        to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
-        script: Script::new(vec![]),
     }));
     (0..=constants::MAX_TX_SIGNATURES).for_each(|_| tx.append_sign(&KeyPair::gen()));
 
@@ -327,11 +310,10 @@ fn tx_with_bad_chain_id() {
     let minter = TestMinter::new();
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: create_tx_header("0.00000 TEST"),
-        to: (&minter.genesis_info().script).into(),
+        to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
-        script: minter.genesis_info().script.clone(),
     }));
 
     {

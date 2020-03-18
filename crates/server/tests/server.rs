@@ -20,11 +20,10 @@ fn successful_broadcast() {
 
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: create_tx_header("0.00000 TEST"),
-        to: (&minter.genesis_info().script).into(),
+        to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
-        script: minter.genesis_info().script.clone(),
     }));
 
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
@@ -58,10 +57,10 @@ fn get_block_unfiltered() {
 }
 
 #[test]
-fn get_block_filtered_with_addresses() {
-    let set_filter = |minter: &TestMinter, state: &mut WsClient, addr: ScriptHash| {
+fn get_block_filtered_with_accounts() {
+    let set_filter = |minter: &TestMinter, state: &mut WsClient, acc_id: AccountId| {
         let mut filter = BlockFilter::new();
-        filter.insert(addr);
+        filter.insert(acc_id);
         let res = minter
             .send_msg(
                 state,
@@ -95,23 +94,32 @@ fn get_block_filtered_with_addresses() {
     let mut state = create_uninit_state().0;
     let minter = TestMinter::new();
 
-    let from_addr: ScriptHash = (&minter.genesis_info().script).into();
-    let to_addr: ScriptHash = (&KeyPair::gen().0).into();
+    let from_acc = minter.genesis_info().owner_id;
+    let to_acc = {
+        let mut acc = Account::create_default(
+            1,
+            Permissions {
+                threshold: 1,
+                keys: vec![KeyPair::gen().0],
+            },
+        );
+        acc.balance = get_asset("4.00000 TEST");
+        minter.create_account(acc, "2.00000 TEST", true)
+    };
 
     {
-        // Produce block 2, this block will be filtered
+        // Produce block, this block will be filtered
         minter.produce_block().unwrap();
 
         let tx = {
             let amount = get_asset("1.00000 TEST");
             let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
                 base: create_tx_header("1.00000 TEST"),
-                from: (&minter.genesis_info().script).into(),
-                script: minter.genesis_info().script.clone(),
+                from: from_acc,
                 call_fn: 1,
                 args: {
                     let mut args = vec![];
-                    args.push_scripthash(&to_addr);
+                    args.push_u64(to_acc.id);
                     args.push_asset(amount);
                     args
                 },
@@ -125,13 +133,13 @@ fn get_block_filtered_with_addresses() {
         let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
         assert_eq!(res, Ok(rpc::Response::Broadcast));
 
-        // Produce block 3, should not be filtered
+        // Produce block, should not be filtered
         minter.produce_block().unwrap();
     }
 
     // Test the outgoing transfer filter
-    set_filter(&minter, &mut state, from_addr.clone());
-    let (block, res) = get_block(&minter, &mut state, 2);
+    set_filter(&minter, &mut state, from_acc);
+    let (block, res) = get_block(&minter, &mut state, 3);
     assert_eq!(
         res,
         Body::Response(rpc::Response::GetBlock(FilteredBlock::Header((
@@ -139,15 +147,15 @@ fn get_block_filtered_with_addresses() {
             block.signer().unwrap().clone(),
         ))))
     );
-    let (block, res) = get_block(&minter, &mut state, 3);
+    let (block, res) = get_block(&minter, &mut state, 4);
     assert_eq!(
         res,
         Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block)))
     );
 
     // Test the incoming transfer filter
-    set_filter(&minter, &mut state, to_addr.clone());
-    let (block, res) = get_block(&minter, &mut state, 2);
+    set_filter(&minter, &mut state, to_acc.id);
+    let (block, res) = get_block(&minter, &mut state, 3);
     assert_eq!(
         res,
         Body::Response(rpc::Response::GetBlock(FilteredBlock::Header((
@@ -155,7 +163,7 @@ fn get_block_filtered_with_addresses() {
             block.signer().unwrap().clone(),
         ))))
     );
-    let (block, res) = get_block(&minter, &mut state, 3);
+    let (block, res) = get_block(&minter, &mut state, 4);
     assert_eq!(
         res,
         Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block)))
@@ -511,15 +519,19 @@ fn get_block_range_filter_all() {
 #[test]
 fn get_account_info() {
     let minter = TestMinter::new();
-    let addr = (&minter.genesis_info().script).into();
-    let res = minter.send_req(rpc::Request::GetAddressInfo(addr)).unwrap();
+    let acc_id = minter.genesis_info().owner_id;
+    let owner_acc = minter.chain().get_account(acc_id, &[]).unwrap();
+    let res = minter
+        .send_req(rpc::Request::GetAccountInfo(acc_id))
+        .unwrap();
 
+    // The account fee is increased because of the account creation transaction
     let expected = Ok(rpc::Response::GetAccountInfo(AccountInfo {
+        account: owner_acc,
         net_fee: constants::GRAEL_FEE_MIN,
-        addr_fee: constants::GRAEL_FEE_MIN
-            .checked_mul(constants::GRAEL_FEE_MULT)
+        account_fee: constants::GRAEL_FEE_MIN
+            .checked_mul(constants::GRAEL_FEE_MULT.checked_pow(2).unwrap())
             .unwrap(),
-        balance: get_asset("1000.00000 TEST"),
     }));
     assert_eq!(res, expected);
 }
@@ -598,12 +610,13 @@ fn eof_returns_max_u32_id() {
 #[test]
 fn response_id_matches_request() {
     let minter = TestMinter::new();
-    let addr = (&minter.genesis_info().script).into();
+    let acc_id = minter.genesis_info().owner_id;
+    let owner_acc = minter.chain().get_account(acc_id, &[]).unwrap();
 
     let buf = {
         let req = Msg {
             id: 123456789,
-            body: Body::Request(rpc::Request::GetAddressInfo(addr)),
+            body: Body::Request(rpc::Request::GetAccountInfo(acc_id)),
         };
         let mut buf = Vec::with_capacity(4096);
         req.serialize(&mut buf);
@@ -617,11 +630,11 @@ fn response_id_matches_request() {
     let expected = Msg {
         id: 123456789,
         body: Body::Response(rpc::Response::GetAccountInfo(AccountInfo {
+            account: owner_acc,
             net_fee: constants::GRAEL_FEE_MIN,
-            addr_fee: constants::GRAEL_FEE_MIN
-                .checked_mul(constants::GRAEL_FEE_MULT)
+            account_fee: constants::GRAEL_FEE_MIN
+                .checked_mul(constants::GRAEL_FEE_MULT.checked_pow(2).unwrap())
                 .unwrap(),
-            balance: get_asset("1000.00000 TEST"),
         })),
     };
     assert_eq!(res, expected);

@@ -15,11 +15,10 @@ fn mint_tx_verification() {
     let create_tx = |fee: &str| {
         let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
             base: create_tx_header(fee),
-            to: (&minter.genesis_info().script).into(),
+            to: minter.genesis_info().owner_id,
             amount: Asset::default(),
             attachment: vec![],
             attachment_name: "".to_owned(),
-            script: minter.genesis_info().script.clone(),
         }));
         tx.append_sign(&minter.genesis_info().wallet_keys[3]);
         tx.append_sign(&minter.genesis_info().wallet_keys[0]);
@@ -75,11 +74,10 @@ fn mint_tx_updates_balances() {
 
     let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
         base: create_tx_header("0.00000 TEST"),
-        to: (&minter.genesis_info().script).into(),
+        to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
         attachment_name: "".to_owned(),
-        script: minter.genesis_info().script.clone(),
     }));
 
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
@@ -95,6 +93,9 @@ fn mint_tx_updates_balances() {
     let expected_bal = get_asset("1010.00000 TEST");
     assert_eq!(props.token_supply, expected_bal);
 
-    let bal = chain.get_balance(&(&minter.genesis_info().script).into(), &[]);
-    assert_eq!(bal, Some(expected_bal));
+    let bal = chain
+        .get_account(minter.genesis_info().owner_id, &[])
+        .unwrap()
+        .balance;
+    assert_eq!(bal, expected_bal);
 }

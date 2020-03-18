@@ -2,6 +2,7 @@ use super::create_tx_header;
 use godcoin::{
     blockchain::{GenesisBlockInfo, ReindexOpts},
     prelude::*,
+    tx::CreateAccountTx,
 };
 use godcoin_server::{client::*, prelude::*, ServerData};
 use sodiumoxide::randombytes;
@@ -40,11 +41,10 @@ impl TestMinter {
             let receipts = {
                 let mut tx = TxVariant::V0(TxVariantV0::MintTx(MintTx {
                     base: create_tx_header("0.00000 TEST"),
-                    to: (&info.script).into(),
+                    to: info.owner_id,
                     amount: "1000.00000 TEST".parse().unwrap(),
                     attachment: vec![1, 2, 3],
                     attachment_name: "".to_owned(),
-                    script: info.script.clone(),
                 }));
 
                 tx.append_sign(&info.wallet_keys[1]);
@@ -109,12 +109,33 @@ impl TestMinter {
         &self.0.chain
     }
 
+    pub fn minter(&self) -> &Minter {
+        &self.0.minter
+    }
+
     pub fn genesis_info(&self) -> &GenesisBlockInfo {
         &self.1
     }
 
     pub fn produce_block(&self) -> Result<(), blockchain::BlockErr> {
         self.0.minter.force_produce_block(true)
+    }
+
+    pub fn create_account(&self, new_account: Account, fee: &str, produce_block: bool) -> Account {
+        let mut tx = TxVariant::V0(TxVariantV0::CreateAccountTx(CreateAccountTx {
+            base: create_tx_header(fee),
+            creator: self.1.owner_id,
+            account: new_account.clone(),
+        }));
+        tx.append_sign(&self.1.wallet_keys[1]);
+        tx.append_sign(&self.1.wallet_keys[0]);
+        self.send_req(rpc::Request::Broadcast(tx))
+            .expect("Expected response message")
+            .unwrap();
+        if produce_block {
+            self.produce_block().unwrap();
+        }
+        new_account
     }
 
     pub fn send_req(&self, req: rpc::Request) -> Option<Result<rpc::Response, net::ErrorKind>> {
