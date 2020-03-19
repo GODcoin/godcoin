@@ -4,13 +4,13 @@ use std::{
     ops::Deref,
 };
 
-pub mod error;
 pub mod key;
 pub mod sigpair;
+pub mod wif;
 
-pub use self::error::*;
 pub use self::key::*;
 pub use self::sigpair::*;
+pub use self::wif::*;
 
 pub const DIGEST_BYTES: usize = sha256::DIGESTBYTES;
 
