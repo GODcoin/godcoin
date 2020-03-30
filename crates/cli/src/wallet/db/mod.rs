@@ -1,4 +1,8 @@
-use godcoin::crypto::{KeyPair, PrivateKey, Wif};
+use godcoin::{
+    account::AccountId,
+    crypto::{KeyPair, PrivateKey, Wif},
+    serializer::*,
+};
 use rocksdb::{ColumnFamilyDescriptor, IteratorMode, Options, DB};
 use sodiumoxide::{
     crypto::{
@@ -7,7 +11,7 @@ use sodiumoxide::{
     },
     randombytes::randombytes_into,
 };
-use std::{borrow::Cow, path::PathBuf};
+use std::{borrow::Cow, io::Cursor, path::PathBuf};
 
 mod crypto;
 
@@ -17,7 +21,7 @@ pub const CF_ACCOUNTS: &str = "accounts";
 
 pub const PROP_INIT: &[u8] = b"init";
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DbState {
     New,
     Locked,
@@ -136,7 +140,7 @@ impl Db {
         self.key = None;
     }
 
-    pub fn get_accounts(&self) -> Vec<(String, KeyPair)> {
+    pub fn get_accounts(&self) -> Vec<(String, WalletAccount)> {
         let secret = self.key.as_ref().expect("wallet not unlocked");
         let mut accounts = Vec::with_capacity(64);
 
@@ -146,13 +150,13 @@ impl Db {
             let dec_key = decrypt_with_key(&key, secret).unwrap();
             let dec_key = String::from_utf8(dec_key).unwrap();
             let dec_val = decrypt_with_key(&value, secret).unwrap();
-            let dec_val = String::from_utf8(dec_val).unwrap();
-            accounts.push((dec_key, PrivateKey::from_wif(&dec_val).unwrap()));
+            let dec_val = WalletAccount::deserialize(&mut Cursor::new(&dec_val));
+            accounts.push((dec_key, dec_val));
         }
         accounts
     }
 
-    pub fn get_account(&self, account: &str) -> Option<KeyPair> {
+    pub fn get_account(&self, account: &str) -> Option<WalletAccount> {
         for (acc, pair) in self.get_accounts() {
             if acc == account {
                 return Some(pair);
@@ -161,26 +165,59 @@ impl Db {
         None
     }
 
-    pub fn set_account(&self, account: &str, key: &PrivateKey) {
+    pub fn set_account(&self, name: &str, account: WalletAccount) {
         let secret = self.key.as_ref().expect("wallet not unlocked");
-        let enc_key = encrypt_with_key(account.as_bytes(), secret);
-        let enc_value = encrypt_with_key(key.to_wif().as_bytes(), secret);
+        let enc_key = encrypt_with_key(name.as_bytes(), secret);
+        let enc_value = encrypt_with_key(&account.serialize(), secret);
         let cf = self.db.cf_handle(CF_ACCOUNTS).unwrap();
         self.db.put_cf(cf, &enc_key, &enc_value).unwrap();
     }
 
-    pub fn del_account(&self, account: &str) -> bool {
+    pub fn del_account(&self, name: &str) -> bool {
         let secret = self.key.as_ref().expect("wallet not unlocked");
         let cf = self.db.cf_handle(CF_ACCOUNTS).unwrap();
         let iter = self.db.iterator_cf(cf, IteratorMode::Start).unwrap();
         for (key, _) in iter {
             let dec_key = decrypt_with_key(&key, secret).unwrap();
             let dec_key = String::from_utf8(dec_key).unwrap();
-            if dec_key == account {
+            if dec_key == name {
                 self.db.delete_cf(cf, &key).unwrap();
                 return true;
             }
         }
         false
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct WalletAccount {
+    pub id: AccountId,
+    pub keys: Vec<KeyPair>,
+}
+
+impl WalletAccount {
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.push_u64(self.id);
+        buf.push_u16(self.keys.len() as u16);
+        for key in &self.keys {
+            buf.push_bytes(key.1.to_wif().as_bytes());
+        }
+        buf
+    }
+
+    pub fn deserialize(cur: &mut Cursor<&[u8]>) -> WalletAccount {
+        let id = cur.take_u64().unwrap();
+        let key_len = cur.take_u16().unwrap();
+        let mut keys = Vec::with_capacity(usize::from(key_len));
+        for _ in 0..key_len {
+            let key = {
+                let bytes = cur.take_bytes().unwrap();
+                let wif = String::from_utf8(bytes).unwrap();
+                PrivateKey::from_wif(&wif).unwrap()
+            };
+            keys.push(key);
+        }
+        WalletAccount { id, keys }
     }
 }

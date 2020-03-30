@@ -1,5 +1,5 @@
 use godcoin::{prelude::*, script::*};
-use std::{error::Error, num::ParseIntError};
+use std::num::ParseIntError;
 
 #[derive(Clone, Debug)]
 pub enum BuildError {
@@ -32,20 +32,15 @@ pub fn build(ops: &[&str]) -> Result<Script, BuildError> {
         match fn_builder {
             Some(builder) => {
                 fn_builder = Some(match op.as_ref() {
+                    // Events
+                    "OP_TRANSFER" => builder.push(OpFrame::OpTransfer),
                     // Push value
                     "OP_FALSE" => builder.push(OpFrame::False),
                     "OP_TRUE" => builder.push(OpFrame::True),
-                    "OP_PUBKEY" => match iter.next() {
-                        Some(key) => {
-                            let key = PublicKey::from_wif(key).map_err(BuildError::WifError)?;
-                            builder.push(OpFrame::PubKey(key))
-                        }
-                        None => return Err(BuildError::MissingArgForOp(op.to_string())),
-                    },
-                    "OP_SCRIPTHASH" => match iter.next() {
-                        Some(hash) => {
-                            let hash = ScriptHash::from_wif(hash).map_err(BuildError::WifError)?;
-                            builder.push(OpFrame::ScriptHash(hash))
+                    "OP_ACCOUNTID" => match iter.next() {
+                        Some(id) => {
+                            let id = AccountId::from_wif(id).map_err(BuildError::WifError)?;
+                            builder.push(OpFrame::AccountId(id))
                         }
                         None => return Err(BuildError::MissingArgForOp(op.to_string())),
                     },
@@ -56,8 +51,6 @@ pub fn build(ops: &[&str]) -> Result<Script, BuildError> {
                         }
                         None => return Err(BuildError::MissingArgForOp(op.to_string())),
                     },
-                    // Events
-                    "OP_TRANSFER" => builder.push(OpFrame::OpTransfer),
                     // Arithmetic
                     "OP_LOADAMT" => builder.push(OpFrame::OpLoadAmt),
                     "OP_LOADREMAMT" => builder.push(OpFrame::OpLoadRemAmt),
@@ -72,41 +65,33 @@ pub fn build(ops: &[&str]) -> Result<Script, BuildError> {
                     "OP_ENDIF" => builder.push(OpFrame::OpEndIf),
                     "OP_RETURN" => builder.push(OpFrame::OpReturn),
                     // Crypto
-                    "OP_CHECKSIG" => builder.push(OpFrame::OpCheckSig),
-                    "OP_CHECKSIGFASTFAIL" => builder.push(OpFrame::OpCheckSigFastFail),
-                    "OP_CHECKMULTISIG" => {
+                    "OP_CHECKPERMS" => builder.push(OpFrame::OpCheckPerms),
+                    "OP_CHECKPERMSFASTFAIL" => builder.push(OpFrame::OpCheckPermsFastFail),
+                    "OP_CHECKMULTIPERMS" => {
                         let threshold = iter
                             .next()
                             .ok_or_else(|| BuildError::MissingArgForOp(op.to_string()))?
                             .parse()
-                            .map_err(|e: ParseIntError| {
-                                BuildError::Other(e.description().to_owned())
-                            })?;
-                        let key_count = iter
+                            .map_err(|e: ParseIntError| BuildError::Other(format!("{}", e)))?;
+                        let acc_count = iter
                             .next()
                             .ok_or_else(|| BuildError::MissingArgForOp(op.to_string()))?
                             .parse()
-                            .map_err(|e: ParseIntError| {
-                                BuildError::Other(e.description().to_owned())
-                            })?;
-                        builder.push(OpFrame::OpCheckMultiSig(threshold, key_count))
+                            .map_err(|e: ParseIntError| BuildError::Other(format!("{}", e)))?;
+                        builder.push(OpFrame::OpCheckMultiPerms(threshold, acc_count))
                     }
-                    "OP_CHECKMULTISIGFASTFAIL" => {
+                    "OP_CHECKMULTIPERMSFASTFAIL" => {
                         let threshold = iter
                             .next()
                             .ok_or_else(|| BuildError::MissingArgForOp(op.to_string()))?
                             .parse()
-                            .map_err(|e: ParseIntError| {
-                                BuildError::Other(e.description().to_owned())
-                            })?;
-                        let key_count = iter
+                            .map_err(|e: ParseIntError| BuildError::Other(format!("{}", e)))?;
+                        let acc_count = iter
                             .next()
                             .ok_or_else(|| BuildError::MissingArgForOp(op.to_string()))?
                             .parse()
-                            .map_err(|e: ParseIntError| {
-                                BuildError::Other(e.description().to_owned())
-                            })?;
-                        builder.push(OpFrame::OpCheckMultiSigFastFail(threshold, key_count))
+                            .map_err(|e: ParseIntError| BuildError::Other(format!("{}", e)))?;
+                        builder.push(OpFrame::OpCheckMultiPermsFastFail(threshold, acc_count))
                     }
                     _ => return Err(BuildError::UnknownOp(op.to_string())),
                 })

@@ -67,12 +67,33 @@ pub fn build_script(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), Strin
                 );
             }
             println!("{:?}", script);
-            println!("P2SH address => {}", ScriptHash::from(script).to_wif());
         }
         Err(e) => {
             println!("{:?}", e);
         }
     }
+    Ok(())
+}
+
+pub fn args_to_bin(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
+    let str_args: Vec<&str> = args.values_of("arg").unwrap().collect();
+    let mut arg_buf = vec![];
+    for a in str_args {
+        if a.starts_with("address=") {
+            let a = &a[8..];
+            let id = AccountId::from_wif(a)
+                .map_err(|e| format!("Failed to parse account address: {} ({:?})", a, e))?;
+            arg_buf.push_u64(id);
+        } else if a.starts_with("asset=") {
+            let a = &a[6..];
+            let asset = a
+                .parse()
+                .map_err(|e| format!("Failed to parse asset amount: {} ({:?})", a, e))?;
+            arg_buf.push_asset(asset);
+        }
+    }
+
+    println!("{}", faster_hex::hex_string(&arg_buf).unwrap());
     Ok(())
 }
 
@@ -87,14 +108,6 @@ pub fn check_script_size(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), 
     }
     let word = if script.len() == 1 { "byte" } else { "bytes" };
     println!("Script is {} {}", script.len(), word);
-    Ok(())
-}
-
-pub fn script_to_p2sh(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
-    let hex = args.value_of("hex").unwrap();
-    let hash: ScriptHash = Script::new(hex_to_bytes!(hex)?).into();
-    println!("P2SH address => {}", hash.to_wif());
-
     Ok(())
 }
 
@@ -124,7 +137,9 @@ pub fn sign_tx(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
             .db
             .get_account(account)
             .ok_or("Account does not exist")?;
-        tx.append_sign(&account);
+        for key in account.keys {
+            tx.append_sign(&key);
+        }
     }
 
     tx_bytes.clear();
@@ -192,7 +207,6 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), Strin
         .unwrap()
         .parse()
         .map_err(|_| "Failed to parse asset")?;
-    let script: Script = hex_to_bytes!(args.value_of("owner_script").unwrap())?.into();
 
     let res = send_rpc_req(wallet, rpc::Request::GetProperties)?;
     let owner = match res.body {
@@ -235,7 +249,6 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), Strin
         amount,
         attachment,
         attachment_name: attachment_name.to_owned(),
-        script,
     }));
     let mut buf = Vec::with_capacity(4096);
     mint_tx.serialize(&mut buf);
@@ -244,7 +257,9 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), Strin
     Ok(())
 }
 
-pub fn build_transfer_tx(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
+pub fn build_transfer_tx(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
+    check_unlocked!(wallet);
+
     let nonce: u32 = {
         let mut nonce = [0; 4];
         sodiumoxide::randombytes::randombytes_into(&mut nonce);
@@ -260,7 +275,12 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), 
         godcoin::get_epoch_time() + expiry
     };
 
-    let from_script = Script::new(hex_to_bytes!(args.value_of("from_script").unwrap())?);
+    let from_acc = args.value_of("from_account").unwrap();
+    let from_acc = match wallet.db.get_account(from_acc) {
+        Some(acc) => acc.id,
+        None => AccountId::from_wif(from_acc)
+            .map_err(|e| format!("Failed to parse account address: {:?}", e))?,
+    };
 
     let call_fn = args
         .value_of("call_fn")
@@ -292,8 +312,7 @@ pub fn build_transfer_tx(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), 
             fee,
             signature_pairs: vec![],
         },
-        from: ScriptHash::from(&from_script),
-        script: from_script,
+        from: from_acc,
         call_fn,
         args: call_args,
         amount,

@@ -114,17 +114,18 @@ impl Wallet {
                     ),
             )
             .subcommand(
-                SubCommand::with_name("create_account")
-                    .about("Create an account")
+                SubCommand::with_name("gen_keypair")
+                    .about("Generates a keypair for use with accounts")
+            )
+            .subcommand(
+                SubCommand::with_name("account_id_to_address")
+                    .about("Converts an ID to a pay-to-address WIF")
                     .arg(
-                        Arg::with_name("name")
-                            .long("name")
+                        Arg::with_name("id")
                             .required(true)
                             .takes_value(true)
-                            .help(
-                                "Name of the account to create, keys are automatically generated",
-                            ),
-                    ),
+                            .help("Decimal ID to convert")
+                    )
             )
             .subcommand(
                 SubCommand::with_name("import_account")
@@ -134,14 +135,24 @@ impl Wallet {
                             .long("name")
                             .required(true)
                             .takes_value(true)
-                            .help("Name of the account to import"),
+                            .help("The name of the account (stored in the wallet only)"),
+                    )
+                    .arg(
+                        Arg::with_name("account")
+                            .long("account")
+                            .required(true)
+                            .takes_value(true)
+                            .help("The account address"),
                     )
                     .arg(
                         Arg::with_name("wif")
                             .long("wif")
                             .required(true)
                             .takes_value(true)
-                            .help("Private WIF key for the account"),
+                            .multiple(true)
+                            .help(
+                                "Private WIF key for the account [accepts multiple for multisig]",
+                            ),
                     ),
             )
             .subcommand(
@@ -171,14 +182,14 @@ impl Wallet {
                     ),
             )
             .subcommand(
-                SubCommand::with_name("get_addr_info")
+                SubCommand::with_name("get_account_info")
                     .about("Retrieve address information from the blockchain")
                     .arg(
-                        Arg::with_name("address")
-                            .long("address")
+                        Arg::with_name("account")
+                            .long("account")
                             .required(true)
                             .takes_value(true)
-                            .help("Wallet account name or P2SH address"),
+                            .help("Wallet account name or ID"),
                     ),
             )
             .subcommand(
@@ -193,18 +204,19 @@ impl Wallet {
                     ),
             )
             .subcommand(
-                SubCommand::with_name("check_script_size")
-                    .about("Checks if the script is too large and prints the size in bytes")
+                SubCommand::with_name("args_to_bin")
+                    .about("Convert an array of arguments to hex to pass as script args")
                     .arg(
-                        Arg::with_name("hex")
+                        Arg::with_name("arg")
                             .required(true)
                             .takes_value(true)
-                            .help("Binary script in hex format"),
-                    ),
+                            .multiple(true)
+                            .help("An argument that starts address={} or asset={}")
+                    )
             )
             .subcommand(
-                SubCommand::with_name("script_to_p2sh")
-                    .about("Converts a script to a payable P2SH address")
+                SubCommand::with_name("check_script_size")
+                    .about("Checks if the script is too large and prints the size in bytes")
                     .arg(
                         Arg::with_name("hex")
                             .required(true)
@@ -270,6 +282,63 @@ impl Wallet {
                     ),
             )
             .subcommand(
+                SubCommand::with_name("build_create_account_tx")
+                    .about("Builds a create account transaction")
+                    .arg(
+                        Arg::with_name("expiry")
+                            .long("expiry")
+                            .takes_value(true)
+                            .required(true)
+                            .default_value("60000")
+                            .help("The time in milliseconds when a transaction expires from now"),
+                    )
+                    .arg(
+                        Arg::with_name("fee")
+                            .long("fee")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The fee to pay for the transaction"),
+                    )
+                    .arg(
+                        Arg::with_name("creator")
+                            .long("creator")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The creator account or account address"),
+                    )
+                    .arg(
+                        Arg::with_name("balance")
+                            .long("balance")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The balance to be deposited in the new account"),
+                    )
+                    .arg(
+                        Arg::with_name("script")
+                            .long("script")
+                            .takes_value(true)
+                            .required(false)
+                            .help(
+                                "The script to apply to the account, otherwise use a default script"
+                            ),
+                    )
+                    .arg(
+                        Arg::with_name("threshold")
+                            .long("threshold")
+                            .takes_value(true)
+                            .required(true)
+                            .help("Account permissions signatory threshold for verification"),
+                    )
+                    .arg(
+                        Arg::with_name("public_wif")
+                            .long("public-wif")
+                            .takes_value(true)
+                            .required(true)
+                            .multiple(true)
+                            .help("Public key allowed for signing to meet the signatory threshold"),
+                    )
+            )
+            .subcommand(
                 SubCommand::with_name("build_mint_tx")
                     .about("Builds a mint transaction")
                     .arg(
@@ -285,14 +354,7 @@ impl Wallet {
                             .long("amount")
                             .takes_value(true)
                             .required(true)
-                            .help("The amount of tokens to be minted, must be an asset string"),
-                    )
-                    .arg(
-                        Arg::with_name("owner_script")
-                            .long("owner-script")
-                            .takes_value(true)
-                            .required(true)
-                            .help("The owner execution script"),
+                            .help("The amount of tokens to be minted"),
                     )
                     .arg(
                         Arg::with_name("attachment_path")
@@ -320,8 +382,8 @@ impl Wallet {
                             .help("The time in milliseconds when a transaction expires from now"),
                     )
                     .arg(
-                        Arg::with_name("from_script")
-                            .long("from-script")
+                        Arg::with_name("from_account")
+                            .long("from-account")
                             .takes_value(true)
                             .required(true)
                             .help("The account to transfer from"),
@@ -344,7 +406,7 @@ impl Wallet {
                             .long("amount")
                             .takes_value(true)
                             .required(true)
-                            .help("The amount of tokens to be minted, must be an asset string"),
+                            .help("The amount of tokens allowed to be transferred"),
                     )
                     .arg(
                         Arg::with_name("fee")
@@ -379,19 +441,25 @@ impl Wallet {
             Ok(args) => match args.subcommand() {
                 ("new", Some(args)) => (false, cmd::create_wallet(self, args)),
                 ("unlock", Some(args)) => (false, cmd::unlock(self, args)),
-                ("create_account", Some(args)) => (true, cmd::account::create(self, args)),
+                ("gen_keypair", Some(_)) => (true, Ok(crate::generate_keypair())),
+                ("account_id_to_address", Some(args)) => {
+                    (true, cmd::account::account_id_to_address(self, args))
+                }
                 ("import_account", Some(args)) => (true, cmd::account::import(self, args)),
                 ("delete_account", Some(args)) => (true, cmd::account::delete(self, args)),
                 ("list_accounts", Some(args)) => (true, cmd::account::list(self, args)),
                 ("get_account", Some(args)) => (true, cmd::account::get(self, args)),
-                ("get_addr_info", Some(args)) => (true, cmd::account::get_addr_info(self, args)),
+                ("get_account_info", Some(args)) => (true, cmd::account::get_acc_info(self, args)),
                 ("build_script", Some(args)) => (true, cmd::build_script(self, args)),
+                ("args_to_bin", Some(args)) => (true, cmd::args_to_bin(self, args)),
                 ("check_script_size", Some(args)) => (true, cmd::check_script_size(self, args)),
-                ("script_to_p2sh", Some(args)) => (true, cmd::script_to_p2sh(self, args)),
                 ("decode_tx", Some(args)) => (true, cmd::decode_tx(self, args)),
                 ("sign_tx", Some(args)) => (true, cmd::sign_tx(self, args)),
                 ("unsign_tx", Some(args)) => (true, cmd::unsign_tx(self, args)),
                 ("broadcast", Some(args)) => (true, cmd::broadcast(self, args)),
+                ("build_create_account_tx", Some(args)) => {
+                    (true, cmd::account::build_create_account_tx(self, args))
+                }
                 ("build_mint_tx", Some(args)) => (true, cmd::build_mint_tx(self, args)),
                 ("build_transfer_tx", Some(args)) => (true, cmd::build_transfer_tx(self, args)),
                 ("get_properties", Some(args)) => (true, cmd::get_properties(self, args)),
