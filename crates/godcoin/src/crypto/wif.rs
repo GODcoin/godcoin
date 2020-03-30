@@ -1,11 +1,11 @@
+use super::{double_sha256, key::*};
+use crate::{account::AccountId, serializer::BufWrite};
+use sodiumoxide::crypto::sign;
 use std::{
+    convert::TryInto,
     error::Error,
     fmt::{self, Display},
-    convert::TryInto,
 };
-use sodiumoxide::crypto::sign;
-use super::{key::*, double_sha256};
-use crate::{account::AccountId, serializer::BufWrite};
 
 pub const PUB_ADDRESS_PREFIX: &str = "GOD";
 const PRIV_BUF_PREFIX: u8 = 0x01;
@@ -237,9 +237,7 @@ mod tests {
 
     #[test]
     fn invalid_prefix_account_id() {
-        let mut bytes = bs58::decode("FVarNr3nEqUnvquCn")
-            .into_vec()
-            .unwrap();
+        let mut bytes = bs58::decode("FVarNr3nEqUnvquCn").into_vec().unwrap();
         bytes[0] = 255;
         let mut wif = bs58::encode(bytes).into_string();
         wif.insert_str(0, PUB_ADDRESS_PREFIX);
@@ -278,9 +276,7 @@ mod tests {
 
     #[test]
     fn invalid_checksum_account_id() {
-        let mut bytes = bs58::decode("FVarNr3nEqUnvquCn")
-            .into_vec()
-            .unwrap();
+        let mut bytes = bs58::decode("FVarNr3nEqUnvquCn").into_vec().unwrap();
         let len = bytes.len();
         for i in 1..5 {
             bytes[len - i] = 0;
