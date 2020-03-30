@@ -48,6 +48,11 @@ pub fn start(opts: ServerOpts) {
     if is_empty {
         let info = blockchain.create_genesis_block(opts.minter_key.clone());
         info!("=> Generated new block chain");
+        info!(
+            "=> Address: {} (raw id: {})",
+            info.owner_id.to_wif(),
+            info.owner_id
+        );
         info!("=> {:?}", info.script);
         for (index, key) in info.wallet_keys.iter().enumerate() {
             info!("=> Wallet key {}: {}", index + 1, key.1.to_wif());
