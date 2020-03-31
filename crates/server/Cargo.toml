@@ -20,7 +20,7 @@ testnet = ["godcoin/testnet"]
 [dependencies]
 dirs = "2.0.2"
 env_logger = "0.7.1"
-futures = "0.3.2"
+futures = "0.3.4"
 godcoin = { path = "../godcoin" }
 log = "0.4.8"
 parking_lot = "0.10.0"
@@ -31,12 +31,12 @@ version = "2.33.0"
 default-features = false
 
 [dependencies.serde]
-version = "1.0.104"
+version = "1.0.105"
 default-features = false
 features = ["derive"]
 
 [dependencies.tokio]
-version = "0.2.11"
+version = "0.2.13"
 default-features = false
 features = ["macros", "tcp", "time", "rt-threaded", "signal", "stream"]
 
