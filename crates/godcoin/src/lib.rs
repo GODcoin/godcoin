@@ -25,6 +25,7 @@ pub fn get_epoch_time() -> u64 {
 pub mod prelude {
     pub use super::account::{
         Account, AccountId, Permissions, PermsSigVerifyErr, IMMUTABLE_ACCOUNT_THRESHOLD,
+        MAX_PERM_KEYS,
     };
     pub use super::asset::{self, Asset, AssetError, AssetErrorKind};
     pub use super::blockchain::{
