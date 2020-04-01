@@ -121,21 +121,30 @@ impl TestMinter {
         self.0.minter.force_produce_block(true)
     }
 
-    pub fn create_account(&self, new_account: Account, fee: &str, produce_block: bool) -> Account {
+    pub fn create_account(&self, new_acc: Account, fee: &str, produce_block: bool) -> Account {
+        self.try_create_account(new_acc, fee, produce_block)
+            .unwrap()
+    }
+
+    pub fn try_create_account(
+        &self,
+        new_acc: Account,
+        fee: &str,
+        produce_block: bool,
+    ) -> Result<Account, net::ErrorKind> {
         let mut tx = TxVariant::V0(TxVariantV0::CreateAccountTx(CreateAccountTx {
             base: create_tx_header(fee),
             creator: self.1.owner_id,
-            account: new_account.clone(),
+            account: new_acc.clone(),
         }));
         tx.append_sign(&self.1.wallet_keys[1]);
         tx.append_sign(&self.1.wallet_keys[0]);
         self.send_req(rpc::Request::Broadcast(tx))
-            .expect("Expected response message")
-            .unwrap();
+            .expect("Expected response message")?;
         if produce_block {
             self.produce_block().unwrap();
         }
-        new_account
+        Ok(new_acc)
     }
 
     pub fn send_req(&self, req: rpc::Request) -> Option<Result<rpc::Response, net::ErrorKind>> {
