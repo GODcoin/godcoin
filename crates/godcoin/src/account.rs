@@ -103,6 +103,27 @@ impl Permissions {
         }
     }
 
+    pub fn is_valid(&self) -> bool {
+        // Validity rules:
+        // (1) Immutable accounts must have a threshold set to the immutable bits
+        // with an empty keys array.
+        // (2) Threshold count must not exceed the maximum allowed keys (exclusive
+        // of immutable bits).
+        // (3) Threshold count must not exceed the length of keys provided.
+        // (4) Provided keys must not exceed the maximum allowed keys.
+        if self.threshold == IMMUTABLE_ACCOUNT_THRESHOLD {
+            if !self.keys.is_empty() {
+                return false;
+            }
+        } else if self.keys.len() > usize::from(MAX_PERM_KEYS)
+            || usize::from(self.threshold) > self.keys.len()
+        {
+            return false;
+        }
+
+        true
+    }
+
     pub fn serialize(&self, buf: &mut Vec<u8>) {
         buf.push(self.threshold);
         buf.push(self.keys.len() as u8);

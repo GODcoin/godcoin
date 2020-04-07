@@ -28,7 +28,7 @@ fn create_acc_tx_broadcast_success() {
 
         let mut tx = TxVariant::V0(TxVariantV0::CreateAccountTx(CreateAccountTx {
             base: create_tx_header(&req_fee.to_string()),
-            creator: minter.genesis_info().owner_id,
+            creator: owner_id,
             account,
         }));
         tx.append_sign(&minter.genesis_info().wallet_keys[1]);

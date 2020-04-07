@@ -18,7 +18,7 @@ pub use self::{
 };
 
 use crate::{
-    account::{Account, AccountId, Permissions, IMMUTABLE_ACCOUNT_THRESHOLD, MAX_PERM_KEYS},
+    account::{Account, AccountId, Permissions},
     asset::Asset,
     constants::*,
     crypto::*,
@@ -95,7 +95,7 @@ impl Blockchain {
             // non-existent since the genesis block is the beginning of the chain.
             if let Ok(genesis_block) = store.raw_read_from_disk(0) {
                 let receipts = genesis_block.receipts();
-                // Two transactions: the first is the creation of the owner wallet, and then second
+                // Two transactions: the first is the creation of the owner wallet, and the second
                 // is the configuration of the owner transaction.
                 assert_eq!(receipts.len(), 2);
                 for r in receipts {
@@ -194,6 +194,9 @@ impl Blockchain {
                                 filter.contains(&create_acc_tx.creator)
                                     || filter.contains(&create_acc_tx.account.id)
                             }
+                            TxVariantV0::UpdateAccountTx(update_acc_tx) => {
+                                filter.contains(&update_acc_tx.account_id)
+                            }
                             TxVariantV0::TransferTx(transfer_tx) => {
                                 if filter.contains(&transfer_tx.from) {
                                     return true;
@@ -241,6 +244,17 @@ impl Blockchain {
                                 .balance
                                 .checked_sub(tx.account.balance)?
                                 .checked_sub(tx.fee)?;
+                        }
+                    }
+                    TxVariantV0::UpdateAccountTx(tx) => {
+                        if tx.account_id == id {
+                            acc.balance = acc.balance.checked_sub(tx.fee)?;
+                        }
+                        if let Some(script) = &tx.new_script {
+                            acc.script = script.clone();
+                        }
+                        if let Some(perms) = &tx.new_permissions {
+                            acc.permissions = perms.clone();
                         }
                     }
                     TxVariantV0::TransferTx(tx) => {
@@ -291,6 +305,7 @@ impl Blockchain {
                         TxVariantV0::OwnerTx(_) => false,
                         TxVariantV0::MintTx(_) => false,
                         TxVariantV0::CreateAccountTx(tx) => tx.creator == id,
+                        TxVariantV0::UpdateAccountTx(tx) => tx.account_id == id,
                         TxVariantV0::TransferTx(tx) => tx.from == id,
                     },
                 };
@@ -412,15 +427,8 @@ impl Blockchain {
             };
         }
 
+        // Check positive amount
         macro_rules! check_pos_amt {
-            ($asset:expr) => {
-                if $asset.amount < 0 {
-                    return Err(TxErr::InvalidAmount);
-                }
-            };
-        }
-
-        macro_rules! check_suf_bal {
             ($asset:expr) => {
                 if $asset.amount < 0 {
                     return Err(TxErr::InvalidAmount);
@@ -493,29 +501,9 @@ impl Blockchain {
                         return Err(TxErr::TxTooLarge);
                     } else if new_acc.destroyed {
                         return Err(TxErr::TxProhibited);
-                    }
-
-                    {
-                        let perms = &new_acc.permissions;
-                        // Validity rules:
-                        // (1) Immutable accounts must have a threshold set to the immutable bits
-                        // with an empty keys array.
-                        // (2) Threshold count must not exceed the maximum allowed keys (exclusive
-                        // of immutable bits).
-                        // (3) Threshold count must not exceed the length of keys provided.
-                        // (4) Provided keys must not exceed the maximum allowed keys.
-                        if perms.threshold == IMMUTABLE_ACCOUNT_THRESHOLD {
-                            if !perms.keys.is_empty() {
-                                return Err(TxErr::InvalidAccountPermissions);
-                            }
-                        } else if perms.keys.len() > usize::from(MAX_PERM_KEYS)
-                            || usize::from(perms.threshold) > perms.keys.len()
-                        {
-                            return Err(TxErr::InvalidAccountPermissions);
-                        }
-                    }
-
-                    if self.indexer.get_account(new_acc.id).is_some() {
+                    } else if !new_acc.permissions.is_valid() {
+                        return Err(TxErr::InvalidAccountPermissions);
+                    } else if self.indexer.account_exists(new_acc.id) {
                         return Err(TxErr::AccountAlreadyExists);
                     }
 
@@ -562,13 +550,67 @@ impl Blockchain {
                         .ok_or(TxErr::Arithmetic)?
                         .checked_sub(new_acc.balance)
                         .ok_or(TxErr::Arithmetic)?;
-                    check_suf_bal!(bal);
+                    check_pos_amt!(bal);
 
                     let txid = data.txid();
                     if creator_acc_info
                         .account
                         .permissions
                         .verify(txid.as_ref(), &create_account_tx.signature_pairs)
+                        .is_err()
+                    {
+                        return Err(TxErr::ScriptEval(EvalErr::new(
+                            0,
+                            EvalErrType::ScriptRetFalse,
+                        )));
+                    }
+
+                    Ok(vec![])
+                }
+                TxVariantV0::UpdateAccountTx(update_acc_tx) => {
+                    let acc_info = match self
+                        .get_account_info(update_acc_tx.account_id, additional_receipts)
+                    {
+                        Some(info) => info,
+                        None => return Err(TxErr::AccountNotFound),
+                    };
+
+                    if acc_info.account.destroyed {
+                        return Err(TxErr::TxProhibited);
+                    } else if let Some(script) = &update_acc_tx.new_script {
+                        if script.len() > MAX_SCRIPT_BYTE_SIZE {
+                            return Err(TxErr::TxTooLarge);
+                        }
+                    } else if let Some(perms) = &update_acc_tx.new_permissions {
+                        if !perms.is_valid() {
+                            return Err(TxErr::InvalidAccountPermissions);
+                        }
+                    }
+
+                    {
+                        let req_fee = acc_info
+                            .total_fee()
+                            .ok_or(TxErr::Arithmetic)?
+                            .checked_mul(GRAEL_ACC_CREATE_FEE_MULT)
+                            .ok_or(TxErr::Arithmetic)?;
+
+                        if tx.fee < req_fee {
+                            return Err(TxErr::InvalidFeeAmount);
+                        }
+                    }
+
+                    let bal = acc_info
+                        .account
+                        .balance
+                        .checked_sub(update_acc_tx.fee)
+                        .ok_or(TxErr::Arithmetic)?;
+                    check_pos_amt!(bal);
+
+                    let txid = data.txid();
+                    if acc_info
+                        .account
+                        .permissions
+                        .verify(txid.as_ref(), &update_acc_tx.signature_pairs)
                         .is_err()
                     {
                         return Err(TxErr::ScriptEval(EvalErr::new(
@@ -599,7 +641,7 @@ impl Blockchain {
                         .ok_or(TxErr::Arithmetic)?
                         .checked_sub(transfer.amount)
                         .ok_or(TxErr::Arithmetic)?;
-                    check_suf_bal!(bal);
+                    check_pos_amt!(bal);
 
                     let log = ScriptEngine::new(data, &info.account.script, self.indexer())
                         .eval()
@@ -640,6 +682,16 @@ impl Blockchain {
                 TxVariantV0::CreateAccountTx(tx) => {
                     batch.sub_bal(tx.creator, tx.fee.checked_add(tx.account.balance).unwrap());
                     batch.insert_or_update_account(tx.account.clone());
+                }
+                TxVariantV0::UpdateAccountTx(tx) => {
+                    let acc = batch.get_account_mut(tx.account_id);
+                    acc.balance = acc.balance.checked_sub(tx.fee).unwrap();
+                    if let Some(script) = &tx.new_script {
+                        acc.script = script.clone();
+                    }
+                    if let Some(perms) = &tx.new_permissions {
+                        acc.permissions = perms.clone();
+                    }
                 }
                 TxVariantV0::TransferTx(tx) => {
                     batch.sub_bal(tx.from, tx.fee.checked_add(tx.amount).unwrap());

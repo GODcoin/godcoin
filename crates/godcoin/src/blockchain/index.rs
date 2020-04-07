@@ -1,5 +1,12 @@
 use rocksdb::{ColumnFamilyDescriptor, DBRecoveryMode, IteratorMode, Options, DB};
-use std::{collections::HashMap, convert::TryInto, io::Cursor, mem, path::Path, sync::Arc};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    convert::TryInto,
+    io::Cursor,
+    mem,
+    path::Path,
+    sync::Arc,
+};
 
 use crate::{
     account::{Account, AccountId},
@@ -221,34 +228,25 @@ impl WriteBatch {
     }
 
     pub fn add_bal(&mut self, id: AccountId, amount: Asset) {
-        match self.accounts.get_mut(&id) {
-            Some(account) => {
-                account.balance = account.balance.checked_add(amount).unwrap();
-            }
-            None => {
-                let mut account = self.indexer.get_account(id).unwrap();
-                account.balance = account.balance.checked_add(amount).unwrap();
-                self.accounts.insert(id, account);
-            }
-        }
+        let acc = self.get_account_mut(id);
+        acc.balance = acc.balance.checked_add(amount).unwrap();
     }
 
     pub fn sub_bal(&mut self, id: AccountId, amount: Asset) {
-        match self.accounts.get_mut(&id) {
-            Some(account) => {
-                account.balance = account.balance.checked_sub(amount).unwrap();
-            }
-            None => {
-                let mut account = self.indexer.get_account(id).unwrap();
-                account.balance = account.balance.checked_sub(amount).unwrap();
-                self.accounts.insert(id, account);
-            }
-        }
+        let acc = self.get_account_mut(id);
+        acc.balance = acc.balance.checked_sub(amount).unwrap();
     }
 
     #[inline]
     pub fn insert_or_update_account(&mut self, account: Account) {
         self.accounts.insert(account.id, account);
+    }
+
+    pub fn get_account_mut(&mut self, id: AccountId) -> &mut Account {
+        match self.accounts.entry(id) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(self.indexer.get_account(id).unwrap()),
+        }
     }
 }
 

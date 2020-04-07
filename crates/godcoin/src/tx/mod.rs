@@ -5,10 +5,11 @@ use std::{
 };
 
 use crate::{
-    account::{Account, AccountId},
+    account::{Account, AccountId, Permissions},
     asset::Asset,
     constants::CHAIN_ID,
     crypto::{Digest, DoubleSha256, KeyPair, PublicKey, SigPair},
+    script::Script,
     serializer::*,
 };
 
@@ -21,7 +22,8 @@ pub enum TxType {
     Owner = 0x00,
     Mint = 0x01,
     CreateAccount = 0x02,
-    Transfer = 0x03,
+    UpdateAccount = 0x03,
+    Transfer = 0x04,
 }
 
 pub trait SerializeTx {
@@ -166,6 +168,7 @@ impl TxVariant {
                     TxVariantV0::OwnerTx(tx) => serialize_sigs!(tx),
                     TxVariantV0::MintTx(tx) => serialize_sigs!(tx),
                     TxVariantV0::CreateAccountTx(tx) => serialize_sigs!(tx),
+                    TxVariantV0::UpdateAccountTx(tx) => serialize_sigs!(tx),
                     TxVariantV0::TransferTx(tx) => serialize_sigs!(tx),
                 }
             }
@@ -182,6 +185,7 @@ impl TxVariant {
                     TxVariantV0::OwnerTx(tx) => tx.serialize(buf),
                     TxVariantV0::MintTx(tx) => tx.serialize(buf),
                     TxVariantV0::CreateAccountTx(tx) => tx.serialize(buf),
+                    TxVariantV0::UpdateAccountTx(tx) => tx.serialize(buf),
                     TxVariantV0::TransferTx(tx) => tx.serialize(buf),
                 }
             }
@@ -198,6 +202,9 @@ impl TxVariant {
                     TxType::Mint => TxVariantV0::MintTx(MintTx::deserialize(cur, base)?),
                     TxType::CreateAccount => {
                         TxVariantV0::CreateAccountTx(CreateAccountTx::deserialize(cur, base)?)
+                    }
+                    TxType::UpdateAccount => {
+                        TxVariantV0::UpdateAccountTx(UpdateAccountTx::deserialize(cur, base)?)
                     }
                     TxType::Transfer => {
                         TxVariantV0::TransferTx(TransferTx::deserialize(cur, base)?)
@@ -235,6 +242,7 @@ pub enum TxVariantV0 {
     OwnerTx(OwnerTx),
     MintTx(MintTx),
     CreateAccountTx(CreateAccountTx),
+    UpdateAccountTx(UpdateAccountTx),
     TransferTx(TransferTx),
 }
 
@@ -246,6 +254,7 @@ impl Deref for TxVariantV0 {
             TxVariantV0::OwnerTx(tx) => &tx.base,
             TxVariantV0::MintTx(tx) => &tx.base,
             TxVariantV0::CreateAccountTx(tx) => &tx.base,
+            TxVariantV0::UpdateAccountTx(tx) => &tx.base,
             TxVariantV0::TransferTx(tx) => &tx.base,
         }
     }
@@ -257,6 +266,7 @@ impl DerefMut for TxVariantV0 {
             TxVariantV0::OwnerTx(tx) => &mut tx.base,
             TxVariantV0::MintTx(tx) => &mut tx.base,
             TxVariantV0::CreateAccountTx(tx) => &mut tx.base,
+            TxVariantV0::UpdateAccountTx(tx) => &mut tx.base,
             TxVariantV0::TransferTx(tx) => &mut tx.base,
         }
     }
@@ -283,6 +293,7 @@ impl Tx {
             t if t == TxType::Owner as u8 => TxType::Owner,
             t if t == TxType::Mint as u8 => TxType::Mint,
             t if t == TxType::CreateAccount as u8 => TxType::CreateAccount,
+            t if t == TxType::UpdateAccount as u8 => TxType::UpdateAccount,
             t if t == TxType::Transfer as u8 => TxType::Transfer,
             _ => return None,
         };
@@ -396,6 +407,58 @@ impl DeserializeTx<CreateAccountTx> for CreateAccountTx {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpdateAccountTx {
+    pub base: Tx,
+    pub account_id: AccountId,
+    pub new_script: Option<Script>,
+    pub new_permissions: Option<Permissions>,
+}
+
+impl SerializeTx for UpdateAccountTx {
+    fn serialize(&self, buf: &mut Vec<u8>) {
+        buf.push(TxType::UpdateAccount as u8);
+        self.serialize_header(buf);
+        buf.push_u64(self.account_id);
+        match &self.new_script {
+            Some(script) => {
+                buf.push(0x01);
+                buf.push_bytes(&script);
+            }
+            None => buf.push(0x00),
+        }
+        match &self.new_permissions {
+            Some(perms) => {
+                buf.push(0x01);
+                perms.serialize(buf);
+            }
+            None => buf.push(0x00),
+        }
+    }
+}
+
+impl DeserializeTx<UpdateAccountTx> for UpdateAccountTx {
+    fn deserialize(cur: &mut Cursor<&[u8]>, tx: Tx) -> Option<Self> {
+        let account_id = cur.take_u64().ok()?;
+        let new_script = match cur.take_u8().ok()? {
+            0x01 => Some(Script::new(cur.take_bytes().ok()?)),
+            0x00 => None,
+            _ => return None,
+        };
+        let new_permissions = match cur.take_u8().ok()? {
+            0x01 => Some(Permissions::deserialize(cur).ok()?),
+            0x00 => None,
+            _ => return None,
+        };
+        Some(Self {
+            base: tx,
+            account_id,
+            new_script,
+            new_permissions,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TransferTx {
     pub base: Tx,
     pub from: AccountId,
@@ -438,6 +501,7 @@ impl DeserializeTx<TransferTx> for TransferTx {
 tx_deref!(OwnerTx);
 tx_deref!(MintTx);
 tx_deref!(CreateAccountTx);
+tx_deref!(UpdateAccountTx);
 tx_deref!(TransferTx);
 
 #[cfg(test)]

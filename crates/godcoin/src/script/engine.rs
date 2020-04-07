@@ -55,8 +55,8 @@ impl<'a> ScriptEngine<'a> {
         }
     }
 
-    /// Returns the log the script produces after execution completes. If any error occurs during evaluation, execution
-    /// will be aborted and return an error.
+    /// Returns the log the script produces after execution completes. If any error occurs during
+    /// evaluation, execution will be aborted and return an error.
     #[inline]
     pub fn eval(mut self) -> Result<Vec<LogEntry>, EvalErr> {
         let fn_id = match self.tx_data.tx() {
@@ -64,6 +64,7 @@ impl<'a> ScriptEngine<'a> {
                 TxVariantV0::OwnerTx(_) => 0,
                 TxVariantV0::MintTx(_) => 0,
                 TxVariantV0::CreateAccountTx(_) => 0,
+                TxVariantV0::UpdateAccountTx(_) => 0,
                 TxVariantV0::TransferTx(tx) => tx.call_fn,
             },
         };
@@ -86,6 +87,7 @@ impl<'a> ScriptEngine<'a> {
                             TxVariantV0::OwnerTx(_) => &[],
                             TxVariantV0::MintTx(_) => &[],
                             TxVariantV0::CreateAccountTx(_) => &[],
+                            TxVariantV0::UpdateAccountTx(_) => &[],
                             TxVariantV0::TransferTx(tx) => &tx.args,
                         },
                     });

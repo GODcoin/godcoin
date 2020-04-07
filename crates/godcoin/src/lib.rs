@@ -40,6 +40,6 @@ pub mod prelude {
     pub use super::serializer::{BufRead, BufWrite};
     pub use super::tx::{
         CreateAccountTx, MintTx, OwnerTx, TransferTx, Tx, TxId, TxPrecompData, TxVariant,
-        TxVariantV0,
+        TxVariantV0, UpdateAccountTx,
     };
 }
