@@ -19,7 +19,7 @@ fn transfer_from_minter() {
             },
         );
         acc.balance = get_asset("4.00000 TEST");
-        minter.create_account(acc, "2.00000 TEST", false)
+        minter.create_account(acc, "2.00000 TEST", true)
     };
     let amount = get_asset("1.00000 TEST");
 
@@ -62,6 +62,48 @@ fn transfer_from_minter() {
             .checked_sub(to_acc.balance)
             .unwrap()
     );
+}
+
+#[test]
+fn fail_transfer_to_nonexistent_account() {
+    let minter = TestMinter::new();
+
+    let from_acc = minter.genesis_info().owner_id;
+    let from_bal = minter.chain().get_account(from_acc, &[]).unwrap().balance;
+    let amount = get_asset("1.00000 TEST");
+
+    let tx = {
+        let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+            base: create_tx_header("1.00000 TEST"),
+            from: from_acc,
+            call_fn: 1,
+            args: {
+                let mut args = vec![];
+                args.push_u64(0xFFFF);
+                args.push_asset(amount);
+                args
+            },
+            amount,
+            memo: vec![],
+        }));
+        tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+        tx
+    };
+
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
+    match res {
+        Some(Err(net::ErrorKind::TxValidation(blockchain::TxErr::ScriptEval(eval_err)))) => {
+            assert_eq!(eval_err.err, script::EvalErrType::AccountNotFound);
+        }
+        _ => panic!("Unexpected response {:?}", res),
+    }
+
+    minter.produce_block().unwrap();
+    let chain = minter.chain();
+    let cur_bal = chain.get_account(from_acc, &[]).unwrap().balance;
+    // Make sure no balances have been transferred
+    assert_eq!(from_bal, cur_bal);
 }
 
 #[test]

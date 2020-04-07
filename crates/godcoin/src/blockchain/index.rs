@@ -96,6 +96,12 @@ impl Indexer {
         Some(account)
     }
 
+    pub fn account_exists(&self, id: AccountId) -> bool {
+        let cf = self.db.cf_handle(CF_ACCOUNT).unwrap();
+        let acc_buf_opt = self.db.get_pinned_cf(cf, id.to_be_bytes()).unwrap();
+        acc_buf_opt.is_some()
+    }
+
     pub fn get_token_supply(&self) -> Asset {
         let supply_buf = self.db.get_pinned(KEY_TOKEN_SUPPLY).unwrap();
         match supply_buf {

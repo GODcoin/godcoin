@@ -126,6 +126,9 @@ impl<'a> ScriptEngine<'a> {
                     if amt.amount < 0 || amt > self.remaining_amt {
                         return Err(self.new_err(EvalErrType::InvalidAmount));
                     }
+                    if !self.indexer.account_exists(transfer_to) {
+                        return Err(self.new_err(EvalErrType::AccountNotFound));
+                    }
                     self.remaining_amt = self
                         .remaining_amt
                         .checked_sub(amt)

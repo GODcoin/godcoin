@@ -44,7 +44,7 @@ fn reindexed_blockchain() {
             },
         );
         acc.balance = get_asset("4.00000 TEST");
-        minter.create_account(acc, "2.00000 TEST", false)
+        minter.create_account(acc, "2.00000 TEST", true)
     };
     let amount = get_asset("1.00000 TEST");
 
@@ -97,8 +97,9 @@ fn reindexed_blockchain() {
     assert!(chain.get_block(0).is_some());
     assert!(chain.get_block(1).is_some());
     assert!(chain.get_block(2).is_some());
-    assert!(chain.get_block(3).is_none());
-    assert_eq!(chain.get_chain_height(), 2);
+    assert!(chain.get_block(3).is_some());
+    assert!(chain.get_block(4).is_none());
+    assert_eq!(chain.get_chain_height(), 3);
     assert!(manager.has(tx_data.txid()));
 
     let owner = match chain.get_owner() {
