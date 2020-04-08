@@ -339,6 +339,63 @@ impl Wallet {
                     )
             )
             .subcommand(
+                SubCommand::with_name("build_update_account_tx")
+                    .about("Builds an update account transaction")
+                    .arg(
+                        Arg::with_name("expiry")
+                            .long("expiry")
+                            .takes_value(true)
+                            .required(true)
+                            .default_value("60000")
+                            .help("The time in milliseconds when a transaction expires from now"),
+                    )
+                    .arg(
+                        Arg::with_name("fee")
+                            .long("fee")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The fee to pay for the transaction"),
+                    )
+                    .arg(
+                        Arg::with_name("account")
+                            .long("account")
+                            .takes_value(true)
+                            .required(true)
+                            .help("The account to update"),
+                    )
+                    .arg(
+                        Arg::with_name("script")
+                            .long("script")
+                            .takes_value(true)
+                            .required(false)
+                            .help("New account script in hex format")
+                    )
+                    .arg(
+                        Arg::with_name("threshold")
+                            .long("threshold")
+                            .takes_value(true)
+                            .required(false)
+                            .requires("public_wif")
+                            .help(
+                                "New permissions threshold. This requires providing new \
+                                signing keys."
+                            )
+                    )
+                    .arg(
+                        Arg::with_name("public_wif")
+                            .long("public-wif")
+                            .takes_value(true)
+                            .required(false)
+                            .multiple(true)
+                            .requires("threshold")
+                            .help(
+                                "New account signing keys, will replace all current keys \
+                                associated with the account. This requires setting a new \
+                                threshold."
+                            )
+                    )
+            )
+            .subcommand(
                 SubCommand::with_name("build_mint_tx")
                     .about("Builds a mint transaction")
                     .arg(
@@ -458,7 +515,10 @@ impl Wallet {
                 ("unsign_tx", Some(args)) => (true, cmd::unsign_tx(self, args)),
                 ("broadcast", Some(args)) => (true, cmd::broadcast(self, args)),
                 ("build_create_account_tx", Some(args)) => {
-                    (true, cmd::account::build_create_account_tx(self, args))
+                    (true, cmd::account::build_create_tx(self, args))
+                }
+                ("build_update_account_tx", Some(args)) => {
+                    (true, cmd::account::build_update_tx(self, args))
                 }
                 ("build_mint_tx", Some(args)) => (true, cmd::build_mint_tx(self, args)),
                 ("build_transfer_tx", Some(args)) => (true, cmd::build_transfer_tx(self, args)),
