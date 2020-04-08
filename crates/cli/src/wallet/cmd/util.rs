@@ -11,7 +11,7 @@ use tungstenite::{client, protocol::Message, stream::Stream};
 macro_rules! check_unlocked {
     ($self:expr) => {
         if $self.db.state() != DbState::Unlocked {
-            return Err("wallet not unlocked".to_owned());
+            return Err("wallet not unlocked".to_string());
         }
     };
 }
@@ -67,7 +67,7 @@ pub fn send_rpc_req(wallet: &mut Wallet, body: rpc::Request) -> Result<Msg, Stri
                     SocketAddr::V4(_) => break addr,
                     _ => continue,
                 },
-                None => return Err("No resolved IPv4 addresses found from host".to_owned()),
+                None => return Err("No resolved IPv4 addresses found from host".to_string()),
             }
         };
 

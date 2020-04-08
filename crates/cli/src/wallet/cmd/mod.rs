@@ -29,7 +29,7 @@ pub fn create_wallet(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), Strin
 
     let pass = args.value_of("password").unwrap();
     wallet.db.set_password(pass.as_bytes());
-    wallet.prompt = "locked>> ".to_owned();
+    wallet.prompt = "locked>> ".to_string();
     Ok(())
 }
 
@@ -48,7 +48,7 @@ pub fn unlock(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
 
     let pass = args.value_of("password").unwrap();
     if wallet.db.unlock(pass.as_bytes()) {
-        wallet.prompt = "unlocked>> ".to_owned();
+        wallet.prompt = "unlocked>> ".to_string();
     } else {
         println!("Failed to unlock wallet...incorrect password");
     }
@@ -155,7 +155,7 @@ pub fn unsign_tx(_wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> 
         .value_of("index")
         .unwrap()
         .parse()
-        .map_err(|_| "Failed to parse signature position".to_owned())?;
+        .map_err(|_| "Failed to parse signature position".to_string())?;
 
     let mut tx_bytes = hex_to_bytes!(args.value_of("hex").unwrap())?;
     let mut tx = {
@@ -198,7 +198,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), Strin
             .value_of("expiry")
             .unwrap()
             .parse()
-            .map_err(|_| "Failed to parse expiry ms".to_owned())?;
+            .map_err(|_| "Failed to parse expiry ms".to_string())?;
         godcoin::get_epoch_time() + expiry
     };
 
@@ -211,7 +211,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), Strin
     let res = send_rpc_req(wallet, rpc::Request::GetProperties)?;
     let owner = match res.body {
         Body::Response(rpc::Response::GetProperties(props)) => props.owner,
-        _ => return Err("Failed to get blockchain properties".to_owned()),
+        _ => return Err("Failed to get blockchain properties".to_string()),
     };
     let owner_wallet = match owner.as_ref() {
         TxVariant::V0(owner) => match owner {
@@ -248,7 +248,7 @@ pub fn build_mint_tx(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), Strin
         to: owner_wallet.clone(),
         amount,
         attachment,
-        attachment_name: attachment_name.to_owned(),
+        attachment_name: attachment_name.to_string(),
     }));
     let mut buf = Vec::with_capacity(4096);
     mint_tx.serialize(&mut buf);
@@ -271,7 +271,7 @@ pub fn build_transfer_tx(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), S
             .value_of("expiry")
             .unwrap()
             .parse()
-            .map_err(|_| "Failed to parse expiry ms".to_owned())?;
+            .map_err(|_| "Failed to parse expiry ms".to_string())?;
         godcoin::get_epoch_time() + expiry
     };
 
@@ -336,7 +336,7 @@ pub fn get_block(wallet: &mut Wallet, args: &ArgMatches) -> Result<(), String> {
         .value_of("height")
         .unwrap()
         .parse()
-        .map_err(|_| "Failed to parse height argument".to_owned())?;
+        .map_err(|_| "Failed to parse height argument".to_string())?;
 
     send_print_rpc_req(wallet, rpc::Request::GetBlock(height));
     Ok(())

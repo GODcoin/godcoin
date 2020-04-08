@@ -143,7 +143,7 @@ fn tx_dupe() {
         to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
-        attachment_name: "".to_owned(),
+        attachment_name: "".to_string(),
     }));
 
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
@@ -166,7 +166,7 @@ fn tx_no_dupe_with_different_nonce() {
         to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
-        attachment_name: "".to_owned(),
+        attachment_name: "".to_string(),
     }));
 
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
@@ -198,7 +198,7 @@ fn tx_sig_validation_err_with_different_nonce() {
         to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
-        attachment_name: "".to_owned(),
+        attachment_name: "".to_string(),
     }));
 
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);
@@ -233,7 +233,7 @@ fn tx_expired() {
         to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
-        attachment_name: "".to_owned(),
+        attachment_name: "".to_string(),
     }));
 
     let res = minter
@@ -263,7 +263,7 @@ fn tx_expiry_far_in_the_future() {
         to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
-        attachment_name: "".to_owned(),
+        attachment_name: "".to_string(),
     }));
 
     let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
@@ -279,7 +279,7 @@ fn tx_too_many_signatures_err() {
         to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
-        attachment_name: "".to_owned(),
+        attachment_name: "".to_string(),
     }));
     (0..=constants::MAX_TX_SIGNATURES).for_each(|_| tx.append_sign(&KeyPair::gen()));
 
@@ -314,7 +314,7 @@ fn tx_with_bad_chain_id() {
         to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
-        attachment_name: "".to_owned(),
+        attachment_name: "".to_string(),
     }));
 
     {

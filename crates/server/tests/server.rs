@@ -23,7 +23,7 @@ fn successful_broadcast() {
         to: minter.genesis_info().owner_id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
-        attachment_name: "".to_owned(),
+        attachment_name: "".to_string(),
     }));
 
     tx.append_sign(&minter.genesis_info().wallet_keys[1]);

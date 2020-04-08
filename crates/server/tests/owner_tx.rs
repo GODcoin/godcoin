@@ -95,7 +95,7 @@ fn owner_tx_deny_mint_tokens() {
         to: wallet_acc.id,
         amount: get_asset("10.00000 TEST"),
         attachment: vec![],
-        attachment_name: "".to_owned(),
+        attachment_name: "".to_string(),
     }));
     // Sign it again with the old keys, even though we changed the owner account.
     tx.append_sign(&minter.genesis_info().wallet_keys[3]);
@@ -166,7 +166,7 @@ fn owner_tx_accept_mint_tokens() {
             to: wallet_acc.id,
             amount: get_asset("1000.00000 TEST"),
             attachment: vec![],
-            attachment_name: "".to_owned(),
+            attachment_name: "".to_string(),
         }));
         tx.append_sign(&wallet_key);
         let res = minter.send_req(rpc::Request::Broadcast(tx));

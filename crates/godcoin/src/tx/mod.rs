@@ -585,7 +585,7 @@ mod tests {
             to: 12345,
             amount: get_asset("10.00000 TEST"),
             attachment: vec![1, 2, 3],
-            attachment_name: "abc.pdf".to_owned(),
+            attachment_name: "abc.pdf".to_string(),
         };
 
         let mut v = vec![];

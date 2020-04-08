@@ -26,7 +26,7 @@ impl Wallet {
         } else {
             "new>> "
         })
-        .to_owned();
+        .to_string();
 
         let mut url: Url = url.parse().unwrap();
         if url.host_str().is_none() {

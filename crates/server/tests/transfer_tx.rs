@@ -589,7 +589,7 @@ fn net_fee_dynamic_increase() {
             to: from_acc,
             amount: get_asset("5000.00000 TEST"),
             attachment: vec![],
-            attachment_name: "".to_owned(),
+            attachment_name: "".to_string(),
         }));
 
         tx.append_sign(&minter.genesis_info().wallet_keys[1]);

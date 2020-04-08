@@ -74,7 +74,7 @@ fn main() {
         PrivateKey::from_wif(&config.minter_key).expect("Provided minter key is invalid");
     let bind_addr = config
         .bind_address
-        .unwrap_or_else(|| "127.0.0.1:7777".to_owned());
+        .unwrap_or_else(|| "127.0.0.1:7777".to_string());
 
     let reindex = if args.is_present("reindex") {
         info!("User requested reindexing");

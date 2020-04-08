@@ -44,7 +44,7 @@ impl TestMinter {
                     to: info.owner_id,
                     amount: "1000.00000 TEST".parse().unwrap(),
                     attachment: vec![1, 2, 3],
-                    attachment_name: "".to_owned(),
+                    attachment_name: "".to_string(),
                 }));
 
                 tx.append_sign(&info.wallet_keys[1]);
