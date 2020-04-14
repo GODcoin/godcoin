@@ -1,5 +1,5 @@
 use godcoin::{
-    blockchain::{error::TxErr, index::TxManager},
+    blockchain::error::TxErr,
     constants,
     prelude::{net::ErrorKind, script::EvalErrType, *},
 };
@@ -80,18 +80,16 @@ fn reindexed_blockchain() {
         // Unindex the blockchain
         minter.unindexed();
         let chain = minter.chain();
-        let manager = TxManager::new(chain.indexer());
 
         assert_eq!(chain.index_status(), IndexStatus::None);
         assert!(chain.get_block(0).is_none());
         assert!(chain.get_account_info(0, &[]).is_none());
-        assert!(!manager.has(tx_data.txid()));
+        assert!(!chain.indexer().has_txid(tx_data.txid()));
     }
 
     // Test the reindexed status from here
     minter.reindex();
     let chain = minter.chain();
-    let manager = TxManager::new(chain.indexer());
 
     assert_eq!(chain.index_status(), IndexStatus::Complete);
     assert!(chain.get_block(0).is_some());
@@ -100,7 +98,7 @@ fn reindexed_blockchain() {
     assert!(chain.get_block(3).is_some());
     assert!(chain.get_block(4).is_none());
     assert_eq!(chain.get_chain_height(), 3);
-    assert!(manager.has(tx_data.txid()));
+    assert!(chain.indexer().has_txid(tx_data.txid()));
 
     let owner = match chain.get_owner() {
         TxVariant::V0(tx) => match tx {

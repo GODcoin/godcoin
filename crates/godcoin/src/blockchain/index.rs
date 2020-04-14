@@ -61,12 +61,12 @@ impl Indexer {
     }
 
     pub fn set_index_status(&self, status: IndexStatus) {
-        let buf = match status {
-            IndexStatus::None => vec![0],
-            IndexStatus::Partial => vec![1],
-            IndexStatus::Complete => vec![2],
+        let status_byte = match status {
+            IndexStatus::None => 0,
+            IndexStatus::Partial => 1,
+            IndexStatus::Complete => 2,
         };
-        self.db.put(KEY_INDEX_STATUS, buf).unwrap();
+        self.db.put(KEY_INDEX_STATUS, vec![status_byte]).unwrap();
     }
 
     pub fn get_block_byte_pos(&self, height: u64) -> Option<u64> {
@@ -118,6 +118,31 @@ impl Indexer {
             }
             None => Asset::default(),
         }
+    }
+
+    pub fn has_txid(&self, id: &TxId) -> bool {
+        let cf = self.db.cf_handle(CF_TX_EXPIRY).unwrap();
+        self.db.get_cf(cf, id).unwrap().is_some()
+    }
+
+    pub fn insert_txid(&self, id: &TxId, expiry: u64) {
+        let cf = self.db.cf_handle(CF_TX_EXPIRY).unwrap();
+        self.db.put_cf(cf, id, expiry.to_be_bytes()).unwrap();
+    }
+
+    pub fn purge_expired_txids(&self) {
+        let cf = self.db.cf_handle(CF_TX_EXPIRY).unwrap();
+        // Pretend to be slightly in the past in case system time adjusts in the future.
+        let current_time = crate::get_epoch_time() - TX_EXPIRY_ADJUSTMENT;
+
+        let mut batch = rocksdb::WriteBatch::default();
+        for (key, value) in self.db.iterator_cf(cf, IteratorMode::Start).unwrap() {
+            let expiry = u64::from_be_bytes(value.as_ref().try_into().unwrap());
+            if expiry < current_time {
+                batch.delete_cf(cf, key).unwrap();
+            }
+        }
+        self.db.write(batch).unwrap();
     }
 }
 
@@ -250,44 +275,6 @@ impl WriteBatch {
     }
 }
 
-pub struct TxManager {
-    indexer: Arc<Indexer>,
-}
-
-impl TxManager {
-    pub fn new(indexer: Arc<Indexer>) -> Self {
-        Self { indexer }
-    }
-
-    pub fn has(&self, id: &TxId) -> bool {
-        let db = &self.indexer.db;
-        let cf = db.cf_handle(CF_TX_EXPIRY).unwrap();
-        self.indexer.db.get_cf(cf, id).unwrap().is_some()
-    }
-
-    pub fn insert(&self, id: &TxId, expiry: u64) {
-        let db = &self.indexer.db;
-        let cf = db.cf_handle(CF_TX_EXPIRY).unwrap();
-        db.put_cf(cf, id, expiry.to_be_bytes()).unwrap();
-    }
-
-    pub fn purge_expired(&self) {
-        let db = &self.indexer.db;
-        let cf = db.cf_handle(CF_TX_EXPIRY).unwrap();
-        // Pretend to be slightly in the past in case system time adjusts in the future.
-        let current_time = crate::get_epoch_time() - TX_EXPIRY_ADJUSTMENT;
-
-        let mut batch = rocksdb::WriteBatch::default();
-        for (key, value) in db.iterator_cf(cf, IteratorMode::Start).unwrap() {
-            let expiry = u64::from_be_bytes(value.as_ref().try_into().unwrap());
-            if expiry < current_time {
-                batch.delete_cf(cf, key).unwrap();
-            }
-        }
-        db.write(batch).unwrap();
-    }
-}
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum IndexStatus {
     None,
@@ -325,32 +312,31 @@ mod tests {
     }
 
     #[test]
-    fn tx_manager() {
+    fn txid_expirations() {
         run_test(|indexer| {
             let id = TxId::from_digest(Digest::from_slice(&[0u8; 32]).unwrap());
             let expiry = crate::get_epoch_time();
-            let manager = TxManager::new(Arc::clone(&indexer));
-            assert!(!manager.has(&id));
-            manager.insert(&id, expiry);
-            assert!(manager.has(&id));
+            assert!(!indexer.has_txid(&id));
+            indexer.insert_txid(&id, expiry);
+            assert!(indexer.has_txid(&id));
 
             let cf = indexer.db.cf_handle(CF_TX_EXPIRY).unwrap();
             indexer.db.delete_cf(cf, &id).unwrap();
-            assert!(!manager.has(&id));
+            assert!(!indexer.has_txid(&id));
 
-            manager.insert(&id, expiry - TX_EXPIRY_ADJUSTMENT + 1);
-            manager.purge_expired();
+            indexer.insert_txid(&id, expiry - TX_EXPIRY_ADJUSTMENT + 1);
+            indexer.purge_expired_txids();
             // The transaction has expired, but we give additional time before purging it.
-            assert!(manager.has(&id));
+            assert!(indexer.has_txid(&id));
 
             let cf = indexer.db.cf_handle(CF_TX_EXPIRY).unwrap();
             indexer.db.delete_cf(cf, &id).unwrap();
-            assert!(!manager.has(&id));
-            manager.insert(&id, expiry - TX_EXPIRY_ADJUSTMENT - 1);
-            assert!(manager.has(&id));
-            manager.purge_expired();
+            assert!(!indexer.has_txid(&id));
+            indexer.insert_txid(&id, expiry - TX_EXPIRY_ADJUSTMENT - 1);
+            assert!(indexer.has_txid(&id));
+            indexer.purge_expired_txids();
             // Test that the expiry is completely over
-            assert!(!manager.has(&id));
+            assert!(!indexer.has_txid(&id));
         });
     }
 

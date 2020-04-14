@@ -1,4 +1,4 @@
-use super::{index::TxManager, skip_flags, AccountInfo, Blockchain, TxErr};
+use super::{Indexer, skip_flags, AccountInfo, Blockchain, TxErr};
 use crate::{
     account::AccountId,
     asset::Asset,
@@ -12,16 +12,16 @@ const DEFAULT_RECEIPT_CAPACITY: usize = 1024;
 
 pub struct ReceiptPool {
     chain: Arc<Blockchain>,
-    manager: TxManager,
+    indexer: Arc<Indexer>,
     receipts: Vec<Receipt>,
 }
 
 impl ReceiptPool {
     pub fn new(chain: Arc<Blockchain>) -> Self {
-        let manager = TxManager::new(chain.indexer());
+        let indexer = chain.indexer();
         Self {
             chain,
-            manager,
+            indexer,
             receipts: Vec::with_capacity(DEFAULT_RECEIPT_CAPACITY),
         }
     }
@@ -41,13 +41,13 @@ impl ReceiptPool {
         let expiry = data.tx().expiry();
         if expiry <= current_time || expiry - current_time > TX_MAX_EXPIRY_TIME {
             return Err(TxErr::TxExpired);
-        } else if self.manager.has(data.txid()) {
+        } else if self.indexer.has_txid(data.txid()) {
             return Err(TxErr::TxDupe);
         }
 
         let log = self.chain.execute_tx(&data, &self.receipts, skip_flags)?;
 
-        self.manager.insert(data.txid(), expiry);
+        self.indexer.insert_txid(data.txid(), expiry);
         self.receipts.push(Receipt {
             tx: data.take(),
             log,
@@ -58,7 +58,7 @@ impl ReceiptPool {
     pub fn flush(&mut self) -> Vec<Receipt> {
         let mut receipts = Vec::with_capacity(DEFAULT_RECEIPT_CAPACITY);
         mem::swap(&mut receipts, &mut self.receipts);
-        self.manager.purge_expired();
+        self.indexer.purge_expired_txids();
         receipts
     }
 }

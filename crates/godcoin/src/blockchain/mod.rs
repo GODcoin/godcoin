@@ -119,7 +119,7 @@ impl Blockchain {
         });
 
         info!("Rebuilding tx expiry index");
-        let manager = index::TxManager::new(self.indexer());
+        let indexer = self.indexer();
         let current_time = crate::get_epoch_time();
         // Iterate in reverse from head to genesis block
         for height in (0..=self.get_chain_height()).rev() {
@@ -129,7 +129,7 @@ impl Blockchain {
                     let data = TxPrecompData::from_tx(&receipt.tx);
                     let expiry = data.tx().expiry();
                     if expiry > current_time {
-                        manager.insert(data.txid(), expiry);
+                        indexer.insert_txid(data.txid(), expiry);
                     }
                 }
             } else {
