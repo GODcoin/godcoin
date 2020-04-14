@@ -28,7 +28,7 @@ faster-hex = "0.4.1"
 godcoin = { path = "../godcoin" }
 log = "0.4.8"
 native-tls = "0.2.4"
-rustyline = "6.0.0"
+rustyline = "6.1.1"
 rocksdb = "0.13.0"
 sodiumoxide = { version = "0.2.5", default-features = false, features = ["std"] }
 url = "2.1.1"
