@@ -1577,6 +1577,33 @@ mod tests {
         );
     }
 
+    #[test]
+    fn fail_transfer_to_unknown_acc() {
+        let engine = TestEngine::new();
+
+        let unknown_acc = 0x1000;
+        assert!(!engine.chain.indexer().account_exists(unknown_acc));
+
+        let builder = Builder::new()
+            .push(
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::AccountId(unknown_acc))
+                    .push(OpFrame::Asset("10.00000 TEST".parse().unwrap()))
+                    .push(OpFrame::OpTransfer)
+                    .push(OpFrame::True)
+            );
+
+        engine.get(
+            builder,
+            |_, mut engine| {
+                assert_eq!(
+                    engine.call_fn(0).unwrap_err().err,
+                    EvalErrType::AccountNotFound
+                );
+            },
+        );
+    }
+
     struct TestEngine {
         tmp_dir: PathBuf,
         chain: Blockchain,
