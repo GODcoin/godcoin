@@ -1537,25 +1537,21 @@ mod tests {
     fn fail_transfer_to_destroyed_acc() {
         let mut engine = TestEngine::new();
 
-        let builder = Builder::new()
-            .push(
-                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::AccountId(engine.to_acc.id))
-                    .push(OpFrame::Asset("10.00000 TEST".parse().unwrap()))
-                    .push(OpFrame::OpTransfer)
-                    .push(OpFrame::True)
-            );
-
-        engine.get(
-            builder.clone(),
-            |test, mut engine| {
-                assert_eq!(
-                    engine.call_fn(0).unwrap(),
-                    vec![test.to_transfer_entry("10.00000 TEST")]
-                );
-                assert!(engine.stack.is_empty());
-            },
+        let builder = Builder::new().push(
+            FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                .push(OpFrame::AccountId(engine.to_acc.id))
+                .push(OpFrame::Asset("10.00000 TEST".parse().unwrap()))
+                .push(OpFrame::OpTransfer)
+                .push(OpFrame::True),
         );
+
+        engine.get(builder.clone(), |test, mut engine| {
+            assert_eq!(
+                engine.call_fn(0).unwrap(),
+                vec![test.to_transfer_entry("10.00000 TEST")]
+            );
+            assert!(engine.stack.is_empty());
+        });
 
         {
             engine.to_acc.destroyed = true;
@@ -1565,16 +1561,13 @@ mod tests {
             assert!(to_acc.destroyed);
         }
 
-        engine.get(
-            builder,
-            |_, mut engine| {
-                assert_eq!(
-                    engine.call_fn(0).unwrap_err().err,
-                    EvalErrType::AccountNotFound
-                );
-                assert!(engine.stack.is_empty());
-            },
-        );
+        engine.get(builder, |_, mut engine| {
+            assert_eq!(
+                engine.call_fn(0).unwrap_err().err,
+                EvalErrType::AccountNotFound
+            );
+            assert!(engine.stack.is_empty());
+        });
     }
 
     #[test]
@@ -1584,24 +1577,20 @@ mod tests {
         let unknown_acc = 0x1000;
         assert!(!engine.chain.indexer().account_exists(unknown_acc));
 
-        let builder = Builder::new()
-            .push(
-                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
-                    .push(OpFrame::AccountId(unknown_acc))
-                    .push(OpFrame::Asset("10.00000 TEST".parse().unwrap()))
-                    .push(OpFrame::OpTransfer)
-                    .push(OpFrame::True)
-            );
-
-        engine.get(
-            builder,
-            |_, mut engine| {
-                assert_eq!(
-                    engine.call_fn(0).unwrap_err().err,
-                    EvalErrType::AccountNotFound
-                );
-            },
+        let builder = Builder::new().push(
+            FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                .push(OpFrame::AccountId(unknown_acc))
+                .push(OpFrame::Asset("10.00000 TEST".parse().unwrap()))
+                .push(OpFrame::OpTransfer)
+                .push(OpFrame::True),
         );
+
+        engine.get(builder, |_, mut engine| {
+            assert_eq!(
+                engine.call_fn(0).unwrap_err().err,
+                EvalErrType::AccountNotFound
+            );
+        });
     }
 
     struct TestEngine {
