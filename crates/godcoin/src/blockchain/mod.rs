@@ -48,6 +48,7 @@ impl AccountInfo {
     }
 }
 
+#[derive(Debug)]
 pub struct Blockchain {
     indexer: Arc<Indexer>,
     store: Mutex<BlockStore>,
@@ -462,9 +463,13 @@ impl Blockchain {
                         },
                     };
 
-                    if let Err(e) =
-                        ScriptEngine::new(data, &prev_owner.script, self.indexer()).eval()
-                    {
+                    let data = EngineData {
+                        script: prev_owner.script.into(),
+                        tx_data: data.into(),
+                        chain: self,
+                        additional_receipts,
+                    };
+                    if let Err(e) = ScriptEngine::new(data).eval() {
                         return Err(TxErr::ScriptEval(e));
                     }
                     Ok(vec![])
@@ -482,7 +487,13 @@ impl Blockchain {
                         },
                     };
 
-                    if let Err(e) = ScriptEngine::new(data, &owner.script, self.indexer()).eval() {
+                    let data = EngineData {
+                        script: owner.script.into(),
+                        tx_data: data.into(),
+                        chain: self,
+                        additional_receipts,
+                    };
+                    if let Err(e) = ScriptEngine::new(data).eval() {
                         return Err(TxErr::ScriptEval(e));
                     }
 
@@ -643,9 +654,13 @@ impl Blockchain {
                         .ok_or(TxErr::Arithmetic)?;
                     check_pos_amt!(bal);
 
-                    let log = ScriptEngine::new(data, &info.account.script, self.indexer())
-                        .eval()
-                        .map_err(TxErr::ScriptEval)?;
+                    let data = EngineData {
+                        script: info.account.script.into(),
+                        tx_data: data.into(),
+                        chain: self,
+                        additional_receipts,
+                    };
+                    let log = ScriptEngine::new(data).eval().map_err(TxErr::ScriptEval)?;
                     Ok(log)
                 }
             },

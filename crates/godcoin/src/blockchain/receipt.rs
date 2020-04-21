@@ -1,4 +1,4 @@
-use super::{Indexer, skip_flags, AccountInfo, Blockchain, TxErr};
+use super::{skip_flags, AccountInfo, Blockchain, Indexer, TxErr};
 use crate::{
     account::AccountId,
     asset::Asset,

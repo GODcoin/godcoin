@@ -19,6 +19,7 @@ pub struct ReindexOpts {
     pub auto_trim: bool,
 }
 
+#[derive(Debug)]
 pub struct BlockStore {
     indexer: Arc<Indexer>,
 
