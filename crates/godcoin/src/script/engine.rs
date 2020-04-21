@@ -126,8 +126,17 @@ impl<'a> ScriptEngine<'a> {
                     if amt.amount < 0 || amt > self.remaining_amt {
                         return Err(self.new_err(EvalErrType::InvalidAmount));
                     }
-                    if !self.data.chain.indexer().account_exists(transfer_to) {
-                        return Err(self.new_err(EvalErrType::AccountNotFound));
+                    match self
+                        .data
+                        .chain
+                        .get_account(transfer_to, &self.data.additional_receipts)
+                    {
+                        Some(acc) => {
+                            if acc.destroyed {
+                                return Err(self.new_err(EvalErrType::AccountNotFound));
+                            }
+                        }
+                        None => return Err(self.new_err(EvalErrType::AccountNotFound)),
                     }
                     self.remaining_amt = self
                         .remaining_amt
@@ -1524,6 +1533,50 @@ mod tests {
         }
     }
 
+    #[test]
+    fn fail_transfer_to_destroyed_acc() {
+        let mut engine = TestEngine::new();
+
+        let builder = Builder::new()
+            .push(
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::AccountId(engine.to_acc.id))
+                    .push(OpFrame::Asset("10.00000 TEST".parse().unwrap()))
+                    .push(OpFrame::OpTransfer)
+                    .push(OpFrame::True)
+            );
+
+        engine.get(
+            builder.clone(),
+            |test, mut engine| {
+                assert_eq!(
+                    engine.call_fn(0).unwrap(),
+                    vec![test.to_transfer_entry("10.00000 TEST")]
+                );
+                assert!(engine.stack.is_empty());
+            },
+        );
+
+        {
+            engine.to_acc.destroyed = true;
+            engine.index_account(engine.to_acc.clone());
+            let indexer = engine.chain.indexer();
+            let to_acc = indexer.get_account(engine.to_acc.id).unwrap();
+            assert!(to_acc.destroyed);
+        }
+
+        engine.get(
+            builder,
+            |_, mut engine| {
+                assert_eq!(
+                    engine.call_fn(0).unwrap_err().err,
+                    EvalErrType::AccountNotFound
+                );
+                assert!(engine.stack.is_empty());
+            },
+        );
+    }
+
     struct TestEngine {
         tmp_dir: PathBuf,
         chain: Blockchain,
@@ -1591,11 +1644,14 @@ mod tests {
                 },
             );
 
-            let mut batch = WriteBatch::new(self.chain.indexer());
-            batch.insert_or_update_account(acc.clone());
-            batch.commit();
-
+            self.index_account(acc.clone());
             (acc, key)
+        }
+
+        fn index_account(&self, account: Account) {
+            let mut batch = WriteBatch::new(self.chain.indexer());
+            batch.insert_or_update_account(account);
+            batch.commit();
         }
 
         fn from_transfer_entry(&self, amt: &str) -> LogEntry {
@@ -1608,13 +1664,13 @@ mod tests {
             LogEntry::Transfer(p2a, amt.parse().unwrap())
         }
 
-        fn get<F: FnOnce(&TestEngine, ScriptEngine)>(self, b: Builder, f: F) {
+        fn get<F: FnOnce(&TestEngine, ScriptEngine)>(&self, b: Builder, f: F) {
             let from_key = self.from_key.clone();
             self.get_with_signers(&[from_key], b, f);
         }
 
         fn get_with_signers<F: FnOnce(&TestEngine, ScriptEngine)>(
-            self,
+            &self,
             keys: &[KeyPair],
             b: Builder,
             f: F,
@@ -1625,7 +1681,7 @@ mod tests {
         }
 
         fn get_direct<F: FnOnce(&TestEngine, ScriptEngine)>(
-            self,
+            &self,
             tx: TxVariant,
             script: Script,
             f: F,
@@ -1648,7 +1704,7 @@ mod tests {
                     fee: "1.00000 TEST".parse().unwrap(),
                     signature_pairs: vec![],
                 },
-                from: 0,
+                from: self.from_acc.id,
                 call_fn,
                 args,
                 amount: "10.00000 TEST".parse().unwrap(),
