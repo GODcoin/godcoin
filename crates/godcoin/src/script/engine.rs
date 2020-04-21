@@ -1283,68 +1283,30 @@ mod tests {
             engine.get_with_signers(&signing_keys, builder, f);
         }
 
-        exec_engine(vec![3, 2, 1, 0], |test, mut engine| {
+        fn expect_transfer(test: &TestEngine, mut engine: ScriptEngine) {
             assert_eq!(
                 engine.call_fn(0).unwrap(),
                 vec![test.from_transfer_entry("10.00000 TEST")]
             );
-        });
+        }
 
-        exec_engine(vec![3, 1, 0], |test, mut engine| {
-            assert_eq!(
-                engine.call_fn(0).unwrap(),
-                vec![test.from_transfer_entry("10.00000 TEST")]
-            );
-        });
-
-        exec_engine(vec![4, 1, 0], |test, mut engine| {
-            assert_eq!(
-                engine.call_fn(0).unwrap(),
-                vec![test.from_transfer_entry("10.00000 TEST")]
-            );
-        });
-
-        exec_engine(vec![3, 2, 0], |test, mut engine| {
-            assert_eq!(
-                engine.call_fn(0).unwrap(),
-                vec![test.from_transfer_entry("10.00000 TEST")]
-            );
-        });
-
-        exec_engine(vec![2, 1, 0], |test, mut engine| {
-            assert_eq!(
-                engine.call_fn(0).unwrap(),
-                vec![test.from_transfer_entry("10.00000 TEST")]
-            );
-        });
-
-        exec_engine(vec![2, 1], |_, mut engine| {
+        fn expect_fail(_: &TestEngine, mut engine: ScriptEngine) {
             assert_eq!(
                 engine.call_fn(0).unwrap_err().err,
                 EvalErrType::ScriptRetFalse
             );
-        });
+        }
 
-        exec_engine(vec![4, 3, 2, 1], |_, mut engine| {
-            assert_eq!(
-                engine.call_fn(0).unwrap_err().err,
-                EvalErrType::ScriptRetFalse
-            );
-        });
+        exec_engine(vec![3, 2, 1, 0], expect_transfer);
+        exec_engine(vec![3, 1, 0], expect_transfer);
+        exec_engine(vec![4, 1, 0], expect_transfer);
+        exec_engine(vec![3, 2, 0], expect_transfer);
+        exec_engine(vec![2, 1, 0], expect_transfer);
 
-        exec_engine(vec![4, 0], |_, mut engine| {
-            assert_eq!(
-                engine.call_fn(0).unwrap_err().err,
-                EvalErrType::ScriptRetFalse
-            );
-        });
-
-        exec_engine(vec![], |_, mut engine| {
-            assert_eq!(
-                engine.call_fn(0).unwrap_err().err,
-                EvalErrType::ScriptRetFalse
-            );
-        });
+        exec_engine(vec![2, 1], expect_fail);
+        exec_engine(vec![4, 3, 2, 1], expect_fail);
+        exec_engine(vec![4, 0], expect_fail);
+        exec_engine(vec![], expect_fail);
     }
 
     #[test]
@@ -1376,32 +1338,18 @@ mod tests {
             engine.get_with_signers(&signing_keys, builder, f);
         }
 
-        exec_engine(vec![2, 1, 0], |test, mut engine| {
+        fn expect_transfer(test: &TestEngine, mut engine: ScriptEngine) {
             assert_eq!(
                 engine.call_fn(0).unwrap(),
                 vec![test.from_transfer_entry("10.00000 TEST")]
             );
             assert!(!engine.stack.pop_bool().unwrap());
             assert!(engine.stack.is_empty());
-        });
+        }
 
-        exec_engine(vec![2, 0], |test, mut engine| {
-            assert_eq!(
-                engine.call_fn(0).unwrap(),
-                vec![test.from_transfer_entry("10.00000 TEST")]
-            );
-            assert!(!engine.stack.pop_bool().unwrap());
-            assert!(engine.stack.is_empty());
-        });
-
-        exec_engine(vec![0], |test, mut engine| {
-            assert_eq!(
-                engine.call_fn(0).unwrap(),
-                vec![test.from_transfer_entry("10.00000 TEST")]
-            );
-            assert!(!engine.stack.pop_bool().unwrap());
-            assert!(engine.stack.is_empty());
-        });
+        exec_engine(vec![2, 1, 0], expect_transfer);
+        exec_engine(vec![2, 0], expect_transfer);
+        exec_engine(vec![0], expect_transfer);
     }
 
     #[test]
