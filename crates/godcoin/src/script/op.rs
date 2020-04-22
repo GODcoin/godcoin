@@ -30,6 +30,7 @@ pub enum Operand {
     OpElse = 0x42,
     OpEndIf = 0x43,
     OpReturn = 0x44,
+    OpAbort = 0x45,
 
     // Crypto
     OpCheckPerms = 0x50,
@@ -72,6 +73,7 @@ pub enum OpFrame {
     OpElse,
     OpEndIf,
     OpReturn,
+    OpAbort,
 
     // Crypto
     OpCheckPerms,

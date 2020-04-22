@@ -64,6 +64,7 @@ pub fn build(ops: &[&str]) -> Result<Script, BuildError> {
                     "OP_ELSE" => builder.push(OpFrame::OpElse),
                     "OP_ENDIF" => builder.push(OpFrame::OpEndIf),
                     "OP_RETURN" => builder.push(OpFrame::OpReturn),
+                    "OP_ABORT" => builder.push(OpFrame::OpAbort),
                     // Crypto
                     "OP_CHECKPERMS" => builder.push(OpFrame::OpCheckPerms),
                     "OP_CHECKPERMSFASTFAIL" => builder.push(OpFrame::OpCheckPermsFastFail),

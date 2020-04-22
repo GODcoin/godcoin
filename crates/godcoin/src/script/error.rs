@@ -16,19 +16,20 @@ impl EvalErr {
 #[repr(u8)]
 pub enum EvalErrType {
     ScriptRetFalse = 0x00,
-    UnexpectedEOF = 0x01,
-    HeaderReadErr = 0x02,
-    InvalidEntryPoint = 0x03,
-    UnknownOp = 0x04,
-    UnknownFn = 0x05,
-    UnknownArgType = 0x06,
-    ArgDeserialization = 0x07,
-    InvalidItemOnStack = 0x08,
-    StackOverflow = 0x09,
-    StackUnderflow = 0x0A,
-    Arithmetic = 0x0B,
-    InvalidAmount = 0x0C,
-    AccountNotFound = 0x0D,
+    Aborted = 0x01,
+    UnexpectedEOF = 0x02,
+    HeaderReadErr = 0x03,
+    InvalidEntryPoint = 0x04,
+    UnknownOp = 0x05,
+    UnknownFn = 0x06,
+    UnknownArgType = 0x07,
+    ArgDeserialization = 0x08,
+    InvalidItemOnStack = 0x09,
+    StackOverflow = 0x0A,
+    StackUnderflow = 0x0B,
+    Arithmetic = 0x0C,
+    InvalidAmount = 0x0D,
+    AccountNotFound = 0x0E,
 }
 
 impl TryFrom<u8> for EvalErrType {
@@ -37,6 +38,7 @@ impl TryFrom<u8> for EvalErrType {
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         Ok(match value {
             t if t == Self::ScriptRetFalse as u8 => Self::ScriptRetFalse,
+            t if t == Self::Aborted as u8 => Self::Aborted,
             t if t == Self::UnexpectedEOF as u8 => Self::UnexpectedEOF,
             t if t == Self::HeaderReadErr as u8 => Self::HeaderReadErr,
             t if t == Self::InvalidEntryPoint as u8 => Self::InvalidEntryPoint,

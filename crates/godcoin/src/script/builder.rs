@@ -117,6 +117,7 @@ impl FnBuilder {
             OpFrame::OpElse => self.byte_code.push(Operand::OpElse.into()),
             OpFrame::OpEndIf => self.byte_code.push(Operand::OpEndIf.into()),
             OpFrame::OpReturn => self.byte_code.push(Operand::OpReturn.into()),
+            OpFrame::OpAbort => self.byte_code.push(Operand::OpAbort.into()),
             // Crypto
             OpFrame::OpCheckPerms => self.byte_code.push(Operand::OpCheckPerms.into()),
             OpFrame::OpCheckPermsFastFail => {

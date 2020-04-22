@@ -242,6 +242,7 @@ impl<'a> ScriptEngine<'a> {
                     if_marker = 0;
                     break;
                 }
+                OpFrame::OpAbort => return Err(self.new_err(EvalErrType::Aborted)),
                 // Crypto
                 OpFrame::OpCheckPerms => {
                     let acc = map_err_type!(self, self.stack.pop_account_id())?;
@@ -399,6 +400,7 @@ impl<'a> ScriptEngine<'a> {
             o if o == Operand::OpElse as u8 => Ok(Some(OpFrame::OpElse)),
             o if o == Operand::OpEndIf as u8 => Ok(Some(OpFrame::OpEndIf)),
             o if o == Operand::OpReturn as u8 => Ok(Some(OpFrame::OpReturn)),
+            o if o == Operand::OpAbort as u8 => Ok(Some(OpFrame::OpAbort)),
             // Crypto
             o if o == Operand::OpCheckPerms as u8 => Ok(Some(OpFrame::OpCheckPerms)),
             o if o == Operand::OpCheckPermsFastFail as u8 => {
@@ -1591,6 +1593,34 @@ mod tests {
                 EvalErrType::AccountNotFound
             );
         });
+    }
+
+    #[test]
+    fn fail_exec_when_aborted() {
+        TestEngine::new().get(
+            Builder::new().push(
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::OpAbort)
+                    .push(OpFrame::True),
+            ),
+            |_, mut engine| {
+                assert_eq!(engine.call_fn(0).unwrap_err().err, EvalErrType::Aborted);
+                assert!(engine.stack.is_empty());
+            },
+        );
+
+        TestEngine::new().get(
+            Builder::new().push(
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::True)
+                    .push(OpFrame::OpAbort),
+            ),
+            |_, mut engine| {
+                assert_eq!(engine.call_fn(0).unwrap_err().err, EvalErrType::Aborted);
+                assert_eq!(engine.stack.pop_bool(), Ok(true));
+                assert!(engine.stack.is_empty());
+            },
+        );
     }
 
     struct TestEngine {
