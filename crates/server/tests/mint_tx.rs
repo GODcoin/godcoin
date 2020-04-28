@@ -1,6 +1,6 @@
 use godcoin::{
     crypto::Signature,
-    prelude::{script::EvalErrType, *},
+    prelude::{script::EvalErrKind, *},
 };
 
 mod common;
@@ -43,7 +43,7 @@ fn mint_tx_verification() {
     tx.sigs_mut().remove(1);
     assert!(check_sigs(&tx));
     match chain.execute_tx(&tx.precompute(), &[], skip_flags) {
-        Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrType::ScriptRetFalse),
+        Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrKind::ScriptRetFalse),
         res @ _ => panic!("Assertion failed, got {:?}", res),
     }
 
@@ -51,7 +51,7 @@ fn mint_tx_verification() {
     tx.sigs_mut().clear();
     assert!(check_sigs(&tx));
     match chain.execute_tx(&tx.precompute(), &[], skip_flags) {
-        Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrType::ScriptRetFalse),
+        Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrKind::ScriptRetFalse),
         res @ _ => panic!("Assertion failed, got {:?}", res),
     }
 
@@ -63,7 +63,7 @@ fn mint_tx_verification() {
     });
     assert!(!check_sigs(&tx));
     match chain.execute_tx(&tx.precompute(), &[], skip_flags) {
-        Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrType::ScriptRetFalse),
+        Err(blockchain::TxErr::ScriptEval(e)) => assert_eq!(e.err, EvalErrKind::ScriptRetFalse),
         res @ _ => panic!("Assertion failed, got {:?}", res),
     }
 }

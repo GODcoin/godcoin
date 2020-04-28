@@ -94,7 +94,7 @@ fn fail_transfer_to_nonexistent_account() {
     let res = minter.send_req(rpc::Request::Broadcast(tx));
     match res {
         Some(Err(net::ErrorKind::TxValidation(blockchain::TxErr::ScriptEval(eval_err)))) => {
-            assert_eq!(eval_err.err, script::EvalErrType::AccountNotFound);
+            assert_eq!(eval_err.err, script::EvalErrKind::AccountNotFound);
         }
         _ => panic!("Unexpected response {:?}", res),
     }
@@ -726,4 +726,465 @@ fn net_fee_dynamic_increase() {
     // Test network delta fee reset
     let expected_fee = GRAEL_FEE_MIN.checked_mul(GRAEL_FEE_NET_MULT);
     assert_eq!(minter.chain().get_network_fee(), expected_fee);
+}
+
+#[test]
+fn fail_transfer_to_destroyed_account() {
+    let minter = TestMinter::new();
+    let owner_acc = minter.genesis_info().owner_id;
+
+    // (1) Create the account
+    let (to_acc, to_acc_key) = {
+        let key = KeyPair::gen();
+        let mut acc = Account::create_default(
+            1,
+            Permissions {
+                threshold: 1,
+                keys: vec![key.0.clone()],
+            },
+        );
+        acc.script = script::Builder::new()
+            .push(
+                script::FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::AccountId(owner_acc))
+                    .push(OpFrame::OpDestroy),
+            )
+            .build()
+            .unwrap();
+        acc.balance = get_asset("4.00000 TEST");
+        (
+            minter.create_account(acc.clone(), "2.00000 TEST", true),
+            key,
+        )
+    };
+
+    // (2) destroy the account
+    let tx = {
+        let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+            base: create_tx_header("1.00000 TEST"),
+            from: to_acc.id,
+            call_fn: 0,
+            args: vec![],
+            amount: get_asset("0.00000 TEST"),
+            memo: vec![],
+        }));
+        tx.append_sign(&to_acc_key);
+        tx
+    };
+    {
+        let res = minter.send_req(rpc::Request::Broadcast(tx));
+        assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
+    }
+
+    // (3) Test cannot transfer to a destroyed account (in the same block)
+    let tx = {
+        let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+            base: create_tx_header("1.00000 TEST"),
+            from: owner_acc,
+            call_fn: 1,
+            args: {
+                let mut args = vec![];
+                args.push_u64(to_acc.id);
+                args.push_asset(get_asset("1.00000 TEST"));
+                args
+            },
+            amount: get_asset("1.00000 TEST"),
+            memo: vec![],
+        }));
+        tx.append_sign(&minter.genesis_info().wallet_keys[3]);
+        tx.append_sign(&minter.genesis_info().wallet_keys[0]);
+        tx
+    };
+    {
+        let res = minter.send_req(rpc::Request::Broadcast(tx.clone()));
+        match res {
+            Some(Err(net::ErrorKind::TxValidation(blockchain::TxErr::ScriptEval(
+                script::EvalErr {
+                    err: script::EvalErrKind::AccountNotFound,
+                    ..
+                },
+            )))) => {}
+            _ => panic!("Unexpected response: {:?}", res),
+        }
+    }
+
+    // (4) Test cannot transfer to a destroyed account (in different blocks)
+    minter.produce_block().unwrap();
+    {
+        let res = minter.send_req(rpc::Request::Broadcast(tx));
+        match res {
+            Some(Err(net::ErrorKind::TxValidation(blockchain::TxErr::ScriptEval(
+                script::EvalErr {
+                    err: script::EvalErrKind::AccountNotFound,
+                    ..
+                },
+            )))) => {}
+            _ => panic!("Unexpected response: {:?}", res),
+        }
+    }
+}
+
+#[test]
+fn fail_destroy_and_send_funds_to_self() {
+    let minter = TestMinter::new();
+
+    // (1) Create the account
+    let (to_acc, to_acc_key) = {
+        let key = KeyPair::gen();
+        let mut acc = Account::create_default(
+            1,
+            Permissions {
+                threshold: 1,
+                keys: vec![key.0.clone()],
+            },
+        );
+        acc.script = script::Builder::new()
+            .push(
+                script::FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::AccountId(acc.id))
+                    .push(OpFrame::OpDestroy),
+            )
+            .build()
+            .unwrap();
+        acc.balance = get_asset("4.00000 TEST");
+        (
+            minter.create_account(acc.clone(), "2.00000 TEST", true),
+            key,
+        )
+    };
+
+    // (2) Test destroying the account should fail due to sending funds to self
+    let tx = {
+        let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+            base: create_tx_header("1.00000 TEST"),
+            from: to_acc.id,
+            call_fn: 0,
+            args: vec![],
+            amount: get_asset("0.00000 TEST"),
+            memo: vec![],
+        }));
+        tx.append_sign(&to_acc_key);
+        tx
+    };
+
+    let res = minter.send_req(rpc::Request::Broadcast(tx));
+    match res {
+        Some(Err(net::ErrorKind::TxValidation(blockchain::TxErr::ScriptEval(
+            script::EvalErr {
+                err: script::EvalErrKind::Aborted,
+                ..
+            },
+        )))) => {}
+        _ => panic!("Unexpected response: {:?}", res),
+    }
+}
+
+#[test]
+fn fail_destroy_and_send_funds_to_invalid_acc() {
+    let minter = TestMinter::new();
+
+    let create_account = |id: AccountId| -> (Account, KeyPair) {
+        let key = KeyPair::gen();
+        let mut acc = Account::create_default(
+            id,
+            Permissions {
+                threshold: 1,
+                keys: vec![key.0.clone()],
+            },
+        );
+        acc.script = script::Builder::new()
+            .push(
+                script::FnBuilder::new(0, OpFrame::OpDefine(vec![script::Arg::AccountId]))
+                    .push(OpFrame::OpDestroy),
+            )
+            .build()
+            .unwrap();
+        acc.balance = get_asset("4.00000 TEST");
+        (
+            minter.create_account(acc.clone(), "2.00000 TEST", true),
+            key,
+        )
+    };
+
+    // (1) Create the accounts
+    let (acc_1, acc_1_key) = create_account(1);
+    let (acc_2, acc_2_key) = create_account(2);
+
+    // (2) Destroy the first account
+    {
+        let tx = {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+                base: create_tx_header("1.00000 TEST"),
+                from: acc_1.id,
+                call_fn: 0,
+                args: {
+                    let mut args = vec![];
+                    args.push_u64(acc_2.id);
+                    args
+                },
+                amount: get_asset("0.00000 TEST"),
+                memo: vec![],
+            }));
+            tx.append_sign(&acc_1_key);
+            tx
+        };
+        let res = minter.send_req(rpc::Request::Broadcast(tx));
+        assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
+    }
+
+    // (3) Attempt to send funds from destroyed account to another destroyed account
+    {
+        let des_acc = minter.minter().get_account_info(acc_1.id).unwrap().account;
+        assert!(des_acc.destroyed);
+
+        let tx = {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+                base: create_tx_header("1.00000 TEST"),
+                from: acc_2.id,
+                call_fn: 0,
+                args: {
+                    let mut args = vec![];
+                    // Send funds to destroyed account
+                    args.push_u64(des_acc.id);
+                    args
+                },
+                amount: get_asset("0.00000 TEST"),
+                memo: vec![],
+            }));
+            tx.append_sign(&acc_2_key);
+            tx
+        };
+
+        let res = minter.send_req(rpc::Request::Broadcast(tx));
+        match res {
+            Some(Err(net::ErrorKind::TxValidation(blockchain::TxErr::ScriptEval(
+                script::EvalErr {
+                    err: script::EvalErrKind::AccountNotFound,
+                    ..
+                },
+            )))) => {}
+            _ => panic!("Unexpected response: {:?}", res),
+        }
+    }
+
+    // (4) Attempt to send funds from a destroyed account to an unknown account
+    {
+        let des_acc = minter.minter().get_account_info(acc_1.id).unwrap().account;
+        assert!(des_acc.destroyed);
+
+        let tx = {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+                base: create_tx_header("1.00000 TEST"),
+                from: acc_2.id,
+                call_fn: 0,
+                args: {
+                    let mut args = vec![];
+                    // Send funds to unknown account
+                    args.push_u64(0xFFFFFFFF);
+                    args
+                },
+                amount: get_asset("0.00000 TEST"),
+                memo: vec![],
+            }));
+            tx.append_sign(&acc_2_key);
+            tx
+        };
+
+        let res = minter.send_req(rpc::Request::Broadcast(tx));
+        match res {
+            Some(Err(net::ErrorKind::TxValidation(blockchain::TxErr::ScriptEval(
+                script::EvalErr {
+                    err: script::EvalErrKind::AccountNotFound,
+                    ..
+                },
+            )))) => {}
+            _ => panic!("Unexpected response: {:?}", res),
+        }
+    }
+}
+
+#[test]
+fn destroyed_acc_is_indexed_correctly() {
+    let minter = TestMinter::new();
+
+    let create_account = |id: AccountId| -> (Account, KeyPair) {
+        let key = KeyPair::gen();
+        let mut acc = Account::create_default(
+            id,
+            Permissions {
+                threshold: 1,
+                keys: vec![key.0.clone()],
+            },
+        );
+        acc.script = script::Builder::new()
+            .push(
+                script::FnBuilder::new(
+                    0,
+                    OpFrame::OpDefine(vec![script::Arg::AccountId, script::Arg::AccountId]),
+                )
+                .push(OpFrame::Asset(get_asset("2.00000 TEST")))
+                .push(OpFrame::OpTransfer)
+                .push(OpFrame::OpDestroy),
+            )
+            .build()
+            .unwrap();
+        acc.balance = get_asset("4.00000 TEST");
+        (
+            minter.create_account(acc.clone(), "2.00000 TEST", true),
+            key,
+        )
+    };
+
+    // (1) Create the accounts
+    let (acc_1, acc_1_key) = create_account(1);
+    let (acc_2, _) = create_account(2);
+    let (acc_3, _) = create_account(3);
+
+    let start_bal = get_asset("4.00000 TEST");
+
+    // (2) Destroy the account
+    {
+        let tx = {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+                base: create_tx_header("1.00000 TEST"),
+                from: acc_1.id,
+                call_fn: 0,
+                args: {
+                    let mut args = vec![];
+                    args.push_u64(acc_2.id);
+                    args.push_u64(acc_3.id);
+                    args
+                },
+                amount: get_asset("2.00000 TEST"),
+                memo: vec![],
+            }));
+            tx.append_sign(&acc_1_key);
+            tx
+        };
+        let res = minter.send_req(rpc::Request::Broadcast(tx));
+        assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
+    }
+
+    // (3) Test indexing in same block
+    {
+        // Funds being drained and account destroyed information are immediately applied
+        let acc_1 = minter.minter().get_account_info(acc_1.id).unwrap().account;
+        assert!(acc_1.destroyed);
+        assert_eq!(acc_1.balance, Asset::new(0));
+
+        // We can't see the funds from the destroyed account until a block is produced!
+        let acc_2 = minter.minter().get_account_info(acc_2.id).unwrap().account;
+        assert_eq!(start_bal, acc_2.balance);
+
+        // We transferred some funds before destroying the account, they shouuld be seen immediately
+        let acc_3 = minter.minter().get_account_info(acc_3.id).unwrap().account;
+        assert_eq!(
+            acc_3.balance,
+            start_bal.checked_add(get_asset("2.00000 TEST")).unwrap()
+        );
+    }
+
+    // (4) Test indexing after a block is produced
+    {
+        minter.produce_block().unwrap();
+
+        // Funds being drained and account destroyed information are immediately applied
+        let acc_1 = minter.minter().get_account_info(acc_1.id).unwrap().account;
+        assert!(acc_1.destroyed);
+        assert_eq!(acc_1.balance, Asset::new(0));
+
+        // We can now see the funds from the destroyed account and use them.
+        let acc_2 = minter.minter().get_account_info(acc_2.id).unwrap().account;
+        // Add 1 token here since the starting bal is 4, the transaction uses 1 token for the fee
+        // and 2 tokens to transfer to account 3.
+        assert_eq!(
+            start_bal.checked_add(get_asset("1.00000 TEST")).unwrap(),
+            acc_2.balance
+        );
+
+        // We transferred some funds before destroying the account, they shouuld be seen immediately
+        let acc_3 = minter.minter().get_account_info(acc_3.id).unwrap().account;
+        assert_eq!(
+            acc_3.balance,
+            start_bal.checked_add(get_asset("2.00000 TEST")).unwrap()
+        );
+    }
+}
+
+#[test]
+fn destroyed_acc_unused_funds_goes_to_correct_acc() {
+    let minter = TestMinter::new();
+
+    let create_account = |id: AccountId| -> (Account, KeyPair) {
+        let key = KeyPair::gen();
+        let mut acc = Account::create_default(
+            id,
+            Permissions {
+                threshold: 1,
+                keys: vec![key.0.clone()],
+            },
+        );
+        acc.script = script::Builder::new()
+            .push(
+                script::FnBuilder::new(
+                    0,
+                    OpFrame::OpDefine(vec![script::Arg::AccountId, script::Arg::AccountId]),
+                )
+                .push(OpFrame::Asset(get_asset("1.50000 TEST")))
+                .push(OpFrame::OpTransfer)
+                .push(OpFrame::OpDestroy),
+            )
+            .build()
+            .unwrap();
+        acc.balance = get_asset("4.00000 TEST");
+        (
+            minter.create_account(acc.clone(), "2.00000 TEST", true),
+            key,
+        )
+    };
+
+    // (1) Create the accounts
+    let (acc_1, acc_1_key) = create_account(1);
+    let (acc_2, _) = create_account(2);
+    let (acc_3, _) = create_account(3);
+
+    // (2) Destroy the account
+    {
+        let tx = {
+            let mut tx = TxVariant::V0(TxVariantV0::TransferTx(TransferTx {
+                base: create_tx_header("1.00000 TEST"),
+                from: acc_1.id,
+                call_fn: 0,
+                args: {
+                    let mut args = vec![];
+                    args.push_u64(acc_2.id);
+                    args.push_u64(acc_3.id);
+                    args
+                },
+                amount: get_asset("2.00000 TEST"),
+                memo: vec![],
+            }));
+            tx.append_sign(&acc_1_key);
+            tx
+        };
+        let res = minter.send_req(rpc::Request::Broadcast(tx));
+        assert_eq!(res, Some(Ok(rpc::Response::Broadcast)));
+    }
+
+    // (3) Test to ensure the log is what we expect
+    {
+        minter.produce_block().unwrap();
+
+        let block = minter.chain().get_chain_head();
+        let receipts = block.receipts();
+        assert_eq!(receipts.len(), 1);
+
+        let log = &receipts[0].log;
+        let expected_log = vec![
+            LogEntry::Transfer(acc_3.id, get_asset("1.50000 TEST")),
+            LogEntry::Destroy(acc_2.id),
+            LogEntry::Transfer(acc_2.id, get_asset("0.50000 TEST")),
+        ];
+        assert_eq!(log, &expected_log);
+    }
 }

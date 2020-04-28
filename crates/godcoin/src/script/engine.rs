@@ -73,8 +73,8 @@ impl<'a> ScriptEngine<'a> {
             .data
             .script
             .get_fn_ptr(fn_id)
-            .map_err(|_| self.new_err(EvalErrType::HeaderReadErr))?
-            .ok_or_else(|| self.new_err(EvalErrType::UnknownFn))? as usize;
+            .map_err(|_| self.new_err(EvalErrKind::HeaderReadErr))?
+            .ok_or_else(|| self.new_err(EvalErrKind::UnknownFn))? as usize;
 
         {
             let op = self.consume_op()?;
@@ -94,19 +94,19 @@ impl<'a> ScriptEngine<'a> {
                             Arg::AccountId => {
                                 let id = bin_args
                                     .take_u64()
-                                    .map_err(|_| self.new_err(EvalErrType::ArgDeserialization))?;
+                                    .map_err(|_| self.new_err(EvalErrKind::ArgDeserialization))?;
                                 map_err_type!(self, self.stack.push(OpFrame::AccountId(id)))?;
                             }
                             Arg::Asset => {
                                 let asset = bin_args
                                     .take_asset()
-                                    .map_err(|_| self.new_err(EvalErrType::ArgDeserialization))?;
+                                    .map_err(|_| self.new_err(EvalErrKind::ArgDeserialization))?;
                                 map_err_type!(self, self.stack.push(OpFrame::Asset(asset)))?;
                             }
                         }
                     }
                 }
-                _ => return Err(self.new_err(EvalErrType::InvalidEntryPoint)),
+                _ => return Err(self.new_err(EvalErrKind::InvalidEntryPoint)),
             }
         }
 
@@ -124,7 +124,7 @@ impl<'a> ScriptEngine<'a> {
                     let amt = map_err_type!(self, self.stack.pop_asset())?;
                     let transfer_to = map_err_type!(self, self.stack.pop_account_id())?;
                     if amt.amount < 0 || amt > self.remaining_amt {
-                        return Err(self.new_err(EvalErrType::InvalidAmount));
+                        return Err(self.new_err(EvalErrKind::InvalidAmount));
                     }
                     match self
                         .data
@@ -133,16 +133,50 @@ impl<'a> ScriptEngine<'a> {
                     {
                         Some(acc) => {
                             if acc.destroyed {
-                                return Err(self.new_err(EvalErrType::AccountNotFound));
+                                return Err(self.new_err(EvalErrKind::AccountNotFound));
                             }
                         }
-                        None => return Err(self.new_err(EvalErrType::AccountNotFound)),
+                        None => return Err(self.new_err(EvalErrKind::AccountNotFound)),
                     }
                     self.remaining_amt = self
                         .remaining_amt
                         .checked_sub(amt)
-                        .ok_or_else(|| self.new_err(EvalErrType::Arithmetic))?;
+                        .ok_or_else(|| self.new_err(EvalErrKind::Arithmetic))?;
                     self.log.push(LogEntry::Transfer(transfer_to, amt));
+                }
+                OpFrame::OpDestroy => {
+                    let to_acc = map_err_type!(self, self.stack.pop_account_id())?;
+                    let from_acc_id = match self.data.tx_data.tx() {
+                        TxVariant::V0(tx) => match tx {
+                            TxVariantV0::TransferTx(tx) => tx.from,
+                            // Only allow destroying from transfer transactions, otherwise abort
+                            _ => return Err(self.new_err(EvalErrKind::Aborted)),
+                        },
+                    };
+                    if to_acc == from_acc_id {
+                        // Do not allow looping the funds back to the origin account
+                        return Err(self.new_err(EvalErrKind::Aborted));
+                    }
+
+                    match self
+                        .data
+                        .chain
+                        .get_account(to_acc, &self.data.additional_receipts)
+                    {
+                        Some(acc) => {
+                            if acc.destroyed {
+                                return Err(self.new_err(EvalErrKind::AccountNotFound));
+                            }
+                        }
+                        None => return Err(self.new_err(EvalErrKind::AccountNotFound)),
+                    }
+                    self.log.push(LogEntry::Destroy(to_acc));
+                    // Terminate any further execution of the script and force it to be successful
+                    self.stack
+                        .push(OpFrame::True)
+                        .map_err(|e| self.new_err(e))?;
+                    if_marker = 0;
+                    break;
                 }
                 // Push
                 OpFrame::False => map_err_type!(self, self.stack.push(op))?,
@@ -161,7 +195,7 @@ impl<'a> ScriptEngine<'a> {
                     let a = map_err_type!(self, self.stack.pop_asset())?;
                     let res = a
                         .checked_add(b)
-                        .ok_or_else(|| self.new_err(EvalErrType::Arithmetic))?;
+                        .ok_or_else(|| self.new_err(EvalErrKind::Arithmetic))?;
                     map_err_type!(self, self.stack.push(OpFrame::Asset(res)))?;
                 }
                 OpFrame::OpSub => {
@@ -169,7 +203,7 @@ impl<'a> ScriptEngine<'a> {
                     let a = map_err_type!(self, self.stack.pop_asset())?;
                     let res = a
                         .checked_sub(b)
-                        .ok_or_else(|| self.new_err(EvalErrType::Arithmetic))?;
+                        .ok_or_else(|| self.new_err(EvalErrKind::Arithmetic))?;
                     map_err_type!(self, self.stack.push(OpFrame::Asset(res)))?;
                 }
                 OpFrame::OpMul => {
@@ -177,7 +211,7 @@ impl<'a> ScriptEngine<'a> {
                     let a = map_err_type!(self, self.stack.pop_asset())?;
                     let res = a
                         .checked_mul(b)
-                        .ok_or_else(|| self.new_err(EvalErrType::Arithmetic))?;
+                        .ok_or_else(|| self.new_err(EvalErrKind::Arithmetic))?;
                     map_err_type!(self, self.stack.push(OpFrame::Asset(res)))?;
                 }
                 OpFrame::OpDiv => {
@@ -185,7 +219,7 @@ impl<'a> ScriptEngine<'a> {
                     let a = map_err_type!(self, self.stack.pop_asset())?;
                     let res = a
                         .checked_div(b)
-                        .ok_or_else(|| self.new_err(EvalErrType::Arithmetic))?;
+                        .ok_or_else(|| self.new_err(EvalErrKind::Arithmetic))?;
                     map_err_type!(self, self.stack.push(OpFrame::Asset(res)))?;
                 }
                 // Logic
@@ -242,7 +276,7 @@ impl<'a> ScriptEngine<'a> {
                     if_marker = 0;
                     break;
                 }
-                OpFrame::OpAbort => return Err(self.new_err(EvalErrType::Aborted)),
+                OpFrame::OpAbort => return Err(self.new_err(EvalErrKind::Aborted)),
                 // Crypto
                 OpFrame::OpCheckPerms => {
                     let acc = map_err_type!(self, self.stack.pop_account_id())?;
@@ -252,7 +286,7 @@ impl<'a> ScriptEngine<'a> {
                 OpFrame::OpCheckPermsFastFail => {
                     let acc = map_err_type!(self, self.stack.pop_account_id())?;
                     if !self.check_acc_perms(1, &[acc])? {
-                        return Err(self.new_err(EvalErrType::ScriptRetFalse));
+                        return Err(self.new_err(EvalErrKind::ScriptRetFalse));
                     }
                 }
                 OpFrame::OpCheckMultiPerms(threshold, acc_count) => {
@@ -275,14 +309,14 @@ impl<'a> ScriptEngine<'a> {
                         accs
                     };
                     if !self.check_acc_perms(usize::from(threshold), &accs)? {
-                        return Err(self.new_err(EvalErrType::ScriptRetFalse));
+                        return Err(self.new_err(EvalErrKind::ScriptRetFalse));
                     }
                 }
             }
         }
 
         if if_marker > 0 {
-            return Err(self.new_err(EvalErrType::UnexpectedEOF));
+            return Err(self.new_err(EvalErrKind::UnexpectedEOF));
         }
 
         // Scripts must return true or false
@@ -290,20 +324,26 @@ impl<'a> ScriptEngine<'a> {
             let mut log = vec![];
             mem::swap(&mut self.log, &mut log);
             if self.remaining_amt.amount > 0 {
-                // Send back funds to the original sender
+                // Handle any remaining funds
                 match self.data.tx_data.tx() {
                     TxVariant::V0(tx) => match tx {
                         TxVariantV0::TransferTx(tx) => {
-                            log.push(LogEntry::Transfer(tx.from, self.remaining_amt))
+                            if let Some(LogEntry::Destroy(to_acc)) = log.last().cloned() {
+                                // Send remaining funds to the designated account
+                                log.push(LogEntry::Transfer(to_acc, self.remaining_amt));
+                            } else {
+                                // Send remaining funds back to the original sender
+                                log.push(LogEntry::Transfer(tx.from, self.remaining_amt));
+                            }
                         }
-                        _ => return Err(self.new_err(EvalErrType::InvalidAmount)),
+                        _ => return Err(self.new_err(EvalErrKind::InvalidAmount)),
                     },
                 }
                 self.remaining_amt = Asset::default();
             }
             Ok(log)
         } else {
-            Err(self.new_err(EvalErrType::ScriptRetFalse))
+            Err(self.new_err(EvalErrKind::ScriptRetFalse))
         }
     }
 
@@ -318,7 +358,7 @@ impl<'a> ScriptEngine<'a> {
                         break;
                     }
                 }
-                None => return Err(self.new_err(EvalErrType::UnexpectedEOF)),
+                None => return Err(self.new_err(EvalErrKind::UnexpectedEOF)),
             }
         }
 
@@ -334,7 +374,7 @@ impl<'a> ScriptEngine<'a> {
                         b
                     }
                     None => {
-                        return Err($self.new_err(EvalErrType::UnexpectedEOF));
+                        return Err($self.new_err(EvalErrKind::UnexpectedEOF));
                     }
                 }
             };
@@ -345,7 +385,7 @@ impl<'a> ScriptEngine<'a> {
                         *b
                     }
                     None => {
-                        return Err($self.new_err(EvalErrType::UnexpectedEOF));
+                        return Err($self.new_err(EvalErrKind::UnexpectedEOF));
                     }
                 }
             };
@@ -366,13 +406,14 @@ impl<'a> ScriptEngine<'a> {
                     let tag_byte = read_bytes!(self);
                     let arg = tag_byte
                         .try_into()
-                        .map_err(|_| self.new_err(EvalErrType::UnknownArgType))?;
+                        .map_err(|_| self.new_err(EvalErrKind::UnknownArgType))?;
                     args.push(arg);
                 }
                 Ok(Some(OpFrame::OpDefine(args)))
             }
             // Events
             o if o == Operand::OpTransfer as u8 => Ok(Some(OpFrame::OpTransfer)),
+            o if o == Operand::OpDestroy as u8 => Ok(Some(OpFrame::OpDestroy)),
             // Push value
             o if o == Operand::PushFalse as u8 => Ok(Some(OpFrame::False)),
             o if o == Operand::PushTrue as u8 => Ok(Some(OpFrame::True)),
@@ -418,7 +459,7 @@ impl<'a> ScriptEngine<'a> {
                     threshold, acc_count,
                 )))
             }
-            _ => Err(self.new_err(EvalErrType::UnknownOp)),
+            _ => Err(self.new_err(EvalErrKind::UnknownOp)),
         }
     }
 
@@ -438,7 +479,7 @@ impl<'a> ScriptEngine<'a> {
                 .data
                 .chain
                 .get_account(*acc_id, &self.data.additional_receipts)
-                .ok_or_else(|| self.new_err(EvalErrType::AccountNotFound))?;
+                .ok_or_else(|| self.new_err(EvalErrKind::AccountNotFound))?;
             match account.permissions.verify(txid, sigs) {
                 Ok(_) => {}
                 Err(PermsSigVerifyErr::InsufficientThreshold)
@@ -455,7 +496,7 @@ impl<'a> ScriptEngine<'a> {
         Ok(valid_threshold >= threshold)
     }
 
-    fn new_err(&self, err: EvalErrType) -> EvalErr {
+    fn new_err(&self, err: EvalErrKind) -> EvalErr {
         EvalErr::new(self.pos as u32, err)
     }
 }
@@ -496,7 +537,7 @@ mod tests {
             |_, mut engine| {
                 assert_eq!(
                     engine.call_fn(0).unwrap_err().err,
-                    EvalErrType::ScriptRetFalse
+                    EvalErrKind::ScriptRetFalse
                 );
                 assert!(engine.stack.is_empty());
             },
@@ -685,7 +726,7 @@ mod tests {
         TestEngine::new().get(
             Builder::new().push(FnBuilder::new(1, OpFrame::OpDefine(vec![])).push(OpFrame::True)),
             |_, mut engine| {
-                assert_eq!(engine.call_fn(0).unwrap_err().err, EvalErrType::UnknownFn);
+                assert_eq!(engine.call_fn(0).unwrap_err().err, EvalErrKind::UnknownFn);
                 assert!(engine.stack.is_empty());
             },
         );
@@ -704,7 +745,7 @@ mod tests {
                 );
                 assert_eq!(
                     engine.call_fn(0).unwrap_err().err,
-                    EvalErrType::ScriptRetFalse
+                    EvalErrKind::ScriptRetFalse
                 );
                 assert!(engine.stack.is_empty());
             },
@@ -755,7 +796,7 @@ mod tests {
             let engine = TestEngine::new();
             let tx = engine.new_transfer_tx(0, vec![], &[]);
             engine.get_direct(tx, script.clone(), |_, engine| {
-                assert_eq!(engine.eval().unwrap_err().err, EvalErrType::ScriptRetFalse);
+                assert_eq!(engine.eval().unwrap_err().err, EvalErrKind::ScriptRetFalse);
             });
         }
         {
@@ -770,7 +811,7 @@ mod tests {
             let engine = TestEngine::new();
             let tx = engine.new_transfer_tx(2, vec![], &[]);
             engine.get_direct(tx, script, |_, engine| {
-                assert_eq!(engine.eval().unwrap_err().err, EvalErrType::UnknownFn);
+                assert_eq!(engine.eval().unwrap_err().err, EvalErrKind::UnknownFn);
             });
         }
     }
@@ -788,7 +829,7 @@ mod tests {
             |_, mut engine| {
                 assert_eq!(
                     engine.call_fn(0).unwrap_err().err,
-                    EvalErrType::ScriptRetFalse
+                    EvalErrKind::ScriptRetFalse
                 );
                 assert!(engine.stack.is_empty());
             }
@@ -827,7 +868,7 @@ mod tests {
             |_, mut engine| {
                 assert_eq!(
                     engine.call_fn(0).unwrap_err().err,
-                    EvalErrType::ScriptRetFalse
+                    EvalErrKind::ScriptRetFalse
                 );
                 assert!(engine.stack.is_empty());
             }
@@ -957,7 +998,7 @@ mod tests {
             |_, mut engine| {
                 assert_eq!(
                     engine.call_fn(0).unwrap_err().err,
-                    EvalErrType::InvalidItemOnStack
+                    EvalErrKind::InvalidItemOnStack
                 );
             },
         );
@@ -974,7 +1015,7 @@ mod tests {
             |_, mut engine| {
                 assert_eq!(
                     engine.call_fn(0).unwrap_err().err,
-                    EvalErrType::InvalidItemOnStack
+                    EvalErrKind::InvalidItemOnStack
                 );
             },
         );
@@ -991,7 +1032,7 @@ mod tests {
             |_, mut engine| {
                 assert_eq!(
                     engine.call_fn(0).unwrap_err().err,
-                    EvalErrType::UnexpectedEOF
+                    EvalErrKind::UnexpectedEOF
                 );
             },
         );
@@ -1005,7 +1046,7 @@ mod tests {
             |_, mut engine| {
                 assert_eq!(
                     engine.call_fn(0).unwrap_err().err,
-                    EvalErrType::UnexpectedEOF
+                    EvalErrKind::UnexpectedEOF
                 );
             },
         );
@@ -1067,7 +1108,7 @@ mod tests {
                 |_, mut engine| {
                     assert_eq!(
                         engine.call_fn(0).unwrap_err().err,
-                        EvalErrType::ScriptRetFalse
+                        EvalErrKind::ScriptRetFalse
                     );
                 },
             );
@@ -1089,7 +1130,7 @@ mod tests {
                 |_, mut engine| {
                     assert_eq!(
                         engine.call_fn(0).unwrap_err().err,
-                        EvalErrType::ScriptRetFalse
+                        EvalErrKind::ScriptRetFalse
                     );
                 },
             );
@@ -1140,7 +1181,7 @@ mod tests {
             |_, mut engine| {
                 assert_eq!(
                     engine.call_fn(0).unwrap_err().err,
-                    EvalErrType::ScriptRetFalse
+                    EvalErrKind::ScriptRetFalse
                 );
             },
         );
@@ -1261,7 +1302,7 @@ mod tests {
             (tx, script)
         };
         engine.get_direct(tx, script, |_, engine| {
-            assert_eq!(engine.eval().unwrap_err().err, EvalErrType::ScriptRetFalse);
+            assert_eq!(engine.eval().unwrap_err().err, EvalErrKind::ScriptRetFalse);
         });
     }
 
@@ -1304,7 +1345,7 @@ mod tests {
         fn expect_fail(_: &TestEngine, mut engine: ScriptEngine) {
             assert_eq!(
                 engine.call_fn(0).unwrap_err().err,
-                EvalErrType::ScriptRetFalse
+                EvalErrKind::ScriptRetFalse
             );
         }
 
@@ -1406,7 +1447,7 @@ mod tests {
         exec_engine(vec![2, 1], |_, mut engine| {
             assert_eq!(
                 engine.call_fn(0).unwrap_err().err,
-                EvalErrType::ScriptRetFalse
+                EvalErrKind::ScriptRetFalse
             );
         });
 
@@ -1414,7 +1455,7 @@ mod tests {
         exec_engine(vec![0, 1], |_, mut engine| {
             assert_eq!(
                 engine.call_fn(0).unwrap_err().err,
-                EvalErrType::ScriptRetFalse
+                EvalErrKind::ScriptRetFalse
             );
         });
     }
@@ -1463,7 +1504,7 @@ mod tests {
         exec_engine(vec![1, 2], |_, mut engine| {
             assert_eq!(
                 engine.call_fn(0).unwrap_err().err,
-                EvalErrType::ScriptRetFalse
+                EvalErrKind::ScriptRetFalse
             );
         });
 
@@ -1471,7 +1512,7 @@ mod tests {
         exec_engine(vec![0, 1], |_, mut engine| {
             assert_eq!(
                 engine.call_fn(0).unwrap_err().err,
-                EvalErrType::ScriptRetFalse
+                EvalErrKind::ScriptRetFalse
             );
         });
     }
@@ -1500,7 +1541,7 @@ mod tests {
                 |_, mut engine| {
                     assert_eq!(
                         engine.call_fn(0).unwrap_err().err,
-                        EvalErrType::ScriptRetFalse
+                        EvalErrKind::ScriptRetFalse
                     );
                 }
             );
@@ -1528,7 +1569,7 @@ mod tests {
                 |_, mut engine| {
                     assert_eq!(
                         engine.call_fn(0).unwrap_err().err,
-                        EvalErrType::ScriptRetFalse
+                        EvalErrKind::ScriptRetFalse
                     );
                 }
             );
@@ -1566,7 +1607,7 @@ mod tests {
         engine.get(builder, |_, mut engine| {
             assert_eq!(
                 engine.call_fn(0).unwrap_err().err,
-                EvalErrType::AccountNotFound
+                EvalErrKind::AccountNotFound
             );
             assert!(engine.stack.is_empty());
         });
@@ -1590,7 +1631,7 @@ mod tests {
         engine.get(builder, |_, mut engine| {
             assert_eq!(
                 engine.call_fn(0).unwrap_err().err,
-                EvalErrType::AccountNotFound
+                EvalErrKind::AccountNotFound
             );
         });
     }
@@ -1604,7 +1645,7 @@ mod tests {
                     .push(OpFrame::True),
             ),
             |_, mut engine| {
-                assert_eq!(engine.call_fn(0).unwrap_err().err, EvalErrType::Aborted);
+                assert_eq!(engine.call_fn(0).unwrap_err().err, EvalErrKind::Aborted);
                 assert!(engine.stack.is_empty());
             },
         );
@@ -1616,8 +1657,55 @@ mod tests {
                     .push(OpFrame::OpAbort),
             ),
             |_, mut engine| {
-                assert_eq!(engine.call_fn(0).unwrap_err().err, EvalErrType::Aborted);
+                assert_eq!(engine.call_fn(0).unwrap_err().err, EvalErrKind::Aborted);
                 assert_eq!(engine.stack.pop_bool(), Ok(true));
+                assert!(engine.stack.is_empty());
+            },
+        );
+    }
+
+    #[test]
+    fn destroy_aborts_further_execution() {
+        let engine = TestEngine::new();
+        let acc = engine.create_account(10).0;
+        engine.get(
+            Builder::new().push(
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::AccountId(engine.to_acc.id))
+                    .push(OpFrame::OpDestroy)
+                    .push(OpFrame::False),
+            ),
+            |test, mut engine| {
+                assert_eq!(
+                    engine.call_fn(0).unwrap(),
+                    vec![
+                        LogEntry::Destroy(test.to_acc.id),
+                        test.to_transfer_entry("10.00000 TEST"),
+                    ]
+                );
+                assert!(engine.stack.is_empty());
+            },
+        );
+
+        engine.get(
+            Builder::new().push(
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::AccountId(acc.id))
+                    .push(OpFrame::Asset("7.00000 TEST".parse().unwrap()))
+                    .push(OpFrame::OpTransfer)
+                    .push(OpFrame::AccountId(engine.to_acc.id))
+                    .push(OpFrame::OpDestroy)
+                    .push(OpFrame::False),
+            ),
+            |test, mut engine| {
+                assert_eq!(
+                    engine.call_fn(0).unwrap(),
+                    vec![
+                        LogEntry::Transfer(acc.id, "7.00000 TEST".parse().unwrap()),
+                        LogEntry::Destroy(test.to_acc.id),
+                        test.to_transfer_entry("3.00000 TEST"),
+                    ]
+                );
                 assert!(engine.stack.is_empty());
             },
         );

@@ -92,7 +92,10 @@ impl Receipt {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LogEntry {
+    /// Sends tokens to the specified account
     Transfer(AccountId, Asset), // To account, amount
+    /// Destroys an account and sends any remaining funds to the specified account
+    Destroy(AccountId),
 }
 
 impl LogEntry {
@@ -102,6 +105,10 @@ impl LogEntry {
                 buf.push(0x00);
                 buf.push_u64(*acc);
                 buf.push_asset(*amt);
+            }
+            Self::Destroy(acc) => {
+                buf.push(0x01);
+                buf.push_u64(*acc);
             }
         }
     }
@@ -113,6 +120,10 @@ impl LogEntry {
                 let acc = cur.take_u64().ok()?;
                 let amt = cur.take_asset().ok()?;
                 Some(Self::Transfer(acc, amt))
+            }
+            0x01 => {
+                let acc = cur.take_u64().ok()?;
+                Some(Self::Destroy(acc))
             }
             _ => None,
         }

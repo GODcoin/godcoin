@@ -111,7 +111,7 @@ fn update_acc_tx_fail_sig_threshold() {
         Some(Err(net::ErrorKind::TxValidation(
             blockchain::TxErr::ScriptEval(script::EvalErr {
                 pos: 0,
-                err: script::EvalErrType::ScriptRetFalse
+                err: script::EvalErrKind::ScriptRetFalse
             })
         )))
     );

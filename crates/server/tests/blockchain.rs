@@ -1,7 +1,7 @@
 use godcoin::{
     blockchain::error::TxErr,
     constants,
-    prelude::{net::ErrorKind, script::EvalErrType, *},
+    prelude::{net::ErrorKind, script::EvalErrKind, *},
 };
 
 mod common;
@@ -215,7 +215,7 @@ fn tx_sig_validation_err_with_different_nonce() {
     let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
     match res {
         Err(ErrorKind::TxValidation(TxErr::ScriptEval(e))) => {
-            assert_eq!(e.err, EvalErrType::ScriptRetFalse)
+            assert_eq!(e.err, EvalErrKind::ScriptRetFalse)
         }
         _ => panic!("Assertion failed, got {:?}", res),
     }
@@ -352,7 +352,7 @@ fn tx_with_bad_chain_id() {
             .unwrap();
         match res {
             Err(ErrorKind::TxValidation(TxErr::ScriptEval(e))) => {
-                assert_eq!(e.err, EvalErrType::ScriptRetFalse)
+                assert_eq!(e.err, EvalErrKind::ScriptRetFalse)
             }
             _ => panic!("Assertion failed, got {:?}", res),
         }

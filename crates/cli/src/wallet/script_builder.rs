@@ -34,6 +34,7 @@ pub fn build(ops: &[&str]) -> Result<Script, BuildError> {
                 fn_builder = Some(match op.as_ref() {
                     // Events
                     "OP_TRANSFER" => builder.push(OpFrame::OpTransfer),
+                    "OP_DESTROY" => builder.push(OpFrame::OpDestroy),
                     // Push value
                     "OP_FALSE" => builder.push(OpFrame::False),
                     "OP_TRUE" => builder.push(OpFrame::True),

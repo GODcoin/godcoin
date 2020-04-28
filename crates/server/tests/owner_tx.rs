@@ -104,7 +104,7 @@ fn owner_tx_deny_mint_tokens() {
     let res = minter.send_req(rpc::Request::Broadcast(tx)).unwrap();
     match res {
         Err(net::ErrorKind::TxValidation(blockchain::TxErr::ScriptEval(script::EvalErr {
-            err: script::EvalErrType::ScriptRetFalse,
+            err: script::EvalErrKind::ScriptRetFalse,
             ..
         }))) => {}
         _ => panic!("Expected another response but got {:?}", res),

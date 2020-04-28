@@ -77,7 +77,7 @@ fn create_acc_tx_test_creator_acc_threshold() {
         Some(Err(net::ErrorKind::TxValidation(
             blockchain::TxErr::ScriptEval(script::EvalErr {
                 pos: 0,
-                err: script::EvalErrType::ScriptRetFalse
+                err: script::EvalErrKind::ScriptRetFalse
             })
         )))
     );

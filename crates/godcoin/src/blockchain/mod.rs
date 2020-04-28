@@ -209,6 +209,11 @@ impl Blockchain {
                                                 return true;
                                             }
                                         }
+                                        LogEntry::Destroy(to_acc) => {
+                                            if filter.contains(to_acc) {
+                                                return true;
+                                            }
+                                        }
                                     }
                                 }
                                 false
@@ -269,6 +274,19 @@ impl Blockchain {
                                     if *to_acc == id {
                                         acc.balance = acc.balance.checked_add(*amount)?;
                                     }
+                                }
+                                LogEntry::Destroy(_to_acc) => {
+                                    if tx.from == id {
+                                        acc.destroyed = true;
+                                        acc.balance = Asset::new(0);
+                                    }
+                                    // The receiving account is not allowed to see the funds until a
+                                    // block is produced. The reason for this is that we cannot
+                                    // account for the balance of `tx.from` until *after* the
+                                    // destroyed account gets indexed. The exception to this is if
+                                    // the current transaction did not use all the funds, a transfer
+                                    // log entry will be created for the receiving account, allowing
+                                    // the user to see those funds immediately.
                                 }
                             }
                         }
@@ -572,7 +590,7 @@ impl Blockchain {
                     {
                         return Err(TxErr::ScriptEval(EvalErr::new(
                             0,
-                            EvalErrType::ScriptRetFalse,
+                            EvalErrKind::ScriptRetFalse,
                         )));
                     }
 
@@ -626,7 +644,7 @@ impl Blockchain {
                     {
                         return Err(TxErr::ScriptEval(EvalErr::new(
                             0,
-                            EvalErrType::ScriptRetFalse,
+                            EvalErrKind::ScriptRetFalse,
                         )));
                     }
 
@@ -713,6 +731,13 @@ impl Blockchain {
                     for entry in &receipt.log {
                         match entry {
                             LogEntry::Transfer(to_acc, amount) => batch.add_bal(*to_acc, *amount),
+                            LogEntry::Destroy(to_acc) => {
+                                let from_acc = batch.get_account_mut(tx.from);
+                                let from_cur_bal = from_acc.balance;
+                                from_acc.destroyed = true;
+                                from_acc.balance = Asset::new(0);
+                                batch.add_bal(*to_acc, from_cur_bal);
+                            }
                         }
                     }
                 }

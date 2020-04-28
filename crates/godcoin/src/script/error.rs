@@ -3,18 +3,18 @@ use std::convert::TryFrom;
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct EvalErr {
     pub pos: u32,
-    pub err: EvalErrType,
+    pub err: EvalErrKind,
 }
 
 impl EvalErr {
-    pub fn new(pos: u32, err: EvalErrType) -> EvalErr {
+    pub fn new(pos: u32, err: EvalErrKind) -> EvalErr {
         EvalErr { pos, err }
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
-pub enum EvalErrType {
+pub enum EvalErrKind {
     ScriptRetFalse = 0x00,
     Aborted = 0x01,
     UnexpectedEOF = 0x02,
@@ -32,7 +32,7 @@ pub enum EvalErrType {
     AccountNotFound = 0x0E,
 }
 
-impl TryFrom<u8> for EvalErrType {
+impl TryFrom<u8> for EvalErrKind {
     type Error = ();
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {

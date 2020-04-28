@@ -13,7 +13,7 @@ impl Stack {
         }
     }
 
-    pub fn push<T>(&mut self, op: T) -> Result<(), EvalErrType>
+    pub fn push<T>(&mut self, op: T) -> Result<(), EvalErrKind>
     where
         T: Into<OpFrame>,
     {
@@ -21,36 +21,36 @@ impl Stack {
             self.inner.push(op.into());
             Ok(())
         } else {
-            Err(EvalErrType::StackOverflow)
+            Err(EvalErrKind::StackOverflow)
         }
     }
 
-    pub fn pop(&mut self) -> Result<OpFrame, EvalErrType> {
-        self.inner.pop().ok_or(EvalErrType::StackUnderflow)
+    pub fn pop(&mut self) -> Result<OpFrame, EvalErrKind> {
+        self.inner.pop().ok_or(EvalErrKind::StackUnderflow)
     }
 
-    pub fn pop_bool(&mut self) -> Result<bool, EvalErrType> {
+    pub fn pop_bool(&mut self) -> Result<bool, EvalErrKind> {
         let frame = self.pop()?;
         match frame {
             OpFrame::False => Ok(false),
             OpFrame::True => Ok(true),
-            _ => Err(EvalErrType::InvalidItemOnStack),
+            _ => Err(EvalErrKind::InvalidItemOnStack),
         }
     }
 
-    pub fn pop_account_id(&mut self) -> Result<AccountId, EvalErrType> {
+    pub fn pop_account_id(&mut self) -> Result<AccountId, EvalErrKind> {
         let frame = self.pop()?;
         match frame {
             OpFrame::AccountId(id) => Ok(id),
-            _ => Err(EvalErrType::InvalidItemOnStack),
+            _ => Err(EvalErrKind::InvalidItemOnStack),
         }
     }
 
-    pub fn pop_asset(&mut self) -> Result<Asset, EvalErrType> {
+    pub fn pop_asset(&mut self) -> Result<Asset, EvalErrKind> {
         let frame = self.pop()?;
         match frame {
             OpFrame::Asset(asset) => Ok(asset),
-            _ => Err(EvalErrType::InvalidItemOnStack),
+            _ => Err(EvalErrKind::InvalidItemOnStack),
         }
     }
 

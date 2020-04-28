@@ -1,5 +1,5 @@
 use crate::{
-    script::{EvalErr, EvalErrType},
+    script::{EvalErr, EvalErrKind},
     serializer::*,
 };
 use std::{
@@ -59,7 +59,7 @@ impl TxErr {
         Ok(match tag {
             0x00 => {
                 let pos = cursor.take_u32()?;
-                let kind = EvalErrType::try_from(cursor.take_u8()?).map_err(|_| {
+                let kind = EvalErrKind::try_from(cursor.take_u8()?).map_err(|_| {
                     io::Error::new(
                         io::ErrorKind::InvalidData,
                         "failed to deserialize EvalErrType",

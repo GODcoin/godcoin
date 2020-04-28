@@ -9,6 +9,7 @@ pub enum Operand {
 
     // Events
     OpTransfer = 0x10,
+    OpDestroy = 0x11,
 
     // Push value
     PushFalse = 0x20,
@@ -52,6 +53,7 @@ pub enum OpFrame {
 
     // Events
     OpTransfer,
+    OpDestroy,
 
     // Push value
     False,
