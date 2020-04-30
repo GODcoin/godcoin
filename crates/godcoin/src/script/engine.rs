@@ -312,6 +312,19 @@ impl<'a> ScriptEngine<'a> {
                         return Err(self.new_err(EvalErrKind::ScriptRetFalse));
                     }
                 }
+                // Lock time
+                OpFrame::OpCheckTime(time) => {
+                    let block = self.data.chain.get_chain_head();
+                    let success = block.timestamp() >= time;
+                    map_err_type!(self, self.stack.push(success))?;
+                }
+                OpFrame::OpCheckTimeFastFail(time) => {
+                    let block = self.data.chain.get_chain_head();
+                    let success = block.timestamp() >= time;
+                    if !success {
+                        return Err(self.new_err(EvalErrKind::ScriptRetFalse));
+                    }
+                }
             }
         }
 
@@ -458,6 +471,17 @@ impl<'a> ScriptEngine<'a> {
                 Ok(Some(OpFrame::OpCheckMultiPermsFastFail(
                     threshold, acc_count,
                 )))
+            }
+            // Lock time
+            o if o == Operand::OpCheckTime as u8 => {
+                let slice = read_bytes!(self, mem::size_of::<u64>());
+                let time = u64::from_be_bytes(slice.try_into().unwrap());
+                Ok(Some(OpFrame::OpCheckTime(time)))
+            }
+            o if o == Operand::OpCheckTimeFastFail as u8 => {
+                let slice = read_bytes!(self, mem::size_of::<u64>());
+                let time = u64::from_be_bytes(slice.try_into().unwrap());
+                Ok(Some(OpFrame::OpCheckTimeFastFail(time)))
             }
             _ => Err(self.new_err(EvalErrKind::UnknownOp)),
         }
@@ -1711,6 +1735,97 @@ mod tests {
         );
     }
 
+    #[test]
+    fn succeed_check_time() {
+        let engine = TestEngine::new();
+        let head_time = engine.chain.get_chain_head().timestamp();
+
+        // Test exactly on time
+        engine.get(
+            Builder::new().push(
+                FnBuilder::new(0, OpFrame::OpDefine(vec![])).push(OpFrame::OpCheckTime(head_time)),
+            ),
+            |test, mut engine| {
+                assert_eq!(
+                    engine.call_fn(0).unwrap(),
+                    vec![test.from_transfer_entry("10.00000 TEST")]
+                );
+            },
+        );
+
+        // Test in the past
+        engine.get(
+            Builder::new().push(
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::OpCheckTime(head_time - 1)),
+            ),
+            |test, mut engine| {
+                assert_eq!(
+                    engine.call_fn(0).unwrap(),
+                    vec![test.from_transfer_entry("10.00000 TEST")]
+                );
+                assert!(engine.stack.is_empty());
+            },
+        );
+
+        // Test fast fail op
+        engine.get(
+            Builder::new().push(
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::OpCheckTimeFastFail(head_time))
+                    .push(OpFrame::True),
+            ),
+            |test, mut engine| {
+                assert_eq!(
+                    engine.call_fn(0).unwrap(),
+                    vec![test.from_transfer_entry("10.00000 TEST")]
+                );
+                assert!(engine.stack.is_empty());
+            },
+        );
+    }
+
+    #[test]
+    fn fail_check_time() {
+        let engine = TestEngine::new();
+        let head_time = engine.chain.get_chain_head().timestamp();
+
+        // Test false is pushed to the stack
+        engine.get(
+            Builder::new().push(
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::OpCheckTime(head_time + 1))
+                    .push(OpFrame::True),
+            ),
+            |test, mut engine| {
+                // Top of the stack is true
+                assert_eq!(
+                    engine.call_fn(0).unwrap(),
+                    vec![test.from_transfer_entry("10.00000 TEST")]
+                );
+                // Next item is false pushed by OpCheckTime failing
+                assert_eq!(engine.stack.pop_bool(), Ok(false));
+                assert!(engine.stack.is_empty());
+            },
+        );
+
+        // Test fast fail op
+        engine.get(
+            Builder::new().push(
+                FnBuilder::new(0, OpFrame::OpDefine(vec![]))
+                    .push(OpFrame::OpCheckTimeFastFail(head_time + 1))
+                    .push(OpFrame::True),
+            ),
+            |_, mut engine| {
+                assert_eq!(
+                    engine.call_fn(0).unwrap_err().err,
+                    EvalErrKind::ScriptRetFalse
+                );
+                assert!(engine.stack.is_empty());
+            },
+        );
+    }
+
     struct TestEngine {
         tmp_dir: PathBuf,
         chain: Blockchain,
@@ -1734,6 +1849,9 @@ mod tests {
             let log_path = Path::join(&tmp_dir, "blocklog");
             let index_path = Path::join(&tmp_dir, "index");
             let chain = Blockchain::new(&log_path, &index_path);
+
+            // Create a head that some tests require.
+            chain.create_genesis_block(KeyPair::gen());
 
             let from_key = KeyPair::gen();
             let from_acc = Account::create_default(

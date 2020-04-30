@@ -133,6 +133,15 @@ impl FnBuilder {
                 threshold,
                 key_count,
             ]),
+            // Lock time
+            OpFrame::OpCheckTime(time) => {
+                self.byte_code.push(Operand::OpCheckTime.into());
+                self.byte_code.push_u64(time);
+            }
+            OpFrame::OpCheckTimeFastFail(time) => {
+                self.byte_code.push(Operand::OpCheckTimeFastFail.into());
+                self.byte_code.push_u64(time);
+            }
         }
         self
     }

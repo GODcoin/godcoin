@@ -95,6 +95,23 @@ pub fn build(ops: &[&str]) -> Result<Script, BuildError> {
                             .map_err(|e: ParseIntError| BuildError::Other(format!("{}", e)))?;
                         builder.push(OpFrame::OpCheckMultiPermsFastFail(threshold, acc_count))
                     }
+                    // Lock time
+                    "OP_CHECKTIME" => {
+                        let time = iter
+                            .next()
+                            .ok_or_else(|| BuildError::MissingArgForOp(op.to_string()))?
+                            .parse()
+                            .map_err(|e: ParseIntError| BuildError::Other(format!("{}", e)))?;
+                        builder.push(OpFrame::OpCheckTime(time))
+                    }
+                    "OP_CHECKTIMEFASTFAIL" => {
+                        let time = iter
+                            .next()
+                            .ok_or_else(|| BuildError::MissingArgForOp(op.to_string()))?
+                            .parse()
+                            .map_err(|e: ParseIntError| BuildError::Other(format!("{}", e)))?;
+                        builder.push(OpFrame::OpCheckTimeFastFail(time))
+                    }
                     _ => return Err(BuildError::UnknownOp(op.to_string())),
                 })
             }

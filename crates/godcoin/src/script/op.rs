@@ -38,6 +38,10 @@ pub enum Operand {
     OpCheckPermsFastFail = 0x51,
     OpCheckMultiPerms = 0x52,
     OpCheckMultiPermsFastFail = 0x53,
+
+    // Lock time
+    OpCheckTime = 0x60,
+    OpCheckTimeFastFail = 0x61,
 }
 
 impl From<Operand> for u8 {
@@ -82,6 +86,10 @@ pub enum OpFrame {
     OpCheckPermsFastFail,
     OpCheckMultiPerms(u8, u8), // M of N: minimum threshold to number of accounts
     OpCheckMultiPermsFastFail(u8, u8),
+
+    // Lock time
+    OpCheckTime(u64), // Epoch time in seconds
+    OpCheckTimeFastFail(u64),
 }
 
 impl From<bool> for OpFrame {
