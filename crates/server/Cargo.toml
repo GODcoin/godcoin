@@ -36,7 +36,7 @@ default-features = false
 features = ["derive"]
 
 [dependencies.tokio]
-version = "0.2.18"
+version = "0.2.20"
 default-features = false
 features = ["macros", "tcp", "time", "rt-threaded", "signal", "stream"]
 

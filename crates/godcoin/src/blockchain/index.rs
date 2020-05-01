@@ -136,10 +136,10 @@ impl Indexer {
         let current_time = crate::get_epoch_time() - TX_EXPIRY_ADJUSTMENT;
 
         let mut batch = rocksdb::WriteBatch::default();
-        for (key, value) in self.db.iterator_cf(cf, IteratorMode::Start).unwrap() {
+        for (key, value) in self.db.iterator_cf(cf, IteratorMode::Start) {
             let expiry = u64::from_be_bytes(value.as_ref().try_into().unwrap());
             if expiry < current_time {
-                batch.delete_cf(cf, key).unwrap();
+                batch.delete_cf(cf, key);
             }
         }
         self.db.write(batch).unwrap();
@@ -175,12 +175,12 @@ impl WriteBatch {
             for (height, pos) in self.block_byte_pos {
                 let height = height.to_be_bytes();
                 let pos = pos.to_be_bytes();
-                batch.put_cf(cf, &height, &pos).unwrap();
+                batch.put_cf(cf, &height, &pos);
             }
         }
 
         if let Some(height) = self.chain_height {
-            batch.put(KEY_CHAIN_HEIGHT, height.to_be_bytes()).unwrap();
+            batch.put(KEY_CHAIN_HEIGHT, height.to_be_bytes());
         }
 
         if let Some(owner) = self.owner {
@@ -189,7 +189,7 @@ impl WriteBatch {
                 owner.serialize(&mut buf);
                 buf
             };
-            batch.put(KEY_NET_OWNER, &val).unwrap();
+            batch.put(KEY_NET_OWNER, &val);
         }
 
         if let Some(token_supply) = self.token_supply {
@@ -198,7 +198,7 @@ impl WriteBatch {
                 buf.push_asset(token_supply);
                 buf
             };
-            batch.put(KEY_TOKEN_SUPPLY, &val).unwrap();
+            batch.put(KEY_TOKEN_SUPPLY, &val);
         }
 
         {
@@ -206,7 +206,7 @@ impl WriteBatch {
             let mut buf = Vec::with_capacity(mem::size_of::<Account>());
             for (id, account) in self.accounts {
                 account.serialize(&mut buf);
-                batch.put_cf(cf, id.to_be_bytes(), &buf).unwrap();
+                batch.put_cf(cf, id.to_be_bytes(), &buf);
                 buf.clear();
             }
         }

@@ -145,7 +145,7 @@ impl Db {
         let mut accounts = Vec::with_capacity(64);
 
         let cf = self.db.cf_handle(CF_ACCOUNTS).unwrap();
-        let iter = self.db.iterator_cf(cf, IteratorMode::Start).unwrap();
+        let iter = self.db.iterator_cf(cf, IteratorMode::Start);
         for (key, value) in iter {
             let dec_key = decrypt_with_key(&key, secret).unwrap();
             let dec_key = String::from_utf8(dec_key).unwrap();
@@ -176,7 +176,7 @@ impl Db {
     pub fn del_account(&self, name: &str) -> bool {
         let secret = self.key.as_ref().expect("wallet not unlocked");
         let cf = self.db.cf_handle(CF_ACCOUNTS).unwrap();
-        let iter = self.db.iterator_cf(cf, IteratorMode::Start).unwrap();
+        let iter = self.db.iterator_cf(cf, IteratorMode::Start);
         for (key, _) in iter {
             let dec_key = decrypt_with_key(&key, secret).unwrap();
             let dec_key = String::from_utf8(dec_key).unwrap();
