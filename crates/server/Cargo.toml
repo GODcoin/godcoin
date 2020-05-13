@@ -20,7 +20,7 @@ testnet = ["godcoin/testnet"]
 [dependencies]
 dirs = "2.0.2"
 env_logger = "0.7.1"
-futures = "0.3.4"
+futures = "0.3.5"
 godcoin = { path = "../godcoin" }
 lazy_static = "1.4.0"
 log = "0.4.8"
@@ -28,7 +28,7 @@ parking_lot = "0.10.2"
 toml = "0.5.6"
 
 [dependencies.clap]
-version = "2.33.0"
+version = "2.33.1"
 default-features = false
 
 [dependencies.hyper]
@@ -41,7 +41,7 @@ version = "0.8.0"
 default-features = false
 
 [dependencies.serde]
-version = "1.0.106"
+version = "1.0.110"
 default-features = false
 features = ["derive"]
 
