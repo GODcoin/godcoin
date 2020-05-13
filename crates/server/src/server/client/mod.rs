@@ -1,6 +1,6 @@
 mod block_range;
 
-use crate::ServerData;
+use crate::{metrics::*, ServerData};
 use block_range::AsyncBlockRange;
 use futures::{
     channel::mpsc::{self, Sender},
@@ -111,9 +111,15 @@ pub fn handle_new_client(stream: TcpStream, peer_addr: SocketAddr, data: Arc<Ser
             }
         };
 
-        let ws_writer = rx.map(|msg| Ok(msg)).forward(sink.sink_map_err(move |e| {
-            warn!("[{}] Sink send error: {:?}", peer_addr, e);
-        }));
+        let ws_writer = rx
+            .inspect(|item| match item {
+                WsMessage::Binary(bytes) => NET_BYTES_SENT.inc_by(bytes.len() as i64),
+                _ => {}
+            })
+            .map(|msg| Ok(msg))
+            .forward(sink.sink_map_err(move |e| {
+                warn!("[{}] Sink send error: {:?}", peer_addr, e);
+            }));
 
         let heartbeat_interval = async move {
             let dur = Duration::from_secs(20);
@@ -160,6 +166,7 @@ pub fn process_ws_msg(
 ) -> Option<WsMessage> {
     match msg {
         WsMessage::Binary(buf) => {
+            NET_BYTES_RECEIVED.inc_by(buf.len() as i64);
             state.set_needs_pong(false);
 
             let mut cur = Cursor::<&[u8]>::new(&buf);
@@ -228,8 +235,8 @@ fn handle_protocol_msg(data: &ServerData, state: &mut WsClient, msg: Msg) -> Opt
         }
         Body::Pong(nonce) => {
             debug!("[{}] Received pong: {}", state.addr(), nonce);
-            // We don't need to update the `needs_pong` state as it has already been updated when the message was
-            // deserialized
+            // We don't need to update the `needs_pong` state as it has already been updated when
+            // the message was deserialized
             None
         }
     }
@@ -243,50 +250,79 @@ fn handle_rpc_request(
 ) -> Option<Body> {
     Some(match req {
         rpc::Request::Broadcast(tx) => {
+            REQ_BROADCAST_TOTAL.inc();
+            let req_timer = REQ_BROADCAST_DUR.start_timer();
             let res = data.minter.push_tx(tx);
+            req_timer.stop_and_record();
             match res {
                 Ok(_) => Body::Response(rpc::Response::Broadcast),
-                Err(e) => Body::Error(ErrorKind::TxValidation(e)),
+                Err(e) => {
+                    REQ_BROADCAST_FAIL.inc();
+                    Body::Error(ErrorKind::TxValidation(e))
+                }
             }
         }
         rpc::Request::SetBlockFilter(filter) => {
+            let req_timer = REQ_SET_BLOCK_FILTER_DUR.start_timer();
             if filter.len() > 16 {
                 return Some(Body::Error(ErrorKind::InvalidRequest));
             }
             state.filter = Some(filter);
+            req_timer.stop_and_record();
             Body::Response(rpc::Response::SetBlockFilter)
         }
         rpc::Request::ClearBlockFilter => {
+            let req_timer = REQ_CLEAR_BLOCK_FILTER_DUR.start_timer();
             state.filter = None;
+            req_timer.stop_and_record();
             Body::Response(rpc::Response::ClearBlockFilter)
         }
         rpc::Request::Subscribe => {
+            let req_timer = REQ_SUBSCRIBE_DUR.start_timer();
             data.sub_pool.insert(state.addr(), state.sender());
+            req_timer.stop_and_record();
             Body::Response(rpc::Response::Subscribe)
         }
         rpc::Request::Unsubscribe => {
+            let req_timer = REQ_UNSUBSCRIBE_DUR.start_timer();
             data.sub_pool.remove(state.addr());
+            req_timer.stop_and_record();
             Body::Response(rpc::Response::Unsubscribe)
         }
         rpc::Request::GetProperties => {
+            let req_timer = REQ_GET_PROPERTIES_DUR.start_timer();
             let props = data.chain.get_properties();
+            req_timer.stop_and_record();
             Body::Response(rpc::Response::GetProperties(props))
         }
-        rpc::Request::GetBlock(height) => match &state.filter {
-            Some(filter) => match data.chain.get_filtered_block(height, filter) {
-                Some(block) => Body::Response(rpc::Response::GetBlock(block)),
+        rpc::Request::GetBlock(height) => {
+            let req_timer = REQ_GET_BLOCK_DUR.start_timer();
+            let res = match &state.filter {
+                Some(filter) => match data.chain.get_filtered_block(height, filter) {
+                    Some(block) => Body::Response(rpc::Response::GetBlock(block)),
+                    None => Body::Error(ErrorKind::InvalidHeight),
+                },
+                None => match data.chain.get_block(height) {
+                    Some(block) => {
+                        Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block)))
+                    }
+                    None => Body::Error(ErrorKind::InvalidHeight),
+                },
+            };
+            req_timer.stop_and_record();
+            res
+        }
+        rpc::Request::GetFullBlock(height) => {
+            let req_timer = REQ_GET_FULL_BLOCK_DUR.start_timer();
+            let res = match data.chain.get_block(height) {
+                Some(block) => Body::Response(rpc::Response::GetFullBlock(block)),
                 None => Body::Error(ErrorKind::InvalidHeight),
-            },
-            None => match data.chain.get_block(height) {
-                Some(block) => Body::Response(rpc::Response::GetBlock(FilteredBlock::Block(block))),
-                None => Body::Error(ErrorKind::InvalidHeight),
-            },
-        },
-        rpc::Request::GetFullBlock(height) => match data.chain.get_block(height) {
-            Some(block) => Body::Response(rpc::Response::GetFullBlock(block)),
-            None => Body::Error(ErrorKind::InvalidHeight),
-        },
+            };
+            req_timer.stop_and_record();
+            res
+        }
         rpc::Request::GetBlockRange(min_height, max_height) => {
+            let req_timer = REQ_GET_BLOCK_RANGE_DUR.start_timer();
             let range = AsyncBlockRange::try_new(Arc::clone(&data.chain), min_height, max_height);
             match range {
                 Some(mut range) => {
@@ -329,13 +365,19 @@ fn handle_rpc_request(
                         }
                     });
 
+                    req_timer.stop_and_record();
                     return None;
                 }
-                None => Body::Error(ErrorKind::InvalidHeight),
+                None => {
+                    req_timer.stop_and_record();
+                    Body::Error(ErrorKind::InvalidHeight)
+                }
             }
         }
         rpc::Request::GetAccountInfo(acc) => {
+            let req_timer = REQ_GET_ACC_INFO_DUR.start_timer();
             let res = data.minter.get_account_info(acc);
+            req_timer.stop_and_record();
             match res {
                 Ok(info) => Body::Response(rpc::Response::GetAccountInfo(info)),
                 Err(e) => Body::Error(ErrorKind::TxValidation(e)),

@@ -2,6 +2,8 @@ pub mod client;
 pub mod minter;
 pub mod pool;
 
+mod metrics;
+
 use godcoin::{blockchain::ReindexOpts, prelude::*};
 use log::{error, info, warn};
 use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
@@ -28,6 +30,10 @@ pub struct ServerData {
     pub chain: Arc<Blockchain>,
     pub minter: Minter,
     pub sub_pool: SubscriptionPool,
+}
+
+pub fn init() {
+    metrics::register_metrics();
 }
 
 pub fn start(opts: ServerOpts) {
