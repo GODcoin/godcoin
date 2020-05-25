@@ -323,39 +323,42 @@ fn handle_rpc_request(
                         range.set_filter(Some(filter.clone()));
                     }
 
-                    let mut tx = state.sender();
-                    tokio::spawn(async move {
-                        while let Some(block) = range.next().await {
+                    {
+                        let mut tx = state.sender();
+                        let fut = async move {
+                            while let Some(block) = range.next().await {
+                                let ws_msg = {
+                                    let msg = Msg {
+                                        id,
+                                        body: Body::Response(rpc::Response::GetBlock(block)),
+                                    };
+
+                                    let mut buf = Vec::with_capacity(65536);
+                                    msg.serialize(&mut buf);
+                                    WsMessage::Binary(buf)
+                                };
+                                if tx.send(ws_msg).await.is_err() {
+                                    warn!("Failed to send block range update");
+                                    return;
+                                }
+                            }
+
                             let ws_msg = {
                                 let msg = Msg {
                                     id,
-                                    body: Body::Response(rpc::Response::GetBlock(block)),
+                                    body: Body::Response(rpc::Response::GetBlockRange),
                                 };
 
-                                let mut buf = Vec::with_capacity(65536);
+                                let mut buf = Vec::with_capacity(32);
                                 msg.serialize(&mut buf);
                                 WsMessage::Binary(buf)
                             };
                             if tx.send(ws_msg).await.is_err() {
-                                warn!("Failed to send block range update");
-                                return;
+                                warn!("Failed to send block range finalizer");
                             }
-                        }
-
-                        let ws_msg = {
-                            let msg = Msg {
-                                id,
-                                body: Body::Response(rpc::Response::GetBlockRange),
-                            };
-
-                            let mut buf = Vec::with_capacity(32);
-                            msg.serialize(&mut buf);
-                            WsMessage::Binary(buf)
                         };
-                        if tx.send(ws_msg).await.is_err() {
-                            warn!("Failed to send block range finalizer");
-                        }
-                    });
+                        tokio::spawn(fut.in_current_span());
+                    }
 
                     req_timer.stop_and_record();
                     return None;
