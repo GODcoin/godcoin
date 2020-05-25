@@ -1,11 +1,9 @@
 use clap::{App, Arg};
-use env_logger::{Env, DEFAULT_FILTER_ENV};
 use godcoin::{blockchain::ReindexOpts, prelude::*};
 use hyper::{
     service::{make_service_fn, service_fn},
     Body, Response, Server, StatusCode,
 };
-use log::{error, info};
 use prometheus::{Encoder, TextEncoder};
 use serde::Deserialize;
 use std::{
@@ -13,6 +11,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use tokio::runtime::Builder;
+use tracing::{error, info};
+use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
 #[derive(Debug, Deserialize)]
 struct Config {
@@ -24,7 +24,10 @@ struct Config {
 
 fn main() {
     install_panic_hook();
-    env_logger::init_from_env(Env::new().filter_or(DEFAULT_FILTER_ENV, "godcoin=info"));
+
+    let filter = EnvFilter::from_default_env().add_directive(LevelFilter::INFO.into());
+    tracing_subscriber::fmt().with_env_filter(filter).init();
+
     godcoin::init().unwrap();
     godcoin_server::init();
 

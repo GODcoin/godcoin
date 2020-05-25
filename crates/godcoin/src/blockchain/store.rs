@@ -1,5 +1,4 @@
 use crc32c::*;
-use log::{debug, error, warn};
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -9,6 +8,7 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use tracing::{debug, error, warn};
 
 use crate::blockchain::{block::*, index::*};
 
@@ -240,13 +240,11 @@ impl BlockStore {
         f.write_all(vec).unwrap();
         f.flush().unwrap();
 
-        if log::log_enabled!(log::Level::Debug) {
-            debug!(
-                "[height:{}] Wrote {} bytes to the block log",
-                block.height(),
-                u64::from(len) + 8
-            );
-        }
+        debug!(
+            height = block.height(),
+            "Wrote {} bytes to the block log",
+            u64::from(len) + 8
+        );
 
         self.byte_pos_tail += u64::from(len) + 8;
     }

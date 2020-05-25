@@ -1,6 +1,6 @@
-use log::info;
 use parking_lot::Mutex;
 use std::{path::Path, sync::Arc};
+use tracing::info;
 
 pub mod block;
 pub mod error;

@@ -5,9 +5,9 @@ pub mod pool;
 mod metrics;
 
 use godcoin::{blockchain::ReindexOpts, prelude::*};
-use log::{error, info, warn};
 use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 use tokio::{net::TcpListener, prelude::*, time};
+use tracing::{error, info, warn};
 
 pub mod prelude {
     pub use super::minter::*;

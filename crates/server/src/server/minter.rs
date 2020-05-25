@@ -1,9 +1,9 @@
 use crate::SubscriptionPool;
 use godcoin::{constants::BLOCK_PROD_TIME, prelude::*};
-use log::{info, warn};
 use parking_lot::Mutex;
 use std::{sync::Arc, time::Duration};
 use tokio::time;
+use tracing::{info, warn};
 
 #[derive(Clone)]
 pub struct Minter {

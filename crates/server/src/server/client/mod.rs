@@ -7,7 +7,6 @@ use futures::{
     prelude::*,
 };
 use godcoin::{get_epoch_time, net::*, prelude::*};
-use log::{debug, error, info, warn};
 use std::{
     io::Cursor,
     net::SocketAddr,
@@ -19,6 +18,8 @@ use std::{
 };
 use tokio::{net::TcpStream, time};
 use tokio_tungstenite::tungstenite::{protocol, Message as WsMessage};
+use tracing::{debug, error, info, warn};
+use tracing_futures::Instrument;
 
 pub struct WsClient {
     filter: Option<BlockFilter>,
@@ -73,15 +74,16 @@ pub fn handle_new_client(stream: TcpStream, peer_addr: SocketAddr, data: Arc<Ser
         // 16 MiB
         max_frame_size: Some(16 << 20),
     });
-    tokio::spawn(async move {
+
+    let client_fut = async move {
         let ws_stream = match tokio_tungstenite::accept_async_with_config(stream, config).await {
             Ok(ws) => ws,
             Err(e) => {
-                error!("[{}] WebSocket accept error: {:?}", peer_addr, e);
+                error!("WebSocket accept error: {:?}", e);
                 return;
             }
         };
-        info!("[{}] Connection opened", peer_addr);
+        info!("Connection opened");
 
         let (tx, rx) = mpsc::channel(32);
         let (sink, mut stream) = ws_stream.split();
@@ -98,12 +100,12 @@ pub fn handle_new_client(stream: TcpStream, peer_addr: SocketAddr, data: Arc<Ser
                             let res = process_ws_msg(&data, &mut state, msg);
                             if let Some(res) = res {
                                 if let Err(e) = tx.send(res).await {
-                                    warn!("[{}] Failed to send message: {:?}", peer_addr, e);
+                                    warn!("Failed to send message: {:?}", e);
                                 }
                             }
                         }
                         Err(e) => {
-                            warn!("[{}] Error reading WS message: {:?}", peer_addr, e);
+                            warn!("Error reading WS message: {:?}", e);
                             break;
                         }
                     }
@@ -118,7 +120,7 @@ pub fn handle_new_client(stream: TcpStream, peer_addr: SocketAddr, data: Arc<Ser
             })
             .map(|msg| Ok(msg))
             .forward(sink.sink_map_err(move |e| {
-                warn!("[{}] Sink send error: {:?}", peer_addr, e);
+                warn!("Sink send error: {:?}", e);
             }));
 
         let heartbeat_interval = async move {
@@ -127,7 +129,7 @@ pub fn handle_new_client(stream: TcpStream, peer_addr: SocketAddr, data: Arc<Ser
             loop {
                 interval.tick().await;
                 if needs_pong.swap(true, Ordering::AcqRel) {
-                    debug!("[{}] Did not receive pong in time from peer", peer_addr);
+                    debug!("Did not receive pong in time from peer");
                     break;
                 }
 
@@ -136,7 +138,7 @@ pub fn handle_new_client(stream: TcpStream, peer_addr: SocketAddr, data: Arc<Ser
                     id: u32::max_value(),
                     body: Body::Ping(nonce),
                 };
-                debug!("[{}] Sending ping: {}", peer_addr, nonce);
+                debug!("Sending ping: {}", nonce);
 
                 let mut buf = Vec::with_capacity(16);
                 msg.serialize(&mut buf);
@@ -153,10 +155,13 @@ pub fn handle_new_client(stream: TcpStream, peer_addr: SocketAddr, data: Arc<Ser
             _ = heartbeat_interval => {},
         };
 
-        info!("[{}] Connection closed", peer_addr);
+        info!("Connection closed");
         // Remove block subscriptions if there are any
         data.sub_pool.remove(peer_addr);
-    });
+    };
+
+    let span = tracing::info_span!("client_connection", peer_addr = ?peer_addr);
+    tokio::spawn(client_fut.instrument(span));
 }
 
 pub fn process_ws_msg(
@@ -186,11 +191,7 @@ pub fn process_ws_msg(
                     }
                 }
                 Err(e) => {
-                    error!(
-                        "[{}] Error occurred during deserialization: {:?}",
-                        state.addr(),
-                        e
-                    );
+                    error!("Error occurred during deserialization: {:?}", e);
                     Msg {
                         id: u32::max_value(),
                         body: Body::Error(ErrorKind::Io),
@@ -213,28 +214,20 @@ pub fn process_ws_msg(
 fn handle_protocol_msg(data: &ServerData, state: &mut WsClient, msg: Msg) -> Option<Body> {
     match msg.body {
         Body::Error(e) => {
-            warn!(
-                "[{}] Received error message from client: {:?}",
-                state.addr(),
-                e
-            );
+            warn!("Received error message from client: {:?}", e);
             None
         }
         Body::Request(req) => handle_rpc_request(data, state, msg.id, req),
         Body::Response(res) => {
-            warn!(
-                "[{}] Unexpected response from client: {:?}",
-                state.addr(),
-                res
-            );
+            warn!("Unexpected response from client: {:?}", res);
             None
         }
         Body::Ping(nonce) => {
-            debug!("[{}] Received ping: {}", state.addr(), nonce);
+            debug!("Received ping: {}", nonce);
             Some(Body::Pong(nonce))
         }
         Body::Pong(nonce) => {
-            debug!("[{}] Received pong: {}", state.addr(), nonce);
+            debug!("Received pong: {}", nonce);
             // We don't need to update the `needs_pong` state as it has already been updated when
             // the message was deserialized
             None
@@ -330,7 +323,6 @@ fn handle_rpc_request(
                         range.set_filter(Some(filter.clone()));
                     }
 
-                    let peer_addr = state.addr();
                     let mut tx = state.sender();
                     tokio::spawn(async move {
                         while let Some(block) = range.next().await {
@@ -345,7 +337,7 @@ fn handle_rpc_request(
                                 WsMessage::Binary(buf)
                             };
                             if tx.send(ws_msg).await.is_err() {
-                                warn!("[{}] Failed to send block range update", peer_addr);
+                                warn!("Failed to send block range update");
                                 return;
                             }
                         }
@@ -361,7 +353,7 @@ fn handle_rpc_request(
                             WsMessage::Binary(buf)
                         };
                         if tx.send(ws_msg).await.is_err() {
-                            warn!("[{}] Failed to send block range finalizer", peer_addr);
+                            warn!("Failed to send block range finalizer");
                         }
                     });
 

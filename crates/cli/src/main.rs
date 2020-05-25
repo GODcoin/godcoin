@@ -11,9 +11,6 @@ use self::keypair::*;
 use self::wallet::*;
 
 fn main() {
-    let env = env_logger::Env::new().filter_or(env_logger::DEFAULT_FILTER_ENV, "godcoin=info");
-    env_logger::init_from_env(env);
-
     godcoin::init().unwrap();
     let app = App::new("godcoin")
         .about("GODcoin core CLI")

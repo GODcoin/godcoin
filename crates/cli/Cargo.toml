@@ -23,10 +23,8 @@ testnet = ["godcoin/testnet"]
 
 [dependencies]
 dirs = "2.0.2"
-env_logger = "0.7.1"
 faster-hex = "0.4.1"
 godcoin = { path = "../godcoin" }
-log = "0.4.8"
 native-tls = "0.2.4"
 rustyline = "6.1.2"
 rocksdb = "0.14.0"
