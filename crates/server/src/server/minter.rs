@@ -56,7 +56,8 @@ impl Minter {
     }
 
     fn produce(&self, force_stale_production: bool) -> Result<(), blockchain::BlockErr> {
-        let receipts = self.receipt_pool.lock().flush();
+        let mut receipt_pool_lock = self.receipt_pool.lock();
+        let receipts = receipt_pool_lock.flush();
         let should_produce =
             if force_stale_production || self.enable_stale_production || !receipts.is_empty() {
                 true
@@ -89,6 +90,12 @@ impl Minter {
         let receipt_len = block.receipts().len();
 
         self.chain.insert_block(block.clone())?;
+
+        // Make sure the receipt pool is locked until the block is produced. This is necessary to
+        // ensure that transactions that depends on a previous transaction in the memory pool can be
+        // properly validated.
+        std::mem::drop(receipt_pool_lock);
+
         let receipts = if receipt_len == 1 {
             "receipt"
         } else {
