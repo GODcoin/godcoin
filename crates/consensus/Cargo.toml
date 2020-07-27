@@ -1,0 +1,36 @@
+[package]
+name = "godcoin-consensus"
+version = "0.3.0"
+edition = "2018"
+authors = ["Samuel Grenier <samrg472@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/GODcoin/godcoin"
+readme = "README.md"
+homepage = "https://godcoin.gold"
+description = """
+GODcoin consensus library for internal use.
+"""
+
+publish = false
+
+[features]
+default = []
+testnet = []
+
+[dependencies]
+bytes = "0.5.6"
+futures = "0.3.5"
+parking_lot = "0.11.0"
+rand = "0.7.3"
+tracing = "0.1.16"
+tracing-futures = "0.2.4"
+
+[dependencies.tokio]
+version = "0.2.21"
+default-features = false
+features = ["macros", "tcp", "io-util", "time", "rt-core"]
+
+[dependencies.tokio-util]
+version = "0.3.1"
+default-features = false
+features = ["codec"]
