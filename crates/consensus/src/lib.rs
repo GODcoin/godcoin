@@ -40,8 +40,9 @@ impl Node {
     }
 
     pub fn add_peer(&self, id: u32, addr: SocketAddr) {
-        let peers = &mut self.inner.lock().peers;
-        if peers.insert(id, Peer::new(addr)).is_some() {
+        let inner = &mut self.inner.lock();
+        assert_ne!(inner.config.id, id, "cannot add self as a peer");
+        if inner.peers.insert(id, Peer::new(addr)).is_some() {
             panic!("Peer id {} already registered", id);
         }
     }
