@@ -30,6 +30,7 @@ fn zigzag_decode(from: u64) -> i64 {
 }
 
 pub trait BufWrite {
+    fn push_bool(&mut self, value: bool);
     fn push_u16(&mut self, value: u16);
     fn push_u32(&mut self, value: u32);
     fn push_i64(&mut self, value: i64);
@@ -43,6 +44,11 @@ pub trait BufWrite {
 }
 
 impl BufWrite for Vec<u8> {
+    #[inline]
+    fn push_bool(&mut self, value: bool) {
+        self.push(value.into());
+    }
+
     #[inline]
     fn push_u16(&mut self, value: u16) {
         self.extend(&value.to_be_bytes());
@@ -109,6 +115,7 @@ impl BufWrite for Vec<u8> {
 }
 
 pub trait BufRead {
+    fn take_bool(&mut self) -> Result<bool, Error>;
     fn take_u8(&mut self) -> Result<u8, Error>;
     fn take_u16(&mut self) -> Result<u16, Error>;
     fn take_u32(&mut self) -> Result<u32, Error>;
@@ -123,6 +130,10 @@ pub trait BufRead {
 }
 
 impl<T: AsRef<[u8]>> BufRead for Cursor<T> {
+    fn take_bool(&mut self) -> Result<bool, Error> {
+        Ok(self.take_u8()? != 0)
+    }
+
     fn take_u8(&mut self) -> Result<u8, Error> {
         let mut buf = [0u8; 1];
         self.read_exact(&mut buf)?;

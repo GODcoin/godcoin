@@ -1,11 +1,12 @@
 use super::{net::*, Handshake, Msg, RpcCodec};
-use futures::{prelude::*, stream::SplitSink};
+use futures::{channel::mpsc, prelude::*, stream::SplitStream};
 use rand::Rng;
 use std::{net::SocketAddr, time::Duration};
 use tokio::{net::TcpStream, time::timeout};
 use tokio_util::codec::Framed;
 
-pub type ActiveConnSink = SplitSink<Framed<TcpStream, RpcCodec>, Msg>;
+pub type ActiveConnSink = mpsc::Sender<Msg>;
+pub type ActiveConnStream = SplitStream<Framed<TcpStream, RpcCodec>>;
 pub type ConnFrame = Framed<TcpStream, RpcCodec>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -27,6 +28,8 @@ pub struct Peer {
     attempt_delta: u64,
     /// Attempted tries to establish a connection.
     tries: u32,
+    /// The next trackable message ID that can be sent over the network
+    next_msg_id: u64,
 }
 
 impl Peer {
@@ -37,6 +40,7 @@ impl Peer {
             attempt_timeout: next_connect_time(0),
             attempt_delta: 0,
             tries: 0,
+            next_msg_id: 0,
         }
     }
 
@@ -55,6 +59,16 @@ impl Peer {
     #[inline]
     pub fn is_connected(&self) -> bool {
         self.connection_sink.is_some()
+    }
+
+    pub fn incr_next_msg_id(&mut self) -> u64 {
+        let id = self.next_msg_id;
+        self.next_msg_id += 1;
+        id
+    }
+
+    pub fn get_sender(&self) -> Option<ActiveConnSink> {
+        self.connection_sink.clone()
     }
 
     /// Returns whether a connection should be established or not. This should only be called when
@@ -80,12 +94,13 @@ impl Peer {
     }
 
     pub async fn perform_handshake(framed: &mut ConnFrame, hs: Handshake) -> Option<Handshake> {
-        if let Err(_) = framed
+        if framed
             .send(Msg {
                 id: 0,
                 data: MsgKind::Handshake(hs),
             })
             .await
+            .is_err()
         {
             return None;
         }

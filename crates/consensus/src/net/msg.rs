@@ -1,4 +1,4 @@
-use super::Serializable;
+use super::{Request, Response, Serializable};
 use bytes::{BufMut, BytesMut};
 use godcoin::serializer::BufRead;
 use std::{
@@ -32,6 +32,8 @@ impl Serializable<Self> for Msg {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MsgKind {
     Handshake(Handshake),
+    Request(Request),
+    Response(Response),
 }
 
 impl Serializable<Self> for MsgKind {
@@ -41,12 +43,22 @@ impl Serializable<Self> for MsgKind {
                 dst.put_u8(0x01);
                 hs.serialize(dst);
             }
+            Self::Request(req) => {
+                dst.put_u8(0x02);
+                req.serialize(dst);
+            }
+            Self::Response(res) => {
+                dst.put_u8(0x03);
+                res.serialize(dst);
+            }
         }
     }
 
     fn byte_size(&self) -> usize {
         let hint = match self {
             Self::Handshake(hs) => hs.byte_size(),
+            Self::Request(req) => req.byte_size(),
+            Self::Response(res) => res.byte_size(),
         };
         // Add 1 byte for the tag type
         hint + 1
@@ -56,6 +68,8 @@ impl Serializable<Self> for MsgKind {
         let tag = src.take_u8()?;
         match tag {
             0x01 => Ok(MsgKind::Handshake(Handshake::deserialize(src)?)),
+            0x02 => Ok(MsgKind::Request(Request::deserialize(src)?)),
+            0x03 => Ok(MsgKind::Response(Response::deserialize(src)?)),
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "invalid tag type on MsgKind",
@@ -75,7 +89,7 @@ impl Serializable<Self> for Handshake {
     }
 
     fn byte_size(&self) -> usize {
-        size_of::<Self>()
+        4
     }
 
     fn deserialize(src: &mut Cursor<&[u8]>) -> io::Result<Self> {

@@ -21,11 +21,11 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), &'static str> {
-        if self.id <= 0 {
+        if self.id == 0 {
             return Err("ID cannot be 0");
         }
 
-        if self.min_election_timeout <= 0 {
+        if self.min_election_timeout == 0 {
             return Err("Minimum election timeout cannot be 0");
         }
 

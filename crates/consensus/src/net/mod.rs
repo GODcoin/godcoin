@@ -1,10 +1,12 @@
 pub mod msg;
+pub mod rpc;
 
 use bytes::{Buf, BufMut, BytesMut};
 use std::{fmt, io, mem, num::NonZeroU64};
 use tokio_util::codec::{Decoder, Encoder};
 
 pub use msg::*;
+pub use rpc::*;
 
 pub trait Serializable<T> {
     fn serialize(&self, dst: &mut BytesMut);
