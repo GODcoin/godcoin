@@ -56,6 +56,10 @@ impl Node {
         map
     }
 
+    pub fn leader(&self) -> u32 {
+        self.inner.lock().leader()
+    }
+
     pub async fn listen_forever(self: Arc<Self>, mut listener: TcpListener) {
         loop {
             let stream = listener.accept().await;
@@ -217,6 +221,12 @@ impl Node {
             }
             Request::AppendEntries(req) => {
                 let success = req.term >= inner.term();
+                if req.term >= inner.term() {
+                    inner.assign_leader(peer_id);
+                    if !inner.is_follower() {
+                        inner.become_follower(req.term);
+                    }
+                }
                 inner.maybe_update_term(req.term);
                 inner.received_heartbeat();
                 Some(Response::AppendEntries(AppendEntriesRes {
@@ -333,12 +343,20 @@ mod private {
             self.leader_id = self.config.id;
         }
 
+        pub fn is_follower(&self) -> bool {
+            !(self.is_candidate() || self.is_leader())
+        }
+
         pub fn is_candidate(&self) -> bool {
             self.candidate_id == self.config.id
         }
 
         pub fn is_leader(&self) -> bool {
             self.leader_id == self.config.id
+        }
+
+        pub fn leader(&self) -> u32 {
+            self.leader_id
         }
 
         pub fn term(&self) -> u64 {
@@ -360,6 +378,10 @@ mod private {
 
         pub fn voted_for(&self) -> u32 {
             self.candidate_id
+        }
+
+        pub fn assign_leader(&mut self, id: u32) {
+            self.leader_id = id;
         }
 
         pub fn maybe_update_term(&mut self, term: u64) {
@@ -420,9 +442,10 @@ mod tests {
             }
         }
 
-        let leader_cnt = cluster.iter().fold(0, |mut cnt, node| {
+        let (leader_cnt, leader_id) = cluster.iter().fold((0, 0), |mut cnt, node| {
             if node.inner.lock().is_leader() {
-                cnt += 1;
+                cnt.0 += 1;
+                cnt.1 = node.inner.lock().config.id;
             }
             cnt
         });
@@ -439,6 +462,10 @@ mod tests {
             "should not have any candidates when a leader is found"
         );
         assert_eq!(leader_cnt, 1, "failed to properly negotiate a leader");
+
+        for node in &cluster {
+            assert_eq!(node.leader(), leader_id);
+        }
     }
 
     async fn setup_cluster(count: u32) -> Vec<Arc<Node>> {
