@@ -1,16 +1,21 @@
 mod config;
+mod log;
 mod net;
 mod peer;
 
+#[cfg(test)]
+mod test_util;
+
 use config::Config;
 use futures::{channel::mpsc, prelude::*};
+use log::Log;
 use net::*;
 use parking_lot::Mutex;
 use peer::*;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
-use tracing::{info, info_span, warn};
+use tracing::{error, info, info_span, trace, warn};
 use tracing_futures::Instrument;
 
 use private::Inner;
@@ -28,10 +33,10 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, stable_index: u64) -> Self {
         config.validate().unwrap();
         Self {
-            inner: Mutex::new(Inner::new(config)),
+            inner: Mutex::new(Inner::new(config, stable_index)),
         }
     }
 
@@ -96,7 +101,14 @@ impl Node {
 
         if inner.tick_heartbeat() {
             let term = inner.term();
-            inner.broadcast_req(Request::AppendEntries(AppendEntriesReq { term }));
+            // TODO fill in this information from the log
+            inner.broadcast_req(Request::AppendEntries(AppendEntriesReq {
+                term,
+                prev_index: 0,
+                prev_term: 0,
+                leader_commit: 0,
+                entries: vec![],
+            }));
         }
     }
 
@@ -117,7 +129,7 @@ impl Node {
 
         // This lock must never pass an await point
         let peers = &mut self.inner.lock().peers;
-        let span = info_span!("peer", peer_id = client_hs.peer_id, ?peer_addr);
+        let span = info_span!("peer", id = client_hs.peer_id, addr = ?peer_addr);
         match peers.get_mut(&client_hs.peer_id) {
             Some(peer) => {
                 if peer.is_connected() {
@@ -180,8 +192,7 @@ impl Node {
                     break;
                 }
             };
-            // TODO change this to trace level in the future
-            info!("Received msg: {:?}", msg);
+            trace!("Received msg: {:?}", msg);
             match msg.data {
                 MsgKind::Handshake(_) => {
                     warn!("Unexpected handshake message");
@@ -220,17 +231,37 @@ impl Node {
                 }))
             }
             Request::AppendEntries(req) => {
-                let success = req.term >= inner.term();
-                if req.term >= inner.term() {
-                    inner.assign_leader(peer_id);
-                    if !inner.is_follower() {
-                        inner.become_follower(req.term);
-                    }
+                if req.term < inner.term() {
+                    return Some(Response::AppendEntries(AppendEntriesRes {
+                        current_term: inner.term(),
+                        success: false,
+                    }));
                 }
+
                 inner.maybe_update_term(req.term);
+                inner.assign_leader(peer_id);
                 inner.received_heartbeat();
+                let current_term = inner.term();
+
+                if !inner.is_follower() {
+                    inner.become_follower(current_term);
+                }
+
+                let has_entry = inner.log.contains_entry(req.prev_term, req.prev_index);
+                let success = if has_entry {
+                    match inner.log.try_commit(req.entries) {
+                        Ok(()) => true,
+                        Err(e) => {
+                            error!("Failed to commit entries: {:?}", e);
+                            false
+                        }
+                    }
+                } else {
+                    false
+                };
+
                 Some(Response::AppendEntries(AppendEntriesRes {
-                    current_term: inner.term(),
+                    current_term,
                     success,
                 }))
             }
@@ -248,8 +279,8 @@ impl Node {
             }
             Response::AppendEntries(res) => {
                 inner.maybe_update_term(res.current_term);
-                if res.success {
-                    // TODO the commit was successful
+                if inner.is_leader() && res.success {
+                    // TODO the commit was successful, we need to stabilize the log if possible
                 }
             }
         }
@@ -263,6 +294,7 @@ mod private {
     pub struct Inner {
         pub config: Config,
         pub peers: HashMap<u32, Peer>,
+        pub log: Log,
         term: u64,
         leader_id: u32,
         candidate_id: u32,
@@ -273,11 +305,12 @@ mod private {
     }
 
     impl Inner {
-        pub fn new(config: Config) -> Self {
+        pub fn new(config: Config, stable_index: u64) -> Self {
             let election_timeout = config.random_election_timeout();
             Self {
                 config,
                 peers: Default::default(),
+                log: Log::new(stable_index),
                 term: 0,
                 leader_id: 0,
                 candidate_id: 0,
@@ -413,6 +446,7 @@ mod tests {
 
     #[tokio::test]
     async fn peer_connected() {
+        let _guard = crate::test_util::init_tracing();
         let (node_1, addr_1) = setup_node(1).await;
         let (node_2, addr_2) = setup_node(2).await;
 
@@ -428,6 +462,7 @@ mod tests {
 
     #[tokio::test]
     async fn negotiate_a_leader() {
+        let _guard = crate::test_util::init_tracing();
         let cluster = setup_cluster(3).await;
 
         // Limit iterations to negotiate a leader before failing
@@ -510,7 +545,7 @@ mod tests {
         let (server, addr) = listen_random().await;
 
         let config = Config::new(id);
-        let node = Arc::new(Node::new(config));
+        let node = Arc::new(Node::new(config, 0));
         tokio::spawn({
             let node = Arc::clone(&node);
             async move {

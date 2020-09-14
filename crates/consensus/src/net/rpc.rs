@@ -1,4 +1,4 @@
-use super::Serializable;
+use super::{super::log::Entry, Serializable};
 use bytes::{BufMut, BytesMut};
 use godcoin::serializer::BufRead;
 use std::io::{self, Cursor};
@@ -19,6 +19,13 @@ impl Serializable<Self> for Request {
             Self::AppendEntries(req) => {
                 dst.put_u8(0x02);
                 dst.put_u64(req.term);
+                dst.put_u64(req.prev_index);
+                dst.put_u64(req.prev_term);
+                dst.put_u64(req.leader_commit);
+                dst.put_u64(req.entries.len() as u64);
+                for e in &req.entries {
+                    e.serialize(dst);
+                }
             }
         }
     }
@@ -26,7 +33,13 @@ impl Serializable<Self> for Request {
     fn byte_size(&self) -> usize {
         let size = match self {
             Self::RequestVote(_) => 8,
-            Self::AppendEntries(_) => 8,
+            Self::AppendEntries(req) => {
+                let entry_len = req.entries.iter().fold(0, |mut acc, entry| {
+                    acc += entry.byte_size();
+                    acc
+                });
+                40 + entry_len
+            }
         };
         // Add 1 byte for the tag type
         size + 1
@@ -41,7 +54,24 @@ impl Serializable<Self> for Request {
             }
             0x02 => {
                 let term = src.take_u64()?;
-                Ok(Self::AppendEntries(AppendEntriesReq { term }))
+                let prev_index = src.take_u64()?;
+                let prev_term = src.take_u64()?;
+                let leader_commit = src.take_u64()?;
+                let entries = {
+                    let len = src.take_u64()?;
+                    let mut entries = Vec::with_capacity(len as usize);
+                    for _ in 0..len {
+                        entries.push(Entry::deserialize(src)?);
+                    }
+                    entries
+                };
+                Ok(Self::AppendEntries(AppendEntriesReq {
+                    term,
+                    prev_index,
+                    prev_term,
+                    leader_commit,
+                    entries,
+                }))
             }
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -61,6 +91,14 @@ pub struct RequestVoteReq {
 pub struct AppendEntriesReq {
     /// Current term of the leader
     pub term: u64,
+    /// Log index preceding new entries
+    pub prev_index: u64,
+    /// The term of the previous index
+    pub prev_term: u64,
+    /// The latest stable entry in the log
+    pub leader_commit: u64,
+    /// Entries that should be committed (or empty for a heartbeat)
+    pub entries: Vec<Entry>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -140,6 +178,7 @@ pub struct AppendEntriesRes {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::Bytes;
 
     #[test]
     fn serialize_request_vote_req() {
@@ -148,7 +187,32 @@ mod tests {
 
     #[test]
     fn serialize_append_entries_req() {
-        test_req_serialization(Request::AppendEntries(AppendEntriesReq { term: 1234 }));
+        test_req_serialization(Request::AppendEntries(AppendEntriesReq {
+            term: 1234,
+            prev_index: 100,
+            prev_term: 7,
+            leader_commit: 95,
+            entries: vec![],
+        }));
+
+        test_req_serialization(Request::AppendEntries(AppendEntriesReq {
+            term: 1234,
+            prev_index: 100,
+            prev_term: 7,
+            leader_commit: 95,
+            entries: {
+                let cap = 25;
+                let mut entries = Vec::with_capacity(cap);
+                for i in 1..=cap {
+                    entries.push(Entry {
+                        index: i as u64,
+                        term: 12345,
+                        data: Bytes::copy_from_slice(&[1, 2, 3]),
+                    });
+                }
+                entries
+            },
+        }));
     }
 
     #[test]
@@ -195,6 +259,7 @@ mod tests {
         assert_eq!(res_a, res_b);
     }
 
+    #[track_caller]
     fn verify_byte_len(bytes: &BytesMut, expected_size: usize) {
         assert_eq!(bytes.len(), expected_size);
         assert_eq!(bytes.capacity(), expected_size);
