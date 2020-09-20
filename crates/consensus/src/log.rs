@@ -11,6 +11,7 @@ pub struct Log {
     unstable_ents: Vec<Entry>,
     /// Committed block height that cannot be reversed
     stable_index: u64,
+    last_term: u64,
 }
 
 impl Log {
@@ -19,7 +20,22 @@ impl Log {
         Self {
             unstable_ents: Vec::with_capacity(32),
             stable_index,
+            last_term: 0,
         }
+    }
+
+    pub fn latest_term(&self) -> u64 {
+        self.last_term
+    }
+
+    pub fn latest_index(&self) -> u64 {
+        self.unstable_ents
+            .last()
+            .map_or(self.stable_index, |e| e.index)
+    }
+
+    pub fn stable_index(&self) -> u64 {
+        self.stable_index
     }
 
     #[must_use = "stable entries should be committed to persistent storage"]
@@ -66,6 +82,9 @@ impl Log {
         if let Some(index) = self.find_conflict(&entries) {
             self.unstable_ents.truncate(index);
         }
+
+        // Unwrap here will never panic as we bail earlier if the entries vec is empty.
+        self.last_term = entries.last().unwrap().term;
         self.unstable_ents.extend(entries);
 
         Ok(())

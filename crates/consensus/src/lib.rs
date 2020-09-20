@@ -6,9 +6,10 @@ mod peer;
 #[cfg(test)]
 mod test_util;
 
+use bytes::Bytes;
 use config::Config;
 use futures::{channel::mpsc, prelude::*};
-use log::Log;
+use log::{Entry, Log};
 use net::*;
 use parking_lot::Mutex;
 use peer::*;
@@ -77,6 +78,32 @@ impl Node {
         }
     }
 
+    /// Returns `Some` when not a leader and entries could not be appended, otherwise returns `None`
+    /// on success.
+    pub fn append_entries(self: &Arc<Self>, mut entries: Vec<Bytes>) -> Option<Vec<Bytes>> {
+        let mut inner = self.inner.lock();
+        if !inner.is_leader() {
+            return Some(entries);
+        }
+        let index_start = inner.log.latest_index() + 1;
+        let term = inner.term();
+        let entries = {
+            let mut e = Vec::with_capacity(entries.len());
+            for (i, data) in entries.drain(..).enumerate() {
+                e.push(Entry {
+                    index: index_start + i as u64,
+                    term,
+                    data,
+                });
+            }
+            e
+        };
+
+        inner.log.try_commit(entries.clone()).unwrap();
+        inner.insert_outbound_entries(entries);
+        None
+    }
+
     pub fn tick(self: &Arc<Self>) {
         let mut inner = self.inner.lock();
         for peer in inner.peers.values_mut() {
@@ -100,15 +127,16 @@ impl Node {
         }
 
         if inner.tick_heartbeat() {
-            let term = inner.term();
-            // TODO fill in this information from the log
-            inner.broadcast_req(Request::AppendEntries(AppendEntriesReq {
-                term,
-                prev_index: 0,
-                prev_term: 0,
-                leader_commit: 0,
-                entries: vec![],
-            }));
+            let append_entries = AppendEntriesReq {
+                term: inner.term(),
+                prev_index: inner.log_last_index,
+                prev_term: inner.log_last_term,
+                leader_commit: inner.log.stable_index(),
+                entries: inner.take_outbound_entries(),
+            };
+            inner.log_last_index = inner.log.latest_index();
+            inner.log_last_term = inner.log.latest_term();
+            inner.broadcast_req(Request::AppendEntries(append_entries));
         }
     }
 
@@ -295,6 +323,9 @@ mod private {
         pub config: Config,
         pub peers: HashMap<u32, Peer>,
         pub log: Log,
+        pub log_last_term: u64,
+        pub log_last_index: u64,
+        outbound_entries: Vec<Entry>,
         term: u64,
         leader_id: u32,
         candidate_id: u32,
@@ -311,6 +342,9 @@ mod private {
                 config,
                 peers: Default::default(),
                 log: Log::new(stable_index),
+                log_last_term: 0,
+                log_last_index: 0,
+                outbound_entries: Vec::with_capacity(32),
                 term: 0,
                 leader_id: 0,
                 candidate_id: 0,
@@ -337,6 +371,16 @@ mod private {
                     });
                 }
             }
+        }
+
+        pub fn insert_outbound_entries(&mut self, mut entries: Vec<Entry>) {
+            self.outbound_entries.append(&mut entries);
+        }
+
+        pub fn take_outbound_entries(&mut self) -> Vec<Entry> {
+            let mut new_vec = Vec::with_capacity(self.outbound_entries.capacity());
+            std::mem::swap(&mut new_vec, &mut self.outbound_entries);
+            new_vec
         }
 
         pub fn tick_election(&mut self) -> bool {
@@ -434,6 +478,7 @@ mod private {
             self.election_timeout = self.config.random_election_timeout();
             self.received_votes = 0;
             self.heartbeat_delta = 0;
+            self.outbound_entries.clear();
         }
     }
 }
