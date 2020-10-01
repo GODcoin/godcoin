@@ -119,6 +119,7 @@ impl Serializable<Self> for Response {
                 dst.put_u8(0x02);
                 dst.put_u64(req.current_term);
                 dst.put_u8(req.success.into());
+                dst.put_u64(req.index);
             }
         }
     }
@@ -126,7 +127,7 @@ impl Serializable<Self> for Response {
     fn byte_size(&self) -> usize {
         let size = match self {
             Self::RequestVote(_) => 9,
-            Self::AppendEntries(_) => 9,
+            Self::AppendEntries(_) => 17,
         };
         // Add 1 byte for the tag type
         size + 1
@@ -146,9 +147,11 @@ impl Serializable<Self> for Response {
             0x02 => {
                 let current_term = src.take_u64()?;
                 let success = src.take_u8()? != 0;
+                let index = src.take_u64()?;
                 Ok(Self::AppendEntries(AppendEntriesRes {
                     current_term,
                     success,
+                    index,
                 }))
             }
             _ => Err(io::Error::new(
@@ -173,6 +176,8 @@ pub struct AppendEntriesRes {
     pub current_term: u64,
     /// Whether the entries were successfully committed
     pub success: bool,
+    /// Last acknowledged index, only on success
+    pub index: u64,
 }
 
 #[cfg(test)]
@@ -233,11 +238,13 @@ mod tests {
         test_res_serialization(Response::AppendEntries(AppendEntriesRes {
             current_term: 1234,
             success: true,
+            index: 0,
         }));
 
         test_res_serialization(Response::AppendEntries(AppendEntriesRes {
             current_term: 1234,
             success: false,
+            index: 1234,
         }));
     }
 

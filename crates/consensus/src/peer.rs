@@ -28,8 +28,10 @@ pub struct Peer {
     attempt_delta: u64,
     /// Attempted tries to establish a connection.
     tries: u32,
-    /// The next trackable message ID that can be sent over the network
+    /// The next trackable message ID that can be sent over the network.
     next_msg_id: u64,
+    /// Last known index this peer has acknowledged.
+    last_ack_index: u64,
 }
 
 impl Peer {
@@ -41,6 +43,7 @@ impl Peer {
             attempt_delta: 0,
             tries: 0,
             next_msg_id: 0,
+            last_ack_index: 0,
         }
     }
 
@@ -59,6 +62,14 @@ impl Peer {
     #[inline]
     pub fn is_connected(&self) -> bool {
         self.connection_sink.is_some()
+    }
+
+    pub fn last_ack_index(&self) -> u64 {
+        self.last_ack_index
+    }
+
+    pub fn set_last_ack_index(&mut self, index: u64) {
+        self.last_ack_index = u64::max(self.last_ack_index, index);
     }
 
     pub fn incr_next_msg_id(&mut self) -> u64 {

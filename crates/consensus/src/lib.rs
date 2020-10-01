@@ -236,7 +236,7 @@ impl Node {
                             .await;
                     }
                 }
-                MsgKind::Response(res) => self.process_peer_res(res),
+                MsgKind::Response(res) => self.process_peer_res(peer_id, res),
             }
         }
     }
@@ -263,6 +263,7 @@ impl Node {
                     return Some(Response::AppendEntries(AppendEntriesRes {
                         current_term: inner.term(),
                         success: false,
+                        index: 0,
                     }));
                 }
 
@@ -288,15 +289,19 @@ impl Node {
                     false
                 };
 
+                // TODO emit to storage backend
+                inner.log.stabilize_to(req.leader_commit);
+                let index = inner.log.latest_index();
                 Some(Response::AppendEntries(AppendEntriesRes {
                     current_term,
                     success,
+                    index,
                 }))
             }
         }
     }
 
-    fn process_peer_res(&self, res: Response) {
+    fn process_peer_res(&self, peer_id: u32, res: Response) {
         let mut inner = self.inner.lock();
         match res {
             Response::RequestVote(res) => {
@@ -308,7 +313,12 @@ impl Node {
             Response::AppendEntries(res) => {
                 inner.maybe_update_term(res.current_term);
                 if inner.is_leader() && res.success {
-                    // TODO the commit was successful, we need to stabilize the log if possible
+                    let peer = inner.peers.get_mut(&peer_id).unwrap();
+                    peer.set_last_ack_index(res.index);
+
+                    let next_commit = inner.next_stable_index();
+                    // TODO emit to storage backend
+                    inner.log.stabilize_to(next_commit);
                 }
             }
         }
@@ -465,8 +475,44 @@ mod private {
             self.term = u64::max(term, self.term);
         }
 
+        pub fn next_stable_index(&self) -> u64 {
+            assert!(self.is_leader(), "cannot retrieve stable index without being a leader");
+
+            let quorum_cnt = self.get_quorum_count();
+            let mut stable_index = 0;
+
+            let mut indexes = Vec::with_capacity(self.peers.len());
+            for peer in self.peers.values() {
+                indexes.push(peer.last_ack_index());
+            }
+            indexes.sort_unstable();
+
+            for last_ack in indexes.drain(..).rev() {
+                // Start at 1 to include ourself, since we are the leader, we always have the
+                // highest index
+                let mut index_count = 1;
+                for peer in self.peers.values() {
+                    if peer.last_ack_index() >= last_ack {
+                        index_count += 1;
+                    }
+                }
+                if index_count > quorum_cnt {
+                    stable_index = last_ack;
+                    break;
+                }
+            }
+
+            stable_index
+        }
+
+        #[inline]
         fn check_quorum(&self, count: u32) -> bool {
-            count as usize > (self.peers.len() + 1) / 2 + 1
+            count as usize > self.get_quorum_count()
+        }
+
+        #[inline]
+        fn get_quorum_count(&self) -> usize {
+            (self.peers.len() / 2) + 1
         }
 
         fn reset(&mut self, term: u64) {
