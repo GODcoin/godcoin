@@ -21,13 +21,6 @@ use tracing_futures::Instrument;
 
 use private::Inner;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Role {
-    Leader,
-    Candidate,
-    Follower,
-}
-
 #[derive(Debug)]
 pub struct Node {
     inner: Mutex<Inner>,
