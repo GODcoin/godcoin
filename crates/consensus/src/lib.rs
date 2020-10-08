@@ -21,16 +21,21 @@ use tracing_futures::Instrument;
 
 use private::Inner;
 
-#[derive(Debug)]
-pub struct Node {
-    inner: Mutex<Inner>,
+pub trait Storage: Send + 'static {
+    /// Commits the stable entries to persistent storage.
+    fn commit_stable_entries(&mut self, entries: Vec<Entry>) -> Result<(), ()>;
 }
 
-impl Node {
-    pub fn new(config: Config, stable_index: u64) -> Self {
+#[derive(Debug)]
+pub struct Node<S: Storage> {
+    inner: Mutex<Inner<S>>,
+}
+
+impl<S: Storage> Node<S> {
+    pub fn new(config: Config, storage: S, stable_index: u64) -> Self {
         config.validate().unwrap();
         Self {
-            inner: Mutex::new(Inner::new(config, stable_index)),
+            inner: Mutex::new(Inner::new(config, storage, stable_index)),
         }
     }
 
@@ -73,7 +78,7 @@ impl Node {
 
     /// Returns `Some` when not a leader and entries could not be appended, otherwise returns `None`
     /// on success.
-    pub fn append_entries(self: &Arc<Self>, mut entries: Vec<Bytes>) -> Option<Vec<Bytes>> {
+    pub fn append_entries(&self, mut entries: Vec<Bytes>) -> Option<Vec<Bytes>> {
         let mut inner = self.inner.lock();
         if !inner.is_leader() {
             return Some(entries);
@@ -282,8 +287,9 @@ impl Node {
                     false
                 };
 
-                // TODO emit to storage backend
-                inner.log.stabilize_to(req.leader_commit);
+                let stable_ents = inner.log.stabilize_to(req.leader_commit);
+                inner.storage.commit_stable_entries(stable_ents).unwrap();
+
                 let index = inner.log.latest_index();
                 Some(Response::AppendEntries(AppendEntriesRes {
                     current_term,
@@ -310,8 +316,8 @@ impl Node {
                     peer.set_last_ack_index(res.index);
 
                     let next_commit = inner.next_stable_index();
-                    // TODO emit to storage backend
-                    inner.log.stabilize_to(next_commit);
+                    let stable_ents = inner.log.stabilize_to(next_commit);
+                    inner.storage.commit_stable_entries(stable_ents).unwrap();
                 }
             }
         }
@@ -322,12 +328,13 @@ mod private {
     use super::*;
 
     #[derive(Debug)]
-    pub struct Inner {
+    pub struct Inner<S: Storage> {
         pub config: Config,
         pub peers: HashMap<u32, Peer>,
         pub log: Log,
         pub log_last_term: u64,
         pub log_last_index: u64,
+        pub storage: S,
         outbound_entries: Vec<Entry>,
         term: u64,
         leader_id: u32,
@@ -338,8 +345,8 @@ mod private {
         heartbeat_delta: u32,
     }
 
-    impl Inner {
-        pub fn new(config: Config, stable_index: u64) -> Self {
+    impl<S: Storage> Inner<S> {
+        pub fn new(config: Config, storage: S, stable_index: u64) -> Self {
             let election_timeout = config.random_election_timeout();
             Self {
                 config,
@@ -347,6 +354,7 @@ mod private {
                 log: Log::new(stable_index),
                 log_last_term: 0,
                 log_last_index: 0,
+                storage,
                 outbound_entries: Vec::with_capacity(32),
                 term: 0,
                 leader_id: 0,
@@ -469,7 +477,10 @@ mod private {
         }
 
         pub fn next_stable_index(&self) -> u64 {
-            assert!(self.is_leader(), "cannot retrieve stable index without being a leader");
+            assert!(
+                self.is_leader(),
+                "cannot retrieve next stable index without being a leader"
+            );
 
             let quorum_cnt = self.get_quorum_count();
             let mut stable_index = 0;
@@ -587,7 +598,7 @@ mod tests {
         }
     }
 
-    async fn setup_cluster(count: u32) -> Vec<Arc<Node>> {
+    async fn setup_cluster(count: u32) -> Vec<Arc<Node<StorageImpl>>> {
         assert!(count > 0);
         let mut nodes = Vec::with_capacity(count as usize);
         let mut addrs = Vec::with_capacity(count as usize);
@@ -625,11 +636,12 @@ mod tests {
         nodes
     }
 
-    async fn setup_node(id: u32) -> (Arc<Node>, SocketAddr) {
+    async fn setup_node(id: u32) -> (Arc<Node<StorageImpl>>, SocketAddr) {
         let (server, addr) = listen_random().await;
 
+        let storage = StorageImpl;
         let config = Config::new(id);
-        let node = Arc::new(Node::new(config, 0));
+        let node = Arc::new(Node::new(config, storage, 0));
         tokio::spawn({
             let node = Arc::clone(&node);
             async move {
@@ -649,5 +661,13 @@ mod tests {
             .local_addr()
             .expect("Failed to get server local address");
         (listener, local_addr)
+    }
+
+    struct StorageImpl;
+
+    impl Storage for StorageImpl {
+        fn commit_stable_entries(&mut self, _entries: Vec<Entry>) -> Result<(), ()> {
+            Ok(())
+        }
     }
 }
