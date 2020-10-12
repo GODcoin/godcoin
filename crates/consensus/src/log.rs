@@ -102,6 +102,11 @@ impl Log {
         false
     }
 
+    pub fn is_up_to_date(&self, last_index: u64, last_term: u64) -> bool {
+        let term = self.latest_term();
+        last_term > term || (last_term == term && last_index >= self.latest_index())
+    }
+
     fn find_index_pos(&self, index: u64) -> Option<usize> {
         for (pos, e) in self.unstable_ents.iter().enumerate() {
             if e.index == index {
@@ -406,6 +411,22 @@ mod tests {
 
         assert_eq!(log.stable_index, 25);
         assert_eq!(log.unstable_ents.len(), 0);
+    }
+
+    #[test]
+    fn log_up_to_date_checks() {
+        let mut log = Log::new(0);
+        let entries = gen_ents_term(1, 5, 25);
+        assert_eq!(log.try_commit(entries), Ok(()));
+
+        assert!(log.is_up_to_date(log.latest_index(), log.latest_term()));
+        assert!(log.is_up_to_date(20, 6));
+        assert!(log.is_up_to_date(25, 5));
+        assert!(log.is_up_to_date(26, 5));
+
+        assert!(!log.is_up_to_date(24, 5));
+        assert!(!log.is_up_to_date(25, 4));
+        assert!(!log.is_up_to_date(26, 4));
     }
 
     fn gen_ents(start_index: u64, len: usize) -> Vec<Entry> {
