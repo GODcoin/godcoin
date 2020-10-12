@@ -120,8 +120,14 @@ impl<S: Storage> Node<S> {
         if inner.tick_election() {
             // Election timeout has expired, start a new election
             let term = inner.term() + 1;
+            let last_index = inner.log.latest_index();
+            let last_term = inner.log.latest_term();
             inner.become_candidate(term);
-            inner.broadcast_req(Request::RequestVote(RequestVoteReq { term }));
+            inner.broadcast_req(Request::RequestVote(RequestVoteReq {
+                term,
+                last_index,
+                last_term,
+            }));
         }
 
         if inner.tick_heartbeat() {
@@ -243,9 +249,9 @@ impl<S: Storage> Node<S> {
         let mut inner = self.inner.lock();
         match req {
             Request::RequestVote(req) => {
-                let approved = req.term >= inner.term() && inner.voted_for() == 0;
-                if req.term > inner.term() {
-                    // Our term is out of date
+                let log_is_latest = inner.log.is_up_to_date(req.last_index, req.last_term);
+                let approved = log_is_latest && req.term >= inner.term() && inner.voted_for() == 0;
+                if req.term > inner.term() || approved {
                     inner.become_follower(req.term);
                 }
                 if approved {

@@ -15,6 +15,8 @@ impl Serializable<Self> for Request {
             Self::RequestVote(req) => {
                 dst.put_u8(0x01);
                 dst.put_u64(req.term);
+                dst.put_u64(req.last_index);
+                dst.put_u64(req.last_term);
             }
             Self::AppendEntries(req) => {
                 dst.put_u8(0x02);
@@ -32,7 +34,7 @@ impl Serializable<Self> for Request {
 
     fn byte_size(&self) -> usize {
         let size = match self {
-            Self::RequestVote(_) => 8,
+            Self::RequestVote(_) => 24,
             Self::AppendEntries(req) => {
                 let entry_len = req.entries.iter().fold(0, |mut acc, entry| {
                     acc += entry.byte_size();
@@ -50,7 +52,13 @@ impl Serializable<Self> for Request {
         match tag {
             0x01 => {
                 let term = src.take_u64()?;
-                Ok(Self::RequestVote(RequestVoteReq { term }))
+                let last_index = src.take_u64()?;
+                let last_term = src.take_u64()?;
+                Ok(Self::RequestVote(RequestVoteReq {
+                    term,
+                    last_index,
+                    last_term,
+                }))
             }
             0x02 => {
                 let term = src.take_u64()?;
@@ -85,6 +93,8 @@ impl Serializable<Self> for Request {
 pub struct RequestVoteReq {
     /// Term of the candidate
     pub term: u64,
+    pub last_index: u64,
+    pub last_term: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -187,7 +197,11 @@ mod tests {
 
     #[test]
     fn serialize_request_vote_req() {
-        test_req_serialization(Request::RequestVote(RequestVoteReq { term: 1234 }));
+        test_req_serialization(Request::RequestVote(RequestVoteReq {
+            term: 1234,
+            last_index: 10,
+            last_term: 20,
+        }));
     }
 
     #[test]
