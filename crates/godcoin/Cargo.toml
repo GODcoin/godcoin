@@ -23,6 +23,6 @@ faster-hex = "0.4.1"
 num-bigint = "0.3.0"
 num-traits = "0.2.12"
 parking_lot = "0.11.0"
-rocksdb = "0.14.0"
+rocksdb = "0.15.0"
 sodiumoxide = { version = "0.2.6", default-features = false, features = ["std"] }
-tracing = "0.1.18"
+tracing = "0.1.21"

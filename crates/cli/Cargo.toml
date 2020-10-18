@@ -26,15 +26,15 @@ dirs = "3.0.1"
 faster-hex = "0.4.1"
 godcoin = { path = "../godcoin" }
 native-tls = "0.2.4"
-rustyline = "6.2.0"
-rocksdb = "0.14.0"
+rustyline = "6.3.0"
+rocksdb = "0.15.0"
 sodiumoxide = { version = "0.2.6", default-features = false, features = ["std"] }
 url = "2.1.1"
 
 [dependencies.clap]
-version = "2.33.1"
+version = "2.33.3"
 default-features = false
 
 [dependencies.tungstenite]
-version = "0.11.0"
+version = "0.11.1"
 default-features = false
