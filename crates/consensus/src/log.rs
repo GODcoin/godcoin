@@ -24,11 +24,11 @@ impl Log {
         }
     }
 
-    pub fn latest_term(&self) -> u64 {
+    pub fn last_term(&self) -> u64 {
         self.last_term
     }
 
-    pub fn latest_index(&self) -> u64 {
+    pub fn last_index(&self) -> u64 {
         self.unstable_ents
             .last()
             .map_or(self.stable_index, |e| e.index)
@@ -103,8 +103,8 @@ impl Log {
     }
 
     pub fn is_up_to_date(&self, last_index: u64, last_term: u64) -> bool {
-        let term = self.latest_term();
-        last_term > term || (last_term == term && last_index >= self.latest_index())
+        let term = self.last_term();
+        last_term > term || (last_term == term && last_index >= self.last_index())
     }
 
     fn find_index_pos(&self, index: u64) -> Option<usize> {
@@ -419,7 +419,7 @@ mod tests {
         let entries = gen_ents_term(1, 5, 25);
         assert_eq!(log.try_commit(entries), Ok(()));
 
-        assert!(log.is_up_to_date(log.latest_index(), log.latest_term()));
+        assert!(log.is_up_to_date(log.last_index(), log.last_term()));
         assert!(log.is_up_to_date(20, 6));
         assert!(log.is_up_to_date(25, 5));
         assert!(log.is_up_to_date(26, 5));
