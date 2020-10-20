@@ -81,34 +81,20 @@ impl Serializable<Self> for MsgKind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Handshake {
     pub peer_id: u32,
-    pub last_index: u64,
-    pub last_term: u64,
-    pub commit_index: u64,
 }
 
 impl Serializable<Self> for Handshake {
     fn serialize(&self, dst: &mut BytesMut) {
         dst.put_u32(self.peer_id);
-        dst.put_u64(self.last_index);
-        dst.put_u64(self.last_term);
-        dst.put_u64(self.commit_index);
     }
 
     fn byte_size(&self) -> usize {
-        28
+        4
     }
 
     fn deserialize(src: &mut Cursor<&[u8]>) -> io::Result<Self> {
         let peer_id = src.take_u32()?;
-        let last_index = src.take_u64()?;
-        let last_term = src.take_u64()?;
-        let commit_index = src.take_u64()?;
-        Ok(Self {
-            peer_id,
-            last_index,
-            last_term,
-            commit_index,
-        })
+        Ok(Self { peer_id })
     }
 }
 
@@ -120,12 +106,7 @@ mod tests {
     fn serialize_msg() {
         let msg_a = Msg {
             id: 1234,
-            data: MsgKind::Handshake(Handshake {
-                peer_id: 5678,
-                last_index: 123,
-                last_term: 456,
-                commit_index: 789,
-            }),
+            data: MsgKind::Handshake(Handshake { peer_id: 5678 }),
         };
         let mut bytes = BytesMut::with_capacity(msg_a.byte_size());
         msg_a.serialize(&mut bytes);
@@ -137,12 +118,7 @@ mod tests {
 
     #[test]
     fn serialize_handshake() {
-        let handshake_a = Handshake {
-            peer_id: 1234,
-            last_index: 123,
-            last_term: 456,
-            commit_index: 789,
-        };
+        let handshake_a = Handshake { peer_id: 1234 };
         let mut bytes = BytesMut::with_capacity(handshake_a.byte_size());
         handshake_a.serialize(&mut bytes);
         verify_byte_len(&bytes, handshake_a.byte_size());

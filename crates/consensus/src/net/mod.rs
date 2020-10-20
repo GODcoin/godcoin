@@ -83,12 +83,7 @@ mod tests {
 
         let msg_a = Msg {
             id: 1234,
-            data: MsgKind::Handshake(Handshake {
-                peer_id: 5678,
-                last_index: 123,
-                last_term: 456,
-                commit_index: 789,
-            }),
+            data: MsgKind::Handshake(Handshake { peer_id: 5678 }),
         };
 
         codec.encode(msg_a.clone(), &mut bytes).unwrap();

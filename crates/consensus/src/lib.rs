@@ -83,7 +83,7 @@ impl<S: Storage> Node<S> {
         if !inner.is_leader() {
             return Some(entries);
         }
-        let index_start = inner.log.last_index() + 1;
+        let index_start = inner.log.latest_index() + 1;
         let term = inner.term();
         let entries = {
             let mut e = Vec::with_capacity(entries.len());
@@ -120,8 +120,8 @@ impl<S: Storage> Node<S> {
         if inner.tick_election() {
             // Election timeout has expired, start a new election
             let term = inner.term() + 1;
-            let last_index = inner.log.last_index();
-            let last_term = inner.log.last_term();
+            let last_index = inner.log.latest_index();
+            let last_term = inner.log.latest_term();
             inner.become_candidate(term);
             inner.broadcast_req(Request::RequestVote(RequestVoteReq {
                 term,
@@ -138,8 +138,8 @@ impl<S: Storage> Node<S> {
                 leader_commit: inner.log.stable_index(),
                 entries: inner.take_outbound_entries(),
             };
-            inner.log_last_index = inner.log.last_index();
-            inner.log_last_term = inner.log.last_term();
+            inner.log_last_index = inner.log.latest_index();
+            inner.log_last_term = inner.log.latest_term();
             inner.broadcast_req(Request::AppendEntries(append_entries));
         }
     }
@@ -149,9 +149,6 @@ impl<S: Storage> Node<S> {
             let inner = self.inner.lock();
             Handshake {
                 peer_id: inner.config.id,
-                last_index: inner.log.last_index(),
-                last_term: inner.log.last_term(),
-                commit_index: inner.log.stable_index(),
             }
         };
 
@@ -299,7 +296,7 @@ impl<S: Storage> Node<S> {
                 let stable_ents = inner.log.stabilize_to(req.leader_commit);
                 inner.storage.commit_stable_entries(stable_ents).unwrap();
 
-                let index = inner.log.last_index();
+                let index = inner.log.latest_index();
                 Some(Response::AppendEntries(AppendEntriesRes {
                     current_term,
                     success,
