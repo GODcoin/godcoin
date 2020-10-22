@@ -120,16 +120,16 @@ pub enum Response {
 impl Serializable<Self> for Response {
     fn serialize(&self, dst: &mut BytesMut) {
         match self {
-            Self::RequestVote(req) => {
+            Self::RequestVote(res) => {
                 dst.put_u8(0x01);
-                dst.put_u64(req.current_term);
-                dst.put_u8(req.approved.into());
+                dst.put_u64(res.current_term);
+                dst.put_u8(res.approved.into());
             }
-            Self::AppendEntries(req) => {
+            Self::AppendEntries(res) => {
                 dst.put_u8(0x02);
-                dst.put_u64(req.current_term);
-                dst.put_u8(req.success.into());
-                dst.put_u64(req.index);
+                dst.put_u64(res.current_term);
+                dst.put_u8(res.success.into());
+                dst.put_u64(res.index);
             }
         }
     }
