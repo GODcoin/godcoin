@@ -21,21 +21,23 @@ use tracing_futures::Instrument;
 
 use private::Inner;
 
-pub trait Storage: Send + 'static {
+pub trait Storage: Sync + Send + 'static {
     /// Commits the stable entries to persistent storage.
-    fn commit_stable_entries(&mut self, entries: Vec<Entry>) -> Result<(), ()>;
+    fn commit_stable_entries(&self, entries: Vec<Entry>) -> Result<(), ()>;
 }
 
 #[derive(Debug)]
 pub struct Node<S: Storage> {
-    inner: Mutex<Inner<S>>,
+    inner: Mutex<Inner>,
+    storage: Arc<S>,
 }
 
 impl<S: Storage> Node<S> {
     pub fn new(config: Config, storage: S, stable_index: u64) -> Self {
         config.validate().unwrap();
         Self {
-            inner: Mutex::new(Inner::new(config, storage, stable_index)),
+            inner: Mutex::new(Inner::new(config, stable_index)),
+            storage: Arc::new(storage),
         }
     }
 
@@ -294,7 +296,7 @@ impl<S: Storage> Node<S> {
                 };
 
                 let stable_ents = inner.log.stabilize_to(req.leader_commit);
-                inner.storage.commit_stable_entries(stable_ents).unwrap();
+                self.storage.commit_stable_entries(stable_ents).unwrap();
 
                 let index = inner.log.latest_index();
                 Some(Response::AppendEntries(AppendEntriesRes {
@@ -323,7 +325,7 @@ impl<S: Storage> Node<S> {
 
                     let next_commit = inner.next_stable_index();
                     let stable_ents = inner.log.stabilize_to(next_commit);
-                    inner.storage.commit_stable_entries(stable_ents).unwrap();
+                    self.storage.commit_stable_entries(stable_ents).unwrap();
                 }
             }
         }
@@ -334,13 +336,12 @@ mod private {
     use super::*;
 
     #[derive(Debug)]
-    pub struct Inner<S: Storage> {
+    pub struct Inner {
         pub config: Config,
         pub peers: HashMap<u32, Peer>,
         pub log: Log,
         pub log_last_term: u64,
         pub log_last_index: u64,
-        pub storage: S,
         outbound_entries: Vec<Entry>,
         term: u64,
         leader_id: u32,
@@ -351,8 +352,8 @@ mod private {
         heartbeat_delta: u32,
     }
 
-    impl<S: Storage> Inner<S> {
-        pub fn new(config: Config, storage: S, stable_index: u64) -> Self {
+    impl Inner {
+        pub fn new(config: Config, stable_index: u64) -> Self {
             let election_timeout = config.random_election_timeout();
             Self {
                 config,
@@ -360,7 +361,6 @@ mod private {
                 log: Log::new(stable_index),
                 log_last_term: 0,
                 log_last_index: 0,
-                storage,
                 outbound_entries: Vec::with_capacity(32),
                 term: 0,
                 leader_id: 0,
@@ -672,7 +672,7 @@ mod tests {
     struct StorageImpl;
 
     impl Storage for StorageImpl {
-        fn commit_stable_entries(&mut self, _entries: Vec<Entry>) -> Result<(), ()> {
+        fn commit_stable_entries(&self, _entries: Vec<Entry>) -> Result<(), ()> {
             Ok(())
         }
     }
