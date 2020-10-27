@@ -107,6 +107,10 @@ impl Log {
         last_term > term || (last_term == term && last_index >= self.latest_index())
     }
 
+    pub fn find_entry(&self, index: u64) -> Option<&Entry> {
+        self.unstable_ents.iter().find(|e| e.index == index)
+    }
+
     fn find_index_pos(&self, index: u64) -> Option<usize> {
         for (pos, e) in self.unstable_ents.iter().enumerate() {
             if e.index == index {

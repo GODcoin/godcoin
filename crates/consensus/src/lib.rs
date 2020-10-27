@@ -24,6 +24,8 @@ use private::Inner;
 pub trait Storage: Sync + Send + 'static {
     /// Commits the stable entries to persistent storage.
     fn commit_stable_entries(&self, entries: Vec<Entry>) -> Result<(), ()>;
+
+    fn retrieve_stable_entry(&self, index: u64) -> Option<Bytes>;
 }
 
 #[derive(Debug)]
@@ -233,7 +235,7 @@ impl<S: Storage> Node<S> {
                     break;
                 }
                 MsgKind::Request(req) => {
-                    if let Some(res) = self.process_peer_req(peer_id, req) {
+                    if let Some(res) = self.process_peer_req(peer_id, msg.id, req) {
                         let _ = tx
                             .send(Msg {
                                 id: msg.id,
@@ -247,7 +249,7 @@ impl<S: Storage> Node<S> {
         }
     }
 
-    fn process_peer_req(&self, peer_id: u32, req: Request) -> Option<Response> {
+    fn process_peer_req(&self, peer_id: u32, msg_id: u64, req: Request) -> Option<Response> {
         let mut inner = self.inner.lock();
         match req {
             Request::RequestVote(req) => {
@@ -283,17 +285,33 @@ impl<S: Storage> Node<S> {
                 }
 
                 let has_entry = inner.log.contains_entry(req.prev_term, req.prev_index);
-                let success = if has_entry {
-                    match inner.log.try_commit(req.entries) {
-                        Ok(()) => true,
-                        Err(e) => {
-                            error!("Failed to commit entries: {:?}", e);
-                            false
-                        }
+                if has_entry {
+                    inner
+                        .log
+                        .try_commit(req.entries)
+                        .expect("Failed to commit entries");
+                    inner.is_syncing = false;
+                } else if !inner.is_syncing {
+                    let leader_id = inner.leader();
+                    let peer = inner.peers.get_mut(&leader_id).unwrap();
+                    if let Some(mut sender) = peer.get_sender() {
+                        let id = peer.incr_next_msg_id();
+                        inner.is_syncing = true;
+                        let last_index = inner.log.latest_index();
+                        let last_term = inner.log.latest_term();
+                        tokio::spawn(async move {
+                            let _ = sender
+                                .send(Msg {
+                                    id,
+                                    data: MsgKind::Request(Request::LogSync(LogSyncReq {
+                                        last_index,
+                                        last_term,
+                                    })),
+                                })
+                                .await;
+                        });
                     }
-                } else {
-                    false
-                };
+                }
 
                 let stable_ents = inner.log.stabilize_to(req.leader_commit);
                 self.storage.commit_stable_entries(stable_ents).unwrap();
@@ -301,9 +319,55 @@ impl<S: Storage> Node<S> {
                 let index = inner.log.latest_index();
                 Some(Response::AppendEntries(AppendEntriesRes {
                     current_term,
-                    success,
+                    success: has_entry,
                     index,
                 }))
+            }
+            Request::LogSync(req) => {
+                // TODO
+                // (1) If peer node's index term is less than our index's term then we need to find
+                // the first index of the node's index term in our log.
+                // (2) Need to implement proper response batching.
+
+                let mut entries = vec![];
+                let mut byte_len = 0;
+                for i in req.last_index..=inner.log.latest_index() {
+                    let entry = if i <= inner.log.stable_index() {
+                        let data = self.storage.retrieve_stable_entry(i).unwrap();
+                        Entry {
+                            index: i,
+                            term: inner.term(),
+                            data,
+                        }
+                    } else {
+                        inner.log.find_entry(i).cloned().unwrap()
+                    };
+                    byte_len += entry.data.len();
+                    entries.push(entry);
+                    if byte_len > 1024 * 1024 {
+                        break;
+                    }
+                }
+
+                let peer = inner.peers.get(&inner.leader()).unwrap();
+                if let Some(mut sender) = peer.get_sender() {
+                    let leader_commit = inner.log.stable_index();
+                    tokio::spawn(async move {
+                        let res = Response::LogSync(LogSyncRes {
+                            leader_commit,
+                            complete: true,
+                            entries,
+                        });
+                        let _ = sender
+                            .send(Msg {
+                                id: msg_id,
+                                data: MsgKind::Response(res),
+                            })
+                            .await;
+                    });
+                }
+
+                None
             }
         }
     }
@@ -328,6 +392,18 @@ impl<S: Storage> Node<S> {
                     self.storage.commit_stable_entries(stable_ents).unwrap();
                 }
             }
+            Response::LogSync(res) => {
+                if !inner.is_syncing {
+                    warn!("Received erroneous sync request from {}", peer_id);
+                    return;
+                }
+                if res.complete {
+                    inner.is_syncing = false;
+                }
+                inner.log.try_commit(res.entries).unwrap();
+                let stable_ents = inner.log.stabilize_to(res.leader_commit);
+                self.storage.commit_stable_entries(stable_ents).unwrap();
+            }
         }
     }
 }
@@ -342,6 +418,7 @@ mod private {
         pub log: Log,
         pub log_last_term: u64,
         pub log_last_index: u64,
+        pub is_syncing: bool,
         outbound_entries: Vec<Entry>,
         term: u64,
         leader_id: u32,
@@ -361,6 +438,7 @@ mod private {
                 log: Log::new(stable_index),
                 log_last_term: 0,
                 log_last_index: 0,
+                is_syncing: false,
                 outbound_entries: Vec::with_capacity(32),
                 term: 0,
                 leader_id: 0,
@@ -673,7 +751,11 @@ mod tests {
 
     impl Storage for StorageImpl {
         fn commit_stable_entries(&self, _entries: Vec<Entry>) -> Result<(), ()> {
-            Ok(())
+            todo!()
+        }
+
+        fn retrieve_stable_entry(&self, _index: u64) -> Option<Bytes> {
+            todo!()
         }
     }
 }
