@@ -9,37 +9,30 @@ mod test_util;
 use bytes::Bytes;
 use config::Config;
 use futures::{channel::mpsc, prelude::*};
-use log::{Entry, Log};
+use log::{Entry, Log, Storage};
 use net::*;
 use parking_lot::Mutex;
 use peer::*;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::codec::Framed;
-use tracing::{error, info, info_span, trace, warn};
+use tracing::{info, info_span, trace, warn};
 use tracing_futures::Instrument;
 
 use private::Inner;
 
-pub trait Storage: Sync + Send + 'static {
-    /// Commits the stable entries to persistent storage.
-    fn commit_stable_entries(&self, entries: Vec<Entry>) -> Result<(), ()>;
-
-    fn retrieve_stable_entry(&self, index: u64) -> Option<Bytes>;
-}
-
 #[derive(Debug)]
 pub struct Node<S: Storage> {
     inner: Mutex<Inner>,
-    storage: Arc<S>,
+    log: Arc<Mutex<Log<S>>>,
 }
 
 impl<S: Storage> Node<S> {
-    pub fn new(config: Config, storage: S, stable_index: u64) -> Self {
+    pub fn new(config: Config, storage: S) -> Self {
         config.validate().unwrap();
         Self {
-            inner: Mutex::new(Inner::new(config, stable_index)),
-            storage: Arc::new(storage),
+            inner: Mutex::new(Inner::new(config)),
+            log: Arc::new(Mutex::new(Log::new(storage))),
         }
     }
 
@@ -84,10 +77,11 @@ impl<S: Storage> Node<S> {
     /// on success.
     pub fn append_entries(&self, mut entries: Vec<Bytes>) -> Option<Vec<Bytes>> {
         let mut inner = self.inner.lock();
+        let mut log = self.log.lock();
         if !inner.is_leader() {
             return Some(entries);
         }
-        let index_start = inner.log.latest_index() + 1;
+        let index_start = log.latest_index() + 1;
         let term = inner.term();
         let entries = {
             let mut e = Vec::with_capacity(entries.len());
@@ -101,7 +95,7 @@ impl<S: Storage> Node<S> {
             e
         };
 
-        inner.log.try_commit(entries.clone()).unwrap();
+        log.try_commit(entries.clone()).unwrap();
         inner.insert_outbound_entries(entries);
         None
     }
@@ -121,11 +115,12 @@ impl<S: Storage> Node<S> {
             }
         }
 
+        let log = self.log.lock();
         if inner.tick_election() {
             // Election timeout has expired, start a new election
             let term = inner.term() + 1;
-            let last_index = inner.log.latest_index();
-            let last_term = inner.log.latest_term();
+            let last_index = log.latest_index();
+            let last_term = log.latest_term();
             inner.become_candidate(term);
             inner.broadcast_req(Request::RequestVote(RequestVoteReq {
                 term,
@@ -139,11 +134,11 @@ impl<S: Storage> Node<S> {
                 term: inner.term(),
                 prev_index: inner.log_last_index,
                 prev_term: inner.log_last_term,
-                leader_commit: inner.log.stable_index(),
+                leader_commit: log.stable_index(),
                 entries: inner.take_outbound_entries(),
             };
-            inner.log_last_index = inner.log.latest_index();
-            inner.log_last_term = inner.log.latest_term();
+            inner.log_last_index = log.latest_index();
+            inner.log_last_term = log.latest_term();
             inner.broadcast_req(Request::AppendEntries(append_entries));
         }
     }
@@ -251,9 +246,10 @@ impl<S: Storage> Node<S> {
 
     fn process_peer_req(&self, peer_id: u32, msg_id: u64, req: Request) -> Option<Response> {
         let mut inner = self.inner.lock();
+        let mut log = self.log.lock();
         match req {
             Request::RequestVote(req) => {
-                let log_is_latest = inner.log.is_up_to_date(req.last_index, req.last_term);
+                let log_is_latest = log.is_up_to_date(req.last_index, req.last_term);
                 let approved = log_is_latest && req.term >= inner.term() && inner.voted_for() == 0;
                 if req.term > inner.term() || approved {
                     inner.become_follower(req.term);
@@ -284,11 +280,9 @@ impl<S: Storage> Node<S> {
                     inner.become_follower(current_term);
                 }
 
-                let has_entry = inner.log.contains_entry(req.prev_term, req.prev_index);
+                let has_entry = log.contains_entry(req.prev_term, req.prev_index);
                 if has_entry {
-                    inner
-                        .log
-                        .try_commit(req.entries)
+                    log.try_commit(req.entries)
                         .expect("Failed to commit entries");
                     inner.is_syncing = false;
                 } else if !inner.is_syncing {
@@ -297,8 +291,8 @@ impl<S: Storage> Node<S> {
                     if let Some(mut sender) = peer.get_sender() {
                         let id = peer.incr_next_msg_id();
                         inner.is_syncing = true;
-                        let last_index = inner.log.latest_index();
-                        let last_term = inner.log.latest_term();
+                        let last_index = log.latest_index();
+                        let last_term = log.latest_term();
                         tokio::spawn(async move {
                             let _ = sender
                                 .send(Msg {
@@ -313,10 +307,8 @@ impl<S: Storage> Node<S> {
                     }
                 }
 
-                let stable_ents = inner.log.stabilize_to(req.leader_commit);
-                self.storage.commit_stable_entries(stable_ents).unwrap();
-
-                let index = inner.log.latest_index();
+                log.stabilize_to(req.leader_commit);
+                let index = log.latest_index();
                 Some(Response::AppendEntries(AppendEntriesRes {
                     current_term,
                     success: has_entry,
@@ -331,16 +323,16 @@ impl<S: Storage> Node<S> {
 
                 let mut entries = vec![];
                 let mut byte_len = 0;
-                for i in req.last_index..=inner.log.latest_index() {
-                    let entry = if i <= inner.log.stable_index() {
-                        let data = self.storage.retrieve_stable_entry(i).unwrap();
+                for i in req.last_index..=log.latest_index() {
+                    let entry = if i <= log.stable_index() {
+                        let data = log.storage().retrieve_stable_entry(i).unwrap();
                         Entry {
                             index: i,
                             term: inner.term(),
                             data,
                         }
                     } else {
-                        inner.log.find_entry(i).cloned().unwrap()
+                        log.find_entry(i).cloned().unwrap()
                     };
                     byte_len += entry.data.len();
                     entries.push(entry);
@@ -351,7 +343,7 @@ impl<S: Storage> Node<S> {
 
                 let peer = inner.peers.get(&inner.leader()).unwrap();
                 if let Some(mut sender) = peer.get_sender() {
-                    let leader_commit = inner.log.stable_index();
+                    let leader_commit = log.stable_index();
                     tokio::spawn(async move {
                         let res = Response::LogSync(LogSyncRes {
                             leader_commit,
@@ -374,6 +366,7 @@ impl<S: Storage> Node<S> {
 
     fn process_peer_res(&self, peer_id: u32, res: Response) {
         let mut inner = self.inner.lock();
+        let mut log = self.log.lock();
         match res {
             Response::RequestVote(res) => {
                 inner.maybe_update_term(res.current_term);
@@ -388,8 +381,7 @@ impl<S: Storage> Node<S> {
                     peer.set_last_ack_index(res.index);
 
                     let next_commit = inner.next_stable_index();
-                    let stable_ents = inner.log.stabilize_to(next_commit);
-                    self.storage.commit_stable_entries(stable_ents).unwrap();
+                    log.stabilize_to(next_commit);
                 }
             }
             Response::LogSync(res) => {
@@ -400,9 +392,8 @@ impl<S: Storage> Node<S> {
                 if res.complete {
                     inner.is_syncing = false;
                 }
-                inner.log.try_commit(res.entries).unwrap();
-                let stable_ents = inner.log.stabilize_to(res.leader_commit);
-                self.storage.commit_stable_entries(stable_ents).unwrap();
+                log.try_commit(res.entries).unwrap();
+                log.stabilize_to(res.leader_commit);
             }
         }
     }
@@ -415,7 +406,6 @@ mod private {
     pub struct Inner {
         pub config: Config,
         pub peers: HashMap<u32, Peer>,
-        pub log: Log,
         pub log_last_term: u64,
         pub log_last_index: u64,
         pub is_syncing: bool,
@@ -430,12 +420,11 @@ mod private {
     }
 
     impl Inner {
-        pub fn new(config: Config, stable_index: u64) -> Self {
+        pub fn new(config: Config) -> Self {
             let election_timeout = config.random_election_timeout();
             Self {
                 config,
                 peers: Default::default(),
-                log: Log::new(stable_index),
                 log_last_term: 0,
                 log_last_index: 0,
                 is_syncing: false,
@@ -620,6 +609,7 @@ mod private {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::log::MemStorage;
     use std::time::Duration;
     use tokio::time::delay_for;
 
@@ -682,7 +672,7 @@ mod tests {
         }
     }
 
-    async fn setup_cluster(count: u32) -> Vec<Arc<Node<StorageImpl>>> {
+    async fn setup_cluster(count: u32) -> Vec<Arc<Node<MemStorage>>> {
         assert!(count > 0);
         let mut nodes = Vec::with_capacity(count as usize);
         let mut addrs = Vec::with_capacity(count as usize);
@@ -720,12 +710,12 @@ mod tests {
         nodes
     }
 
-    async fn setup_node(id: u32) -> (Arc<Node<StorageImpl>>, SocketAddr) {
+    async fn setup_node(id: u32) -> (Arc<Node<MemStorage>>, SocketAddr) {
         let (server, addr) = listen_random().await;
 
-        let storage = StorageImpl;
+        let storage = MemStorage::default();
         let config = Config::new(id);
-        let node = Arc::new(Node::new(config, storage, 0));
+        let node = Arc::new(Node::new(config, storage));
         tokio::spawn({
             let node = Arc::clone(&node);
             async move {
@@ -745,17 +735,5 @@ mod tests {
             .local_addr()
             .expect("Failed to get server local address");
         (listener, local_addr)
-    }
-
-    struct StorageImpl;
-
-    impl Storage for StorageImpl {
-        fn commit_stable_entries(&self, _entries: Vec<Entry>) -> Result<(), ()> {
-            todo!()
-        }
-
-        fn retrieve_stable_entry(&self, _index: u64) -> Option<Bytes> {
-            todo!()
-        }
     }
 }

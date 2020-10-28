@@ -1,4 +1,4 @@
-use super::net::Serializable;
+use crate::net::Serializable;
 use bytes::{BufMut, Bytes, BytesMut};
 use godcoin::serializer::BufRead;
 use std::{
@@ -6,22 +6,28 @@ use std::{
     mem,
 };
 
+pub mod storage;
+
+pub use storage::*;
+
 #[derive(Debug)]
-pub struct Log {
+pub struct Log<S: Storage> {
     unstable_ents: Vec<Entry>,
-    /// Committed block height that cannot be reversed
-    stable_index: u64,
+    storage: S,
     last_term: u64,
 }
 
-impl Log {
-    /// Using zero for the `stable_index` declares the log is completely empty or new.
-    pub fn new(stable_index: u64) -> Self {
+impl<S: Storage> Log<S> {
+    pub fn new(storage: S) -> Self {
         Self {
             unstable_ents: Vec::with_capacity(32),
-            stable_index,
+            storage,
             last_term: 0,
         }
+    }
+
+    pub fn storage(&mut self) -> &mut S {
+        &mut self.storage
     }
 
     pub fn latest_term(&self) -> u64 {
@@ -31,45 +37,45 @@ impl Log {
     pub fn latest_index(&self) -> u64 {
         self.unstable_ents
             .last()
-            .map_or(self.stable_index, |e| e.index)
+            .map_or_else(|| self.stable_index(), |e| e.index)
     }
 
+    #[inline]
     pub fn stable_index(&self) -> u64 {
-        self.stable_index
+        self.storage.stable_index()
     }
 
-    #[must_use = "stable entries should be committed to persistent storage"]
-    pub fn stabilize_to(&mut self, index: u64) -> Vec<Entry> {
-        if index <= self.stable_index {
-            return vec![];
+    pub fn stabilize_to(&mut self, index: u64) {
+        if index <= self.stable_index() {
+            return;
         }
-        if let Some(pos) = self.find_index_pos(index) {
-            self.stable_index = index;
+        let entries = if let Some(pos) = self.find_index_pos(index) {
             self.unstable_ents.drain(..=pos).collect()
         } else if let Some(last_ent) = self.unstable_ents.last() {
             // Index will never be equal or lower than our last unstable entry, this assertion will
             // fail if there is a bug finding an index that *should* exist in the unstable log
             assert!(index > last_ent.index);
-            self.stable_index = last_ent.index;
             let mut unstable_ents = Vec::with_capacity(self.unstable_ents.capacity());
             mem::swap(&mut self.unstable_ents, &mut unstable_ents);
             unstable_ents
         } else {
             vec![]
-        }
+        };
+        self.storage.commit_stable_entries(entries);
     }
 
     /// `entries` are assumed to be in order from lowest index to highest index.
     pub fn try_commit(&mut self, entries: Vec<Entry>) -> Result<(), CommitErr> {
         if let Some(e) = entries.first() {
-            if e.index <= self.stable_index {
+            let stable_index = self.stable_index();
+            if e.index <= stable_index {
                 return Err(CommitErr::CannotRevertStableIndex);
             } else if let Some(our_ent) = self.unstable_ents.last() {
                 // Check to prevent gaps in the log
                 if e.index > our_ent.index + 1 {
                     return Err(CommitErr::IndexTooHigh);
                 }
-            } else if self.stable_index + 1 != e.index {
+            } else if stable_index + 1 != e.index {
                 // Unstable entries has no entries in it, so we check to make sure the next index
                 // that comes next is after the stable index.
                 return Err(CommitErr::IndexTooHigh);
@@ -91,7 +97,7 @@ impl Log {
     }
 
     pub fn contains_entry(&self, term: u64, index: u64) -> bool {
-        if index <= self.stable_index {
+        if index <= self.stable_index() {
             return true;
         }
         for e in &self.unstable_ents {
@@ -120,7 +126,7 @@ impl Log {
         None
     }
 
-    fn find_conflict(&self, entries: &Vec<Entry>) -> Option<usize> {
+    fn find_conflict(&self, entries: &[Entry]) -> Option<usize> {
         for (index, self_e) in self.unstable_ents.iter().enumerate() {
             for other_e in entries {
                 if self_e.index == other_e.index {
@@ -180,7 +186,7 @@ mod tests {
     #[test]
     fn commit_during_empty_log_with_stable_index() {
         let stable_index = 100;
-        let mut log = Log::new(stable_index);
+        let mut log = init_log(stable_index);
 
         let entries = gen_ents(stable_index + 1, 25);
         assert_eq!(log.try_commit(entries), Ok(()));
@@ -189,22 +195,22 @@ mod tests {
 
     #[test]
     fn commit_new_log() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
 
         let entries = gen_ents(1, 25);
         assert_eq!(log.try_commit(entries), Ok(()));
         assert_eq!(log.unstable_ents.len(), 25);
-        assert_eq!(log.stable_index, 0);
+        assert_eq!(log.stable_index(), 0);
     }
 
     #[test]
     fn commit_multiple_times() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
         for i in 1..=10 {
             let entries = gen_ents(i, 1);
             assert_eq!(log.try_commit(entries), Ok(()));
             assert_eq!(log.unstable_ents.len() as u64, i);
-            assert_eq!(log.stable_index, 0);
+            assert_eq!(log.stable_index(), 0);
         }
 
         for i in 1..=10 {
@@ -214,13 +220,13 @@ mod tests {
 
     #[test]
     fn commit_err_with_gap_in_log() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
 
         {
             let entries = gen_ents(2, 1);
             assert_eq!(log.try_commit(entries), Err(CommitErr::IndexTooHigh));
             assert_eq!(log.unstable_ents.len(), 0);
-            assert_eq!(log.stable_index, 0);
+            assert_eq!(log.stable_index(), 0);
         }
         {
             let entries = gen_ents(1, 10);
@@ -230,14 +236,14 @@ mod tests {
             assert_eq!(log.try_commit(entries), Err(CommitErr::IndexTooHigh));
 
             assert_eq!(log.unstable_ents.len(), 10);
-            assert_eq!(log.stable_index, 0);
+            assert_eq!(log.stable_index(), 0);
         }
     }
 
     #[test]
     fn cannot_revert_stable_index() {
         fn run_test(start_index: u64) {
-            let mut log = Log::new(start_index);
+            let mut log = init_log(start_index);
 
             let entries = gen_ents(start_index, 10);
             assert_eq!(
@@ -245,7 +251,7 @@ mod tests {
                 Err(CommitErr::CannotRevertStableIndex)
             );
             assert_eq!(log.unstable_ents.len(), 0);
-            assert_eq!(log.stable_index, start_index);
+            assert_eq!(log.stable_index(), start_index);
         };
 
         run_test(0);
@@ -254,7 +260,7 @@ mod tests {
 
     #[test]
     fn commit_with_conflicts_same_term() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
 
         {
             let mut entries = gen_ents(1, 25);
@@ -281,7 +287,7 @@ mod tests {
 
     #[test]
     fn commit_with_conflicts_diff_term() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
 
         {
             let mut entries = gen_ents(1, 25);
@@ -308,7 +314,7 @@ mod tests {
 
     #[test]
     fn can_find_conflict() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
 
         let entries = gen_ents(1, 25);
         assert_eq!(log.try_commit(entries), Ok(()));
@@ -325,7 +331,7 @@ mod tests {
 
     #[test]
     fn can_find_entry() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
 
         let entries = gen_ents(1, 25);
         assert_eq!(log.try_commit(entries), Ok(()));
@@ -341,7 +347,7 @@ mod tests {
 
     #[test]
     fn can_find_entry_pos() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
 
         let entries = gen_ents(1, 25);
         assert_eq!(log.try_commit(entries), Ok(()));
@@ -355,33 +361,34 @@ mod tests {
 
     #[test]
     fn stabilize_to_empty_unstable_entries() {
-        let mut log = Log::new(10);
-        assert_eq!(log.stabilize_to(11), vec![]);
-        assert_eq!(log.stable_index, 10);
+        let mut log = init_log(10);
+        log.stabilize_to(11);
+        assert_eq!(log.stable_index(), 10);
     }
 
     #[test]
     fn stabilize_to_already_stable_index() {
-        let mut log = Log::new(10);
+        let mut log = init_log(10);
 
-        assert_eq!(log.stabilize_to(9), vec![]);
-        assert_eq!(log.stable_index, 10);
+        log.stabilize_to(9);
+        assert_eq!(log.stable_index(), 10);
 
-        assert_eq!(log.stabilize_to(10), vec![]);
-        assert_eq!(log.stable_index, 10);
+        log.stabilize_to(10);
+        assert_eq!(log.stable_index(), 10);
     }
 
     #[test]
     fn stabilize_to_under_last_unstable_index() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
         let entries = gen_ents(1, 25);
         assert_eq!(log.try_commit(entries), Ok(()));
 
-        for (expected_index, entry) in (1..=20).zip(log.stabilize_to(20)) {
+        log.stabilize_to(20);
+        for (expected_index, (_, entry)) in (1..=20).zip(log.storage().stable_entries()) {
             assert_eq!(expected_index, entry.index);
         }
 
-        assert_eq!(log.stable_index, 20);
+        assert_eq!(log.stable_index(), 20);
         assert_eq!(log.unstable_ents.len(), 5);
 
         for (expected_index, entry) in (21..=25).zip(&log.unstable_ents) {
@@ -391,35 +398,37 @@ mod tests {
 
     #[test]
     fn stabilize_to_last_unstable_index() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
         let entries = gen_ents(1, 25);
         assert_eq!(log.try_commit(entries), Ok(()));
 
-        for (expected_index, entry) in (1..=25).zip(log.stabilize_to(25)) {
+        log.stabilize_to(25);
+        for (expected_index, (_, entry)) in (1..=25).zip(log.storage().stable_entries()) {
             assert_eq!(expected_index, entry.index);
         }
 
-        assert_eq!(log.stable_index, 25);
+        assert_eq!(log.stable_index(), 25);
         assert_eq!(log.unstable_ents.len(), 0);
     }
 
     #[test]
     fn stabilize_to_above_last_unstable_index() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
         let entries = gen_ents(1, 25);
         assert_eq!(log.try_commit(entries), Ok(()));
 
-        for (expected_index, entry) in (1..=25).zip(log.stabilize_to(30)) {
+        log.stabilize_to(30);
+        for (expected_index, (_, entry)) in (1..=25).zip(log.storage().stable_entries()) {
             assert_eq!(expected_index, entry.index);
         }
 
-        assert_eq!(log.stable_index, 25);
+        assert_eq!(log.stable_index(), 25);
         assert_eq!(log.unstable_ents.len(), 0);
     }
 
     #[test]
     fn log_up_to_date_checks() {
-        let mut log = Log::new(0);
+        let mut log = init_log(0);
         let entries = gen_ents_term(1, 5, 25);
         assert_eq!(log.try_commit(entries), Ok(()));
 
@@ -453,5 +462,11 @@ mod tests {
         for e in entries {
             e.data = data.clone();
         }
+    }
+
+    fn init_log(stable_index: u64) -> Log<MemStorage> {
+        let mut storage = MemStorage::default();
+        storage.commit_stable_entries(gen_ents(1, stable_index as usize));
+        Log::new(storage)
     }
 }
