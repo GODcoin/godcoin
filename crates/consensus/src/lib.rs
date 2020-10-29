@@ -343,17 +343,7 @@ impl<S: Storage> Node<S> {
                             let mut byte_len = 0;
                             while last_index < latest_index {
                                 last_index += 1;
-                                let entry = if last_index <= stable_index {
-                                    let storage = log.storage();
-                                    let data = storage.retrieve_stable_entry(last_index).unwrap();
-                                    Entry {
-                                        index: last_index,
-                                        term: inner.term(),
-                                        data,
-                                    }
-                                } else {
-                                    log.find_entry(last_index).cloned().unwrap()
-                                };
+                                let entry = log.get_entry_by_index(last_index).unwrap();
                                 byte_len += entry.data.len();
                                 entries.push(entry);
                                 if byte_len > 1024 * 1024 * 10 {

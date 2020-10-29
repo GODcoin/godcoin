@@ -26,10 +26,6 @@ impl<S: Storage> Log<S> {
         }
     }
 
-    pub fn storage(&self) -> &S {
-        &self.storage
-    }
-
     pub fn latest_term(&self) -> u64 {
         self.last_term
     }
@@ -113,8 +109,21 @@ impl<S: Storage> Log<S> {
         last_term > term || (last_term == term && last_index >= self.latest_index())
     }
 
-    pub fn find_entry(&self, index: u64) -> Option<&Entry> {
-        self.unstable_ents.iter().find(|e| e.index == index)
+    pub fn get_entry_by_index(&self, index: u64) -> Option<Entry> {
+        if index > self.stable_index() {
+            self.unstable_ents
+                .iter()
+                .find(|e| e.index == index)
+                .cloned()
+        } else {
+            self.storage
+                .retrieve_stable_entry(index)
+                .map(|bytes| Entry {
+                    term: self.last_term,
+                    index,
+                    data: bytes,
+                })
+        }
     }
 
     fn find_index_pos(&self, index: u64) -> Option<usize> {
@@ -384,7 +393,7 @@ mod tests {
         assert_eq!(log.try_commit(entries), Ok(()));
 
         log.stabilize_to(20);
-        for (expected_index, (_, entry)) in (1..=20).zip(log.storage().stable_entries()) {
+        for (expected_index, (_, entry)) in (1..=20).zip(log.storage.stable_entries()) {
             assert_eq!(expected_index, entry.index);
         }
 
@@ -403,7 +412,7 @@ mod tests {
         assert_eq!(log.try_commit(entries), Ok(()));
 
         log.stabilize_to(25);
-        for (expected_index, (_, entry)) in (1..=25).zip(log.storage().stable_entries()) {
+        for (expected_index, (_, entry)) in (1..=25).zip(log.storage.stable_entries()) {
             assert_eq!(expected_index, entry.index);
         }
 
@@ -418,7 +427,7 @@ mod tests {
         assert_eq!(log.try_commit(entries), Ok(()));
 
         log.stabilize_to(30);
-        for (expected_index, (_, entry)) in (1..=25).zip(log.storage().stable_entries()) {
+        for (expected_index, (_, entry)) in (1..=25).zip(log.storage.stable_entries()) {
             assert_eq!(expected_index, entry.index);
         }
 
