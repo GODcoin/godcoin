@@ -85,7 +85,7 @@ impl<S: Storage> Node<S> {
         if !inner.is_leader() {
             return Some(entries);
         }
-        let index_start = log.latest_index() + 1;
+        let index_start = log.last_index() + 1;
         let term = inner.term();
         let entries = {
             let mut e = Vec::with_capacity(entries.len());
@@ -123,8 +123,8 @@ impl<S: Storage> Node<S> {
         if inner.tick_election() {
             // Election timeout has expired, start a new election
             let term = inner.term() + 1;
-            let last_index = log.latest_index();
-            let last_term = log.latest_term();
+            let last_index = log.last_index();
+            let last_term = log.last_term();
             inner.become_candidate(term);
             inner.broadcast_req(Request::RequestVote(RequestVoteReq {
                 term,
@@ -141,8 +141,8 @@ impl<S: Storage> Node<S> {
                 leader_commit: log.stable_index(),
                 entries: inner.take_outbound_entries(),
             };
-            inner.log_last_index = log.latest_index();
-            inner.log_last_term = log.latest_term();
+            inner.log_last_index = log.last_index();
+            inner.log_last_term = log.last_term();
             inner.broadcast_req(Request::AppendEntries(append_entries));
         }
     }
@@ -300,8 +300,8 @@ impl<S: Storage> Node<S> {
                     if let Some(mut sender) = peer.get_sender() {
                         let id = peer.incr_next_msg_id();
                         inner.is_syncing = true;
-                        let last_index = log.latest_index();
-                        let last_term = log.latest_term();
+                        let last_index = log.last_index();
+                        let last_term = log.last_term();
                         tokio::spawn(async move {
                             let _ = sender
                                 .send(Msg {
@@ -317,7 +317,7 @@ impl<S: Storage> Node<S> {
                 }
 
                 log.stabilize_to(req.leader_commit);
-                let index = log.latest_index();
+                let index = log.last_index();
                 Some(Response::AppendEntries(AppendEntriesRes {
                     current_term,
                     success: has_entry,
@@ -341,7 +341,7 @@ impl<S: Storage> Node<S> {
                         let log = node.log.lock().await;
                         let inner = node.inner.lock().await;
 
-                        let latest_index = log.latest_index();
+                        let latest_index = log.last_index();
                         let stable_index = log.stable_index();
                         let complete = {
                             let mut byte_len = 0;
