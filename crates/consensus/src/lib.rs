@@ -25,7 +25,7 @@ use private::Inner;
 
 #[derive(Debug)]
 pub struct Node<S: Storage> {
-    inner: Mutex<Inner>,
+    inner: Arc<Mutex<Inner>>,
     log: Arc<Mutex<Log<S>>>,
     config: Config,
 }
@@ -34,7 +34,7 @@ impl<S: Storage> Node<S> {
     pub fn new(config: Config, storage: S) -> Self {
         config.validate().unwrap();
         Self {
-            inner: Mutex::new(Inner::new(config.clone())),
+            inner: Arc::new(Mutex::new(Inner::new(config.clone()))),
             log: Arc::new(Mutex::new(Log::new(storage))),
             config,
         }
@@ -323,45 +323,73 @@ impl<S: Storage> Node<S> {
                 // TODO
                 // (1) If peer node's index term is less than our index's term then we need to find
                 // the first index of the node's index term in our log.
-                // (2) Need to implement proper response batching.
 
-                let mut entries = vec![];
-                let mut byte_len = 0;
-                for i in req.last_index..=log.latest_index() {
-                    let entry = if i <= log.stable_index() {
-                        let data = log.storage().retrieve_stable_entry(i).unwrap();
-                        Entry {
-                            index: i,
-                            term: inner.term(),
-                            data,
+                let inner_locked = Arc::clone(&self.inner);
+                let log_locked = Arc::clone(&self.log);
+                tokio::spawn(async move {
+                    let mut entries = vec![];
+                    let mut last_index = req.last_index;
+                    loop {
+                        entries.clear();
+
+                        // We lock inside the loop to allow other systems to continue operating
+                        // during the sync process with a peer.
+                        let log = log_locked.lock().await;
+                        let inner = inner_locked.lock().await;
+
+                        let latest_index = log.latest_index();
+                        let stable_index = log.stable_index();
+                        let complete = {
+                            let mut byte_len = 0;
+                            while last_index < latest_index {
+                                last_index += 1;
+                                let entry = if last_index <= stable_index {
+                                    let storage = log.storage();
+                                    let data = storage.retrieve_stable_entry(last_index).unwrap();
+                                    Entry {
+                                        index: last_index,
+                                        term: inner.term(),
+                                        data,
+                                    }
+                                } else {
+                                    log.find_entry(last_index).cloned().unwrap()
+                                };
+                                byte_len += entry.data.len();
+                                entries.push(entry);
+                                if byte_len > 1024 * 1024 * 10 {
+                                    break;
+                                }
+                            }
+                            entries.is_empty()
+                        };
+
+                        let peer = inner.peers.get(&peer_id).unwrap();
+                        match peer.get_sender() {
+                            Some(mut sender) => {
+                                let res = Response::LogSync(LogSyncRes {
+                                    leader_commit: stable_index,
+                                    complete,
+                                    entries: entries.clone(),
+                                });
+                                if sender
+                                    .send(Msg {
+                                        id: msg_id,
+                                        data: MsgKind::Response(res),
+                                    })
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            None => break,
                         }
-                    } else {
-                        log.find_entry(i).cloned().unwrap()
-                    };
-                    byte_len += entry.data.len();
-                    entries.push(entry);
-                    if byte_len > 1024 * 1024 {
-                        break;
-                    }
-                }
 
-                let peer = inner.peers.get(&inner.leader()).unwrap();
-                if let Some(mut sender) = peer.get_sender() {
-                    let leader_commit = log.stable_index();
-                    tokio::spawn(async move {
-                        let res = Response::LogSync(LogSyncRes {
-                            leader_commit,
-                            complete: true,
-                            entries,
-                        });
-                        let _ = sender
-                            .send(Msg {
-                                id: msg_id,
-                                data: MsgKind::Response(res),
-                            })
-                            .await;
-                    });
-                }
+                        if complete {
+                            break;
+                        }
+                    }
+                });
 
                 None
             }

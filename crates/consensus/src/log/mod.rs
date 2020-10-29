@@ -1,3 +1,7 @@
+pub mod storage;
+
+pub use storage::*;
+
 use crate::net::Serializable;
 use bytes::{BufMut, Bytes, BytesMut};
 use godcoin::serializer::BufRead;
@@ -5,10 +9,6 @@ use std::{
     io::{self, Cursor, Read},
     mem,
 };
-
-pub mod storage;
-
-pub use storage::*;
 
 #[derive(Debug)]
 pub struct Log<S: Storage> {
@@ -26,8 +26,8 @@ impl<S: Storage> Log<S> {
         }
     }
 
-    pub fn storage(&mut self) -> &mut S {
-        &mut self.storage
+    pub fn storage(&self) -> &S {
+        &self.storage
     }
 
     pub fn latest_term(&self) -> u64 {
