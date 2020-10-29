@@ -11,10 +11,12 @@ use config::Config;
 use futures::{channel::mpsc, prelude::*};
 use log::{Entry, Log, Storage};
 use net::*;
-use parking_lot::Mutex;
 use peer::*;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    sync::Mutex,
+};
 use tokio_util::codec::Framed;
 use tracing::{info, info_span, trace, warn};
 use tracing_futures::Instrument;
@@ -25,31 +27,33 @@ use private::Inner;
 pub struct Node<S: Storage> {
     inner: Mutex<Inner>,
     log: Arc<Mutex<Log<S>>>,
+    config: Config,
 }
 
 impl<S: Storage> Node<S> {
     pub fn new(config: Config, storage: S) -> Self {
         config.validate().unwrap();
         Self {
-            inner: Mutex::new(Inner::new(config)),
+            inner: Mutex::new(Inner::new(config.clone())),
             log: Arc::new(Mutex::new(Log::new(storage))),
+            config,
         }
     }
 
-    pub fn config(&self) -> Config {
-        self.inner.lock().config.clone()
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 
-    pub fn add_peer(&self, id: u32, addr: SocketAddr) {
-        let inner = &mut self.inner.lock();
-        assert_ne!(inner.config.id, id, "cannot add self as a peer");
+    pub async fn add_peer(&self, id: u32, addr: SocketAddr) {
+        let inner = &mut self.inner.lock().await;
+        assert_ne!(self.config.id, id, "cannot add self as a peer");
         if inner.peers.insert(id, Peer::new(addr)).is_some() {
             panic!("Peer id {} already registered", id);
         }
     }
 
-    pub fn collect_peer_info(&self) -> HashMap<u32, PeerInfo> {
-        let inner = self.inner.lock();
+    pub async fn collect_peer_info(&self) -> HashMap<u32, PeerInfo> {
+        let inner = self.inner.lock().await;
         let mut map = HashMap::with_capacity(inner.peers.len());
         for (id, peer) in inner.peers.iter() {
             map.insert(*id, peer.collect_info());
@@ -57,8 +61,8 @@ impl<S: Storage> Node<S> {
         map
     }
 
-    pub fn leader(&self) -> u32 {
-        self.inner.lock().leader()
+    pub async fn leader(&self) -> u32 {
+        self.inner.lock().await.leader()
     }
 
     pub async fn listen_forever(self: Arc<Self>, mut listener: TcpListener) {
@@ -75,9 +79,9 @@ impl<S: Storage> Node<S> {
 
     /// Returns `Some` when not a leader and entries could not be appended, otherwise returns `None`
     /// on success.
-    pub fn append_entries(&self, mut entries: Vec<Bytes>) -> Option<Vec<Bytes>> {
-        let mut inner = self.inner.lock();
-        let mut log = self.log.lock();
+    pub async fn append_entries(&self, mut entries: Vec<Bytes>) -> Option<Vec<Bytes>> {
+        let mut inner = self.inner.lock().await;
+        let mut log = self.log.lock().await;
         if !inner.is_leader() {
             return Some(entries);
         }
@@ -100,8 +104,8 @@ impl<S: Storage> Node<S> {
         None
     }
 
-    pub fn tick(self: &Arc<Self>) {
-        let mut inner = self.inner.lock();
+    pub async fn tick(self: &Arc<Self>) {
+        let mut inner = self.inner.lock().await;
         for peer in inner.peers.values_mut() {
             if !peer.is_connected() && peer.tick_connection() {
                 let peer_addr = peer.address();
@@ -115,7 +119,7 @@ impl<S: Storage> Node<S> {
             }
         }
 
-        let log = self.log.lock();
+        let log = self.log.lock().await;
         if inner.tick_election() {
             // Election timeout has expired, start a new election
             let term = inner.term() + 1;
@@ -145,7 +149,7 @@ impl<S: Storage> Node<S> {
 
     pub async fn init_peer_connection(self: &Arc<Self>, stream: TcpStream) {
         let server_hs = {
-            let inner = self.inner.lock();
+            let inner = self.inner.lock().await;
             Handshake {
                 peer_id: inner.config.id,
             }
@@ -159,7 +163,7 @@ impl<S: Storage> Node<S> {
         };
 
         // This lock must never pass an await point
-        let peers = &mut self.inner.lock().peers;
+        let peers = &mut self.inner.lock().await.peers;
         let span = info_span!("peer", id = client_hs.peer_id, addr = ?peer_addr);
         match peers.get_mut(&client_hs.peer_id) {
             Some(peer) => {
@@ -195,7 +199,7 @@ impl<S: Storage> Node<S> {
                         // Tick the connection to signify the connection has been dropped. The
                         // result doesn't matter as we wouldn't want to perform an immediate
                         // reconnection.
-                        let mut inner = node.inner.lock();
+                        let mut inner = node.inner.lock().await;
                         let peer = inner.peers.get_mut(&peer_id).unwrap();
                         peer.tick_connection();
                     };
@@ -230,7 +234,7 @@ impl<S: Storage> Node<S> {
                     break;
                 }
                 MsgKind::Request(req) => {
-                    if let Some(res) = self.process_peer_req(peer_id, msg.id, req) {
+                    if let Some(res) = self.process_peer_req(peer_id, msg.id, req).await {
                         let _ = tx
                             .send(Msg {
                                 id: msg.id,
@@ -239,14 +243,14 @@ impl<S: Storage> Node<S> {
                             .await;
                     }
                 }
-                MsgKind::Response(res) => self.process_peer_res(peer_id, res),
+                MsgKind::Response(res) => self.process_peer_res(peer_id, res).await,
             }
         }
     }
 
-    fn process_peer_req(&self, peer_id: u32, msg_id: u64, req: Request) -> Option<Response> {
-        let mut inner = self.inner.lock();
-        let mut log = self.log.lock();
+    async fn process_peer_req(&self, peer_id: u32, msg_id: u64, req: Request) -> Option<Response> {
+        let mut inner = self.inner.lock().await;
+        let mut log = self.log.lock().await;
         match req {
             Request::RequestVote(req) => {
                 let log_is_latest = log.is_up_to_date(req.last_index, req.last_term);
@@ -364,9 +368,9 @@ impl<S: Storage> Node<S> {
         }
     }
 
-    fn process_peer_res(&self, peer_id: u32, res: Response) {
-        let mut inner = self.inner.lock();
-        let mut log = self.log.lock();
+    async fn process_peer_res(&self, peer_id: u32, res: Response) {
+        let mut inner = self.inner.lock().await;
+        let mut log = self.log.lock().await;
         match res {
             Response::RequestVote(res) => {
                 inner.maybe_update_term(res.current_term);
@@ -611,7 +615,7 @@ mod tests {
     use super::*;
     use crate::log::MemStorage;
     use std::time::Duration;
-    use tokio::time::delay_for;
+    use tokio::{stream::iter, time::delay_for};
 
     #[tokio::test]
     async fn peer_connected() {
@@ -619,14 +623,14 @@ mod tests {
         let (node_1, addr_1) = setup_node(1).await;
         let (node_2, addr_2) = setup_node(2).await;
 
-        node_1.add_peer(node_2.config().id, addr_2);
-        node_2.add_peer(node_1.config().id, addr_1);
+        node_1.add_peer(node_2.config().id, addr_2).await;
+        node_2.add_peer(node_1.config().id, addr_1).await;
 
         let conn = TcpStream::connect(addr_2).await.unwrap();
         Arc::clone(&node_1).init_peer_connection(conn).await;
 
-        assert!(node_1.collect_peer_info().get(&2).unwrap().connected);
-        assert!(node_2.collect_peer_info().get(&1).unwrap().connected);
+        assert!(node_1.collect_peer_info().await.get(&2).unwrap().connected);
+        assert!(node_2.collect_peer_info().await.get(&1).unwrap().connected);
     }
 
     #[tokio::test]
@@ -635,31 +639,36 @@ mod tests {
         let cluster = setup_cluster(3).await;
 
         // Limit iterations to negotiate a leader before failing
-        'outer: for _ in 0..50 {
+        'outer: for _ in 0..50u8 {
             for node in &cluster {
-                node.tick();
+                node.tick().await;
                 delay_for(Duration::from_millis(1)).await;
-                let inner = node.inner.lock();
+                let inner = node.inner.lock().await;
                 if inner.is_leader() {
                     break 'outer;
                 }
             }
         }
 
-        let (leader_cnt, leader_id) = cluster.iter().fold((0, 0), |mut cnt, node| {
-            if node.inner.lock().is_leader() {
-                cnt.0 += 1;
-                cnt.1 = node.inner.lock().config.id;
-            }
-            cnt
-        });
+        let (leader_cnt, leader_id) = iter(&cluster)
+            .fold((0u32, 0u32), |mut cnt, node| async move {
+                let inner = node.inner.lock().await;
+                if inner.is_leader() {
+                    cnt.0 += 1;
+                    cnt.1 = inner.config.id;
+                }
+                cnt
+            })
+            .await;
 
-        let candidate_cnt = cluster.iter().fold(0, |mut cnt, node| {
-            if node.inner.lock().is_candidate() {
-                cnt += 1;
-            }
-            cnt
-        });
+        let candidate_cnt = iter(&cluster)
+            .fold(0u8, |mut cnt, node| async move {
+                if node.inner.lock().await.is_candidate() {
+                    cnt += 1;
+                }
+                cnt
+            })
+            .await;
 
         assert_eq!(
             candidate_cnt, 0,
@@ -668,7 +677,7 @@ mod tests {
         assert_eq!(leader_cnt, 1, "failed to properly negotiate a leader");
 
         for node in &cluster {
-            assert_eq!(node.leader(), leader_id);
+            assert_eq!(node.leader().await, leader_id);
         }
     }
 
@@ -692,7 +701,7 @@ mod tests {
                 if id == peer_id {
                     continue;
                 }
-                node.add_peer(peer_id, *peer_addr);
+                node.add_peer(peer_id, *peer_addr).await;
                 let conn = TcpStream::connect(peer_addr).await.unwrap();
                 node.init_peer_connection(conn).await;
             }
@@ -700,7 +709,7 @@ mod tests {
 
         // Assert connections
         for node in &nodes {
-            let peer_info = node.collect_peer_info();
+            let peer_info = node.collect_peer_info().await;
             assert_eq!(peer_info.len(), count as usize - 1);
             for peer in peer_info.values() {
                 assert!(peer.connected);

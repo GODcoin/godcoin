@@ -526,7 +526,6 @@ dependencies = [
  "bytes",
  "futures",
  "godcoin",
- "parking_lot",
  "rand",
  "tokio",
  "tokio-util",
