@@ -25,8 +25,8 @@ use private::Inner;
 
 #[derive(Debug)]
 pub struct Node<S: Storage> {
-    inner: Arc<Mutex<Inner>>,
-    log: Arc<Mutex<Log<S>>>,
+    inner: Mutex<Inner>,
+    log: Mutex<Log<S>>,
     config: Config,
 }
 
@@ -34,8 +34,8 @@ impl<S: Storage> Node<S> {
     pub fn new(config: Config, storage: S) -> Self {
         config.validate().unwrap();
         Self {
-            inner: Arc::new(Mutex::new(Inner::new(config.clone()))),
-            log: Arc::new(Mutex::new(Log::new(storage))),
+            inner: Mutex::new(Inner::new(config.clone())),
+            log: Mutex::new(Log::new(storage)),
             config,
         }
     }
@@ -248,7 +248,12 @@ impl<S: Storage> Node<S> {
         }
     }
 
-    async fn process_peer_req(&self, peer_id: u32, msg_id: u64, req: Request) -> Option<Response> {
+    async fn process_peer_req(
+        self: &Arc<Self>,
+        peer_id: u32,
+        msg_id: u64,
+        req: Request,
+    ) -> Option<Response> {
         let mut inner = self.inner.lock().await;
         let mut log = self.log.lock().await;
         match req {
@@ -324,8 +329,7 @@ impl<S: Storage> Node<S> {
                 // (1) If peer node's index term is less than our index's term then we need to find
                 // the first index of the node's index term in our log.
 
-                let inner_locked = Arc::clone(&self.inner);
-                let log_locked = Arc::clone(&self.log);
+                let node = Arc::clone(self);
                 tokio::spawn(async move {
                     let mut entries = vec![];
                     let mut last_index = req.last_index;
@@ -334,8 +338,8 @@ impl<S: Storage> Node<S> {
 
                         // We lock inside the loop to allow other systems to continue operating
                         // during the sync process with a peer.
-                        let log = log_locked.lock().await;
-                        let inner = inner_locked.lock().await;
+                        let log = node.log.lock().await;
+                        let inner = node.inner.lock().await;
 
                         let latest_index = log.latest_index();
                         let stable_index = log.stable_index();
