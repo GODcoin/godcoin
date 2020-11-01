@@ -23,6 +23,8 @@ use tracing_futures::Instrument;
 
 use private::Inner;
 
+pub type NodeId = u32;
+
 #[derive(Debug)]
 pub struct Node<S: Storage> {
     inner: Mutex<Inner>,
@@ -44,7 +46,7 @@ impl<S: Storage> Node<S> {
         &self.config
     }
 
-    pub async fn add_peer(&self, id: u32, addr: SocketAddr) {
+    pub async fn add_peer(&self, id: NodeId, addr: SocketAddr) {
         let inner = &mut self.inner.lock().await;
         assert_ne!(self.config.id, id, "cannot add self as a peer");
         if inner.peers.insert(id, Peer::new(addr)).is_some() {
@@ -52,7 +54,7 @@ impl<S: Storage> Node<S> {
         }
     }
 
-    pub async fn collect_peer_info(&self) -> HashMap<u32, PeerInfo> {
+    pub async fn collect_peer_info(&self) -> HashMap<NodeId, PeerInfo> {
         let inner = self.inner.lock().await;
         let mut map = HashMap::with_capacity(inner.peers.len());
         for (id, peer) in inner.peers.iter() {
@@ -61,7 +63,7 @@ impl<S: Storage> Node<S> {
         map
     }
 
-    pub async fn leader(&self) -> u32 {
+    pub async fn leader(&self) -> NodeId {
         self.inner.lock().await.leader()
     }
 
@@ -215,7 +217,7 @@ impl<S: Storage> Node<S> {
 
     async fn handle_incoming_peer_msgs(
         self: &Arc<Self>,
-        peer_id: u32,
+        peer_id: NodeId,
         mut tx: ActiveConnSink,
         mut rx: ActiveConnStream,
     ) {
@@ -250,7 +252,7 @@ impl<S: Storage> Node<S> {
 
     async fn process_peer_req(
         self: &Arc<Self>,
-        peer_id: u32,
+        peer_id: NodeId,
         msg_id: u64,
         req: Request,
     ) -> Option<Response> {
@@ -390,7 +392,7 @@ impl<S: Storage> Node<S> {
         }
     }
 
-    async fn process_peer_res(&self, peer_id: u32, res: Response) {
+    async fn process_peer_res(&self, peer_id: NodeId, res: Response) {
         let mut inner = self.inner.lock().await;
         let mut log = self.log.lock().await;
         match res {
@@ -431,14 +433,14 @@ mod private {
     #[derive(Debug)]
     pub struct Inner {
         pub config: Config,
-        pub peers: HashMap<u32, Peer>,
+        pub peers: HashMap<NodeId, Peer>,
         pub log_last_term: u64,
         pub log_last_index: u64,
         pub is_syncing: bool,
         outbound_entries: Vec<Entry>,
         term: u64,
-        leader_id: u32,
-        candidate_id: u32,
+        leader_id: NodeId,
+        candidate_id: NodeId,
         election_delta: u32,
         election_timeout: u32,
         received_votes: u32,
@@ -542,7 +544,7 @@ mod private {
             self.leader_id == self.config.id
         }
 
-        pub fn leader(&self) -> u32 {
+        pub fn leader(&self) -> NodeId {
             self.leader_id
         }
 
@@ -558,16 +560,16 @@ mod private {
             self.election_delta = 0;
         }
 
-        pub fn vote(&mut self, candidate_id: u32) {
+        pub fn vote(&mut self, candidate_id: NodeId) {
             assert_eq!(self.candidate_id, 0, "already voted");
             self.candidate_id = candidate_id;
         }
 
-        pub fn voted_for(&self) -> u32 {
+        pub fn voted_for(&self) -> NodeId {
             self.candidate_id
         }
 
-        pub fn assign_leader(&mut self, id: u32) {
+        pub fn assign_leader(&mut self, id: NodeId) {
             self.leader_id = id;
         }
 
@@ -673,7 +675,7 @@ mod tests {
         }
 
         let (leader_cnt, leader_id) = iter(&cluster)
-            .fold((0u32, 0u32), |mut cnt, node| async move {
+            .fold((0, 0), |mut cnt, node| async move {
                 let inner = node.inner.lock().await;
                 if inner.is_leader() {
                     cnt.0 += 1;
@@ -741,7 +743,7 @@ mod tests {
         nodes
     }
 
-    async fn setup_node(id: u32) -> (Arc<Node<MemStorage>>, SocketAddr) {
+    async fn setup_node(id: NodeId) -> (Arc<Node<MemStorage>>, SocketAddr) {
         let (server, addr) = listen_random().await;
 
         let storage = MemStorage::default();

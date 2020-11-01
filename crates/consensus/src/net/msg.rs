@@ -1,4 +1,5 @@
 use super::{Request, Response, Serializable};
+use crate::NodeId;
 use bytes::{BufMut, BytesMut};
 use godcoin::serializer::BufRead;
 use std::{
@@ -80,7 +81,7 @@ impl Serializable<Self> for MsgKind {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Handshake {
-    pub peer_id: u32,
+    pub peer_id: NodeId,
 }
 
 impl Serializable<Self> for Handshake {

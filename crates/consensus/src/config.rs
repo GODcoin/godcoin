@@ -1,8 +1,9 @@
+use crate::NodeId;
 use rand::Rng;
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub id: u32,
+    pub id: NodeId,
     pub heartbeat_timeout: u32,
     pub min_election_timeout: u32,
     pub max_election_timeout: u32,
@@ -11,7 +12,7 @@ pub struct Config {
 impl Config {
     /// Creates a default configuration with the specified raft ID and the assumption that every
     /// 100ms is a tick.
-    pub fn new(id: u32) -> Self {
+    pub fn new(id: NodeId) -> Self {
         Self {
             id,
             heartbeat_timeout: 2,
