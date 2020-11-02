@@ -617,7 +617,9 @@ mod private {
 
         #[inline]
         fn get_quorum_count(&self) -> usize {
-            (self.peers.len() / 2) + 1
+            // Include ourself in the calculation
+            let nodes = self.peers.len() + 1;
+            (nodes / 2) + 1
         }
 
         fn reset(&mut self, term: u64) {
