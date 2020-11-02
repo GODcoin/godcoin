@@ -257,7 +257,7 @@ impl<S: Storage> Node<S> {
         match req {
             Request::RequestVote(req) => {
                 let log_is_latest = log.is_up_to_date(req.last_index, req.last_term);
-                let approved = log_is_latest && req.term >= inner.term() && inner.voted_for() == 0;
+                let approved = log_is_latest && req.term >= inner.term() && !inner.voted();
                 if req.term > inner.term() || approved {
                     inner.become_follower(req.term);
                 }
@@ -436,7 +436,7 @@ mod private {
         outbound_entries: Vec<Entry>,
         term: u64,
         leader_id: NodeId,
-        candidate_id: NodeId,
+        candidate_id: Option<NodeId>,
         election_delta: u32,
         election_timeout: u32,
         received_votes: u32,
@@ -455,7 +455,7 @@ mod private {
                 outbound_entries: Vec::with_capacity(32),
                 term: 0,
                 leader_id: 0,
-                candidate_id: 0,
+                candidate_id: None,
                 election_delta: 0,
                 election_timeout,
                 received_votes: 0,
@@ -533,7 +533,7 @@ mod private {
         }
 
         pub fn is_candidate(&self) -> bool {
-            self.candidate_id == self.config.id
+            self.candidate_id == Some(self.config.id)
         }
 
         pub fn is_leader(&self) -> bool {
@@ -557,12 +557,12 @@ mod private {
         }
 
         pub fn vote(&mut self, candidate_id: NodeId) {
-            assert_eq!(self.candidate_id, 0, "already voted");
-            self.candidate_id = candidate_id;
+            assert_eq!(self.candidate_id, None, "already voted");
+            self.candidate_id = Some(candidate_id);
         }
 
-        pub fn voted_for(&self) -> NodeId {
-            self.candidate_id
+        pub fn voted(&self) -> bool {
+            self.candidate_id.is_some()
         }
 
         pub fn assign_leader(&mut self, id: NodeId) {
@@ -622,7 +622,7 @@ mod private {
             assert!(term >= self.term, "term cannot be smaller than ours");
             self.term = term;
             self.leader_id = 0;
-            self.candidate_id = 0;
+            self.candidate_id = None;
             self.election_delta = 0;
             self.election_timeout = self.config.random_election_timeout();
             self.received_votes = 0;
