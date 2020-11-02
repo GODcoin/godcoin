@@ -27,8 +27,7 @@ pub type NodeId = u32;
 
 #[derive(Debug)]
 pub struct Node<S: Storage> {
-    inner: Mutex<Inner>,
-    log: Mutex<Log<S>>,
+    inner: Mutex<Inner<S>>,
     config: Config,
 }
 
@@ -36,8 +35,7 @@ impl<S: Storage> Node<S> {
     pub fn new(config: Config, storage: S) -> Self {
         config.validate().unwrap();
         Self {
-            inner: Mutex::new(Inner::new(config.clone())),
-            log: Mutex::new(Log::new(storage)),
+            inner: Mutex::new(Inner::new(config.clone(), Log::new(storage))),
             config,
         }
     }
@@ -83,11 +81,10 @@ impl<S: Storage> Node<S> {
     /// on success.
     pub async fn append_entries(&self, mut entries: Vec<Bytes>) -> Option<Vec<Bytes>> {
         let mut inner = self.inner.lock().await;
-        let mut log = self.log.lock().await;
         if !inner.is_leader() {
             return Some(entries);
         }
-        let index_start = log.last_index() + 1;
+        let index_start = inner.log.last_index() + 1;
         let term = inner.term();
         let entries = {
             let mut e = Vec::with_capacity(entries.len());
@@ -101,7 +98,7 @@ impl<S: Storage> Node<S> {
             e
         };
 
-        log.try_commit(entries.clone()).unwrap();
+        inner.log.try_commit(entries.clone()).unwrap();
         inner.insert_outbound_entries(entries);
         None
     }
@@ -121,12 +118,11 @@ impl<S: Storage> Node<S> {
             }
         }
 
-        let log = self.log.lock().await;
         if inner.tick_election() {
             // Election timeout has expired, start a new election
             let term = inner.term() + 1;
-            let last_index = log.last_index();
-            let last_term = log.last_term();
+            let last_index = inner.log.last_index();
+            let last_term = inner.log.last_term();
             inner.become_candidate(term);
             inner.broadcast_req(Request::RequestVote(RequestVoteReq {
                 term,
@@ -140,11 +136,11 @@ impl<S: Storage> Node<S> {
                 term: inner.term(),
                 prev_index: inner.log_last_index,
                 prev_term: inner.log_last_term,
-                leader_commit: log.stable_index(),
+                leader_commit: inner.log.stable_index(),
                 entries: inner.take_outbound_entries(),
             };
-            inner.log_last_index = log.last_index();
-            inner.log_last_term = log.last_term();
+            inner.log_last_index = inner.log.last_index();
+            inner.log_last_term = inner.log.last_term();
             inner.broadcast_req(Request::AppendEntries(append_entries));
         }
     }
@@ -253,10 +249,9 @@ impl<S: Storage> Node<S> {
         req: Request,
     ) -> Option<Response> {
         let mut inner = self.inner.lock().await;
-        let mut log = self.log.lock().await;
         match req {
             Request::RequestVote(req) => {
-                let log_is_latest = log.is_up_to_date(req.last_index, req.last_term);
+                let log_is_latest = inner.log.is_up_to_date(req.last_index, req.last_term);
                 let approved = log_is_latest && req.term >= inner.term() && !inner.voted();
                 if req.term > inner.term() || approved {
                     inner.become_follower(req.term);
@@ -287,9 +282,11 @@ impl<S: Storage> Node<S> {
                     inner.become_follower(current_term);
                 }
 
-                let has_entry = log.contains_entry(req.prev_term, req.prev_index);
+                let has_entry = inner.log.contains_entry(req.prev_term, req.prev_index);
                 if has_entry {
-                    log.try_commit(req.entries)
+                    inner
+                        .log
+                        .try_commit(req.entries)
                         .expect("Failed to commit entries");
                     inner.is_syncing = false;
                 } else if !inner.is_syncing {
@@ -298,8 +295,8 @@ impl<S: Storage> Node<S> {
                     if let Some(mut sender) = peer.get_sender() {
                         let id = peer.incr_next_msg_id();
                         inner.is_syncing = true;
-                        let last_index = log.last_index();
-                        let last_term = log.last_term();
+                        let last_index = inner.log.last_index();
+                        let last_term = inner.log.last_term();
                         tokio::spawn(async move {
                             let _ = sender
                                 .send(Msg {
@@ -314,8 +311,8 @@ impl<S: Storage> Node<S> {
                     }
                 }
 
-                log.stabilize_to(req.leader_commit);
-                let index = log.last_index();
+                inner.log.stabilize_to(req.leader_commit);
+                let index = inner.log.last_index();
                 Some(Response::AppendEntries(AppendEntriesRes {
                     current_term,
                     success: has_entry,
@@ -336,16 +333,15 @@ impl<S: Storage> Node<S> {
 
                         // We lock inside the loop to allow other systems to continue operating
                         // during the sync process with a peer.
-                        let log = node.log.lock().await;
                         let inner = node.inner.lock().await;
 
-                        let latest_index = log.last_index();
-                        let stable_index = log.stable_index();
+                        let latest_index = inner.log.last_index();
+                        let stable_index = inner.log.stable_index();
                         let complete = {
                             let mut byte_len = 0;
                             while last_index < latest_index {
                                 last_index += 1;
-                                let entry = log.get_entry_by_index(last_index).unwrap();
+                                let entry = inner.log.get_entry_by_index(last_index).unwrap();
                                 byte_len += entry.data.len();
                                 entries.push(entry);
                                 if byte_len > 1024 * 1024 * 10 {
@@ -390,7 +386,6 @@ impl<S: Storage> Node<S> {
 
     async fn process_peer_res(&self, peer_id: NodeId, res: Response) {
         let mut inner = self.inner.lock().await;
-        let mut log = self.log.lock().await;
         match res {
             Response::RequestVote(res) => {
                 inner.maybe_update_term(res.current_term);
@@ -405,7 +400,7 @@ impl<S: Storage> Node<S> {
                     peer.set_last_ack_index(res.index);
 
                     let next_commit = inner.next_stable_index();
-                    log.stabilize_to(next_commit);
+                    inner.log.stabilize_to(next_commit);
                 }
             }
             Response::LogSync(res) => {
@@ -416,8 +411,8 @@ impl<S: Storage> Node<S> {
                 if res.complete {
                     inner.is_syncing = false;
                 }
-                log.try_commit(res.entries).unwrap();
-                log.stabilize_to(res.leader_commit);
+                inner.log.try_commit(res.entries).unwrap();
+                inner.log.stabilize_to(res.leader_commit);
             }
         }
     }
@@ -427,12 +422,13 @@ mod private {
     use super::*;
 
     #[derive(Debug)]
-    pub struct Inner {
-        config: Config,
+    pub struct Inner<S: Storage> {
+        pub log: Log<S>,
         pub peers: HashMap<NodeId, Peer>,
         pub log_last_term: u64,
         pub log_last_index: u64,
         pub is_syncing: bool,
+        config: Config,
         outbound_entries: Vec<Entry>,
         term: u64,
         leader_id: NodeId,
@@ -443,15 +439,16 @@ mod private {
         heartbeat_delta: u32,
     }
 
-    impl Inner {
-        pub fn new(config: Config) -> Self {
+    impl<S: Storage> Inner<S> {
+        pub fn new(config: Config, log: Log<S>) -> Self {
             let election_timeout = config.random_election_timeout();
             Self {
-                config,
+                log,
                 peers: Default::default(),
                 log_last_term: 0,
                 log_last_index: 0,
                 is_syncing: false,
+                config,
                 outbound_entries: Vec::with_capacity(32),
                 term: 0,
                 leader_id: 0,
