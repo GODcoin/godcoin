@@ -150,11 +150,8 @@ impl<S: Storage> Node<S> {
     }
 
     pub async fn init_peer_connection(self: &Arc<Self>, stream: TcpStream) {
-        let server_hs = {
-            let inner = self.inner.lock().await;
-            Handshake {
-                peer_id: inner.config.id,
-            }
+        let server_hs = Handshake {
+            peer_id: self.config.id,
         };
 
         let peer_addr = stream.peer_addr().unwrap();
@@ -164,7 +161,6 @@ impl<S: Storage> Node<S> {
             None => return,
         };
 
-        // This lock must never pass an await point
         let peers = &mut self.inner.lock().await.peers;
         let span = info_span!("peer", id = client_hs.peer_id, addr = ?peer_addr);
         match peers.get_mut(&client_hs.peer_id) {
@@ -432,7 +428,7 @@ mod private {
 
     #[derive(Debug)]
     pub struct Inner {
-        pub config: Config,
+        config: Config,
         pub peers: HashMap<NodeId, Peer>,
         pub log_last_term: u64,
         pub log_last_index: u64,
@@ -681,7 +677,7 @@ mod tests {
                 let inner = node.inner.lock().await;
                 if inner.is_leader() {
                     cnt.0 += 1;
-                    cnt.1 = inner.config.id;
+                    cnt.1 = node.config.id;
                 }
                 cnt
             })
