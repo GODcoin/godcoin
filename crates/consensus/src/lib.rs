@@ -278,16 +278,12 @@ impl<S: Storage> Node<S> {
                         success: false,
                         index: 0,
                     }));
+                } else if !inner.is_follower() {
+                    inner.become_follower(req.term);
                 }
 
-                inner.maybe_update_term(req.term);
-                inner.assign_leader(peer_id);
                 inner.received_heartbeat();
-                let current_term = inner.term();
-
-                if !inner.is_follower() {
-                    inner.become_follower(current_term);
-                }
+                inner.assign_leader(peer_id);
 
                 let has_entry = inner.log.contains_entry(req.prev_term, req.prev_index);
                 if has_entry {
@@ -321,7 +317,7 @@ impl<S: Storage> Node<S> {
                 inner.log.stabilize_to(req.leader_commit);
                 let index = inner.log.last_index();
                 Some(Response::AppendEntries(AppendEntriesRes {
-                    current_term,
+                    current_term: inner.term(),
                     success: has_entry,
                     index,
                 }))
