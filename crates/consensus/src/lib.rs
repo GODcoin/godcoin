@@ -118,7 +118,7 @@ impl<S: Storage> Node<S> {
             }
         }
 
-        if inner.tick_election() {
+        if !inner.is_leader() && inner.tick_election() {
             // Election timeout has expired, start a new election
             let term = inner.term() + 1;
             let last_index = inner.log.last_index();
@@ -131,7 +131,7 @@ impl<S: Storage> Node<S> {
             }));
         }
 
-        if inner.tick_heartbeat() {
+        if inner.is_leader() && inner.tick_heartbeat() {
             let append_entries = AppendEntriesReq {
                 term: inner.term(),
                 prev_index: inner.log_last_index,
@@ -255,7 +255,7 @@ impl<S: Storage> Node<S> {
                     let log_is_latest = inner.log.is_up_to_date(req.last_index, req.last_term);
                     let can_vote = match inner.voted_for() {
                         Some(current_candid) => current_candid == peer_id,
-                        None => true
+                        None => true,
                     };
                     log_is_latest && req.term >= inner.term() && can_vote
                 };
@@ -492,19 +492,15 @@ mod private {
         }
 
         pub fn tick_election(&mut self) -> bool {
+            debug_assert!(!self.is_leader());
             self.election_delta += 1;
-            self.election_delta > self.election_timeout
+            self.election_delta >= self.election_timeout
         }
 
         pub fn tick_heartbeat(&mut self) -> bool {
-            if self.is_candidate() && self.check_quorum(self.received_votes) {
-                self.become_leader();
-                return true;
-            } else if !self.is_leader() {
-                return false;
-            }
+            debug_assert!(self.is_leader());
             self.heartbeat_delta += 1;
-            if self.heartbeat_delta > self.config.heartbeat_timeout {
+            if self.heartbeat_delta >= self.config.heartbeat_timeout {
                 self.heartbeat_delta = 0;
                 true
             } else {
@@ -526,6 +522,16 @@ mod private {
         pub fn become_leader(&mut self) {
             self.reset(self.term);
             self.leader_id = self.config.id;
+            self.log_last_index = self.log.last_index();
+            self.log_last_term = self.log.last_term();
+            let append_entries = AppendEntriesReq {
+                term: self.term,
+                prev_index: self.log_last_index,
+                prev_term: self.log_last_term,
+                leader_commit: self.log.stable_index(),
+                entries: vec![],
+            };
+            self.broadcast_req(Request::AppendEntries(append_entries));
         }
 
         pub fn is_follower(&self) -> bool {
@@ -549,7 +555,14 @@ mod private {
         }
 
         pub fn received_vote(&mut self) {
+            assert!(
+                self.is_candidate(),
+                "cannot receive vote when not a candidate"
+            );
             self.received_votes += 1;
+            if self.check_quorum(self.received_votes) {
+                self.become_leader();
+            }
         }
 
         pub fn received_heartbeat(&mut self) {
