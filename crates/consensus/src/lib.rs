@@ -323,14 +323,23 @@ impl<S: Storage> Node<S> {
                 }))
             }
             Request::LogSync(req) => {
-                // TODO
-                // (1) If peer node's index term is less than our index's term then we need to find
-                // the first index of the node's index term in our log.
-
+                let mut sender = {
+                    let peer = inner.peers.get(&peer_id).unwrap();
+                    match peer.get_sender() {
+                        Some(sender) => sender,
+                        None => return None,
+                    }
+                };
                 let node = Arc::clone(self);
                 tokio::spawn(async move {
                     let mut entries = vec![];
-                    let mut last_index = req.last_index;
+                    let mut sync_index = {
+                        let inner = node.inner.lock().await;
+                        // Start syncing at the start of our unstable log or the peer's last known
+                        // stable index that they currently do not have. This is to ensure the log
+                        // is an exact replica of the leader.
+                        u64::min(req.last_index + 1, inner.log.stable_index() + 1)
+                    };
                     loop {
                         entries.clear();
 
@@ -338,42 +347,32 @@ impl<S: Storage> Node<S> {
                         // during the sync process with a peer.
                         let inner = node.inner.lock().await;
 
-                        let latest_index = inner.log.last_index();
-                        let stable_index = inner.log.stable_index();
-                        let complete = {
+                        {
+                            let latest_index = inner.log.last_index();
                             let mut byte_len = 0;
-                            while last_index < latest_index {
-                                last_index += 1;
-                                let entry = inner.log.get_entry_by_index(last_index).unwrap();
+                            while sync_index <= latest_index {
+                                let entry = inner.log.get_entry_by_index(sync_index).unwrap();
                                 byte_len += entry.data.len();
                                 entries.push(entry);
-                                if byte_len > 1024 * 1024 * 10 {
+                                if byte_len > 1024 * 1024 * 2 {
                                     break;
                                 }
+                                sync_index += 1;
                             }
-                            entries.is_empty()
-                        };
+                        }
+                        let complete = entries.is_empty();
 
-                        let peer = inner.peers.get(&peer_id).unwrap();
-                        match peer.get_sender() {
-                            Some(mut sender) => {
-                                let res = Response::LogSync(LogSyncRes {
-                                    leader_commit: stable_index,
-                                    complete,
-                                    entries: entries.clone(),
-                                });
-                                if sender
-                                    .send(Msg {
-                                        id: msg_id,
-                                        data: MsgKind::Response(res),
-                                    })
-                                    .await
-                                    .is_err()
-                                {
-                                    break;
-                                }
-                            }
-                            None => break,
+                        let res = Response::LogSync(LogSyncRes {
+                            leader_commit: inner.log.stable_index(),
+                            complete,
+                            entries: entries.clone(),
+                        });
+                        let msg = Msg {
+                            id: msg_id,
+                            data: MsgKind::Response(res),
+                        };
+                        if sender.send(msg).await.is_err() {
+                            break;
                         }
 
                         if complete {
@@ -408,7 +407,7 @@ impl<S: Storage> Node<S> {
             }
             Response::LogSync(res) => {
                 if !inner.is_syncing {
-                    warn!("Received erroneous sync request from {}", peer_id);
+                    warn!("Received erroneous sync response from {}", peer_id);
                     return;
                 }
                 if res.complete {
