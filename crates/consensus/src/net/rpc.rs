@@ -5,6 +5,7 @@ use std::io::{self, Cursor};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Request {
+    PreVote(PreVoteReq),
     RequestVote(RequestVoteReq),
     AppendEntries(AppendEntriesReq),
     LogSync(LogSyncReq),
@@ -13,14 +14,19 @@ pub enum Request {
 impl Serializable<Self> for Request {
     fn serialize(&self, dst: &mut BytesMut) {
         match self {
-            Self::RequestVote(req) => {
+            Self::PreVote(req) => {
                 dst.put_u8(0x01);
+                dst.put_u64(req.last_index);
+                dst.put_u64(req.last_term);
+            }
+            Self::RequestVote(req) => {
+                dst.put_u8(0x02);
                 dst.put_u64(req.term);
                 dst.put_u64(req.last_index);
                 dst.put_u64(req.last_term);
             }
             Self::AppendEntries(req) => {
-                dst.put_u8(0x02);
+                dst.put_u8(0x03);
                 dst.put_u64(req.term);
                 dst.put_u64(req.prev_index);
                 dst.put_u64(req.prev_term);
@@ -31,7 +37,7 @@ impl Serializable<Self> for Request {
                 }
             }
             Self::LogSync(req) => {
-                dst.put_u8(0x03);
+                dst.put_u8(0x04);
                 dst.put_u64(req.last_index);
                 dst.put_u64(req.last_term);
             }
@@ -40,6 +46,7 @@ impl Serializable<Self> for Request {
 
     fn byte_size(&self) -> usize {
         let size = match self {
+            Self::PreVote(_) => 16,
             Self::RequestVote(_) => 24,
             Self::AppendEntries(req) => {
                 let entry_len = req.entries.iter().fold(0, |mut acc, entry| {
@@ -58,6 +65,14 @@ impl Serializable<Self> for Request {
         let tag = src.take_u8()?;
         match tag {
             0x01 => {
+                let last_index = src.take_u64()?;
+                let last_term = src.take_u64()?;
+                Ok(Self::PreVote(PreVoteReq {
+                    last_index,
+                    last_term,
+                }))
+            }
+            0x02 => {
                 let term = src.take_u64()?;
                 let last_index = src.take_u64()?;
                 let last_term = src.take_u64()?;
@@ -67,7 +82,7 @@ impl Serializable<Self> for Request {
                     last_term,
                 }))
             }
-            0x02 => {
+            0x03 => {
                 let term = src.take_u64()?;
                 let prev_index = src.take_u64()?;
                 let prev_term = src.take_u64()?;
@@ -88,7 +103,7 @@ impl Serializable<Self> for Request {
                     entries,
                 }))
             }
-            0x03 => {
+            0x04 => {
                 let last_index = src.take_u64()?;
                 let last_term = src.take_u64()?;
                 Ok(Self::LogSync(LogSyncReq {
@@ -102,6 +117,12 @@ impl Serializable<Self> for Request {
             )),
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PreVoteReq {
+    pub last_index: u64,
+    pub last_term: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -134,6 +155,7 @@ pub struct LogSyncReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Response {
+    PreVote(PreVoteRes),
     RequestVote(RequestVoteRes),
     AppendEntries(AppendEntriesRes),
     LogSync(LogSyncRes),
@@ -142,19 +164,23 @@ pub enum Response {
 impl Serializable<Self> for Response {
     fn serialize(&self, dst: &mut BytesMut) {
         match self {
-            Self::RequestVote(res) => {
+            Self::PreVote(res) => {
                 dst.put_u8(0x01);
+                dst.put_u8(res.approved.into());
+            }
+            Self::RequestVote(res) => {
+                dst.put_u8(0x02);
                 dst.put_u64(res.current_term);
                 dst.put_u8(res.approved.into());
             }
             Self::AppendEntries(res) => {
-                dst.put_u8(0x02);
+                dst.put_u8(0x03);
                 dst.put_u64(res.current_term);
                 dst.put_u8(res.success.into());
                 dst.put_u64(res.index);
             }
             Self::LogSync(res) => {
-                dst.put_u8(0x03);
+                dst.put_u8(0x04);
                 dst.put_u64(res.leader_commit);
                 dst.put_u8(res.complete.into());
                 dst.put_u64(res.entries.len() as u64);
@@ -167,6 +193,7 @@ impl Serializable<Self> for Response {
 
     fn byte_size(&self) -> usize {
         let size = match self {
+            Self::PreVote(_) => 1,
             Self::RequestVote(_) => 9,
             Self::AppendEntries(_) => 17,
             Self::LogSync(res) => {
@@ -185,6 +212,10 @@ impl Serializable<Self> for Response {
         let tag = src.take_u8()?;
         match tag {
             0x01 => {
+                let approved = src.take_u8()? != 0;
+                Ok(Self::PreVote(PreVoteRes { approved }))
+            }
+            0x02 => {
                 let current_term = src.take_u64()?;
                 let approved = src.take_u8()? != 0;
                 Ok(Self::RequestVote(RequestVoteRes {
@@ -192,7 +223,7 @@ impl Serializable<Self> for Response {
                     approved,
                 }))
             }
-            0x02 => {
+            0x03 => {
                 let current_term = src.take_u64()?;
                 let success = src.take_u8()? != 0;
                 let index = src.take_u64()?;
@@ -202,7 +233,7 @@ impl Serializable<Self> for Response {
                     index,
                 }))
             }
-            0x03 => {
+            0x04 => {
                 let leader_commit = src.take_u64()?;
                 let complete = src.take_u8()? != 0;
                 let entries = {
@@ -225,6 +256,11 @@ impl Serializable<Self> for Response {
             )),
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PreVoteRes {
+    pub approved: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -259,6 +295,14 @@ pub struct LogSyncRes {
 mod tests {
     use super::*;
     use bytes::Bytes;
+
+    #[test]
+    fn serialize_prevote_req() {
+        test_req_serialization(Request::PreVote(PreVoteReq {
+            last_index: 10,
+            last_term: 20,
+        }));
+    }
 
     #[test]
     fn serialize_request_vote_req() {
@@ -305,6 +349,12 @@ mod tests {
             last_index: 1234,
             last_term: 456,
         }));
+    }
+
+    #[test]
+    fn serialize_prevote_res() {
+        test_res_serialization(Response::PreVote(PreVoteRes { approved: true }));
+        test_res_serialization(Response::PreVote(PreVoteRes { approved: false }));
     }
 
     #[test]

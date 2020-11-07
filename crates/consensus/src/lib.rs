@@ -119,13 +119,18 @@ impl<S: Storage> Node<S> {
         }
 
         if !inner.is_leader() && inner.tick_election() {
-            // Election timeout has expired, start a new election
-            let term = inner.term() + 1;
+            if inner.is_candidate() {
+                // Reset back to follower state so that we can try becoming a leader once more
+                let term = inner.term();
+                inner.become_follower(term);
+            }
+
+            // Election timeout has expired, try to start a new election if possible
             let last_index = inner.log.last_index();
             let last_term = inner.log.last_term();
-            inner.become_candidate(term);
-            inner.broadcast_req(Request::RequestVote(RequestVoteReq {
-                term,
+            // Always vote for ourself
+            inner.received_prevote();
+            inner.broadcast_req(Request::PreVote(PreVoteReq {
                 last_index,
                 last_term,
             }));
@@ -250,13 +255,19 @@ impl<S: Storage> Node<S> {
     ) -> Option<Response> {
         let mut inner = self.inner.lock().await;
         match req {
+            Request::PreVote(req) => {
+                let log_is_latest = inner.log.is_up_to_date(req.last_index, req.last_term);
+                let can_vote = inner.can_vote(peer_id);
+                let election_near_timeout =
+                    inner.election_delta() >= self.config.min_election_timeout;
+                Some(Response::PreVote(PreVoteRes {
+                    approved: log_is_latest && can_vote && election_near_timeout,
+                }))
+            }
             Request::RequestVote(req) => {
                 let approved = {
                     let log_is_latest = inner.log.is_up_to_date(req.last_index, req.last_term);
-                    let can_vote = match inner.voted_for() {
-                        Some(current_candid) => current_candid == peer_id,
-                        None => true,
-                    };
+                    let can_vote = inner.can_vote(peer_id);
                     log_is_latest && req.term >= inner.term() && can_vote
                 };
                 if req.term > inner.term() || approved {
@@ -389,6 +400,11 @@ impl<S: Storage> Node<S> {
     async fn process_peer_res(&self, peer_id: NodeId, res: Response) {
         let mut inner = self.inner.lock().await;
         match res {
+            Response::PreVote(res) => {
+                if inner.is_follower() && res.approved {
+                    inner.received_prevote();
+                }
+            }
             Response::RequestVote(res) => {
                 inner.maybe_update_term(res.current_term);
                 if inner.is_candidate() && res.approved {
@@ -437,8 +453,9 @@ mod private {
         candidate_id: Option<NodeId>,
         election_delta: u32,
         election_timeout: u32,
-        received_votes: u32,
         heartbeat_delta: u32,
+        received_votes: u32,
+        received_prevotes: u32,
     }
 
     impl<S: Storage> Inner<S> {
@@ -457,8 +474,9 @@ mod private {
                 candidate_id: None,
                 election_delta: 0,
                 election_timeout,
-                received_votes: 0,
                 heartbeat_delta: 0,
+                received_votes: 0,
+                received_prevotes: 0,
             }
         }
 
@@ -493,7 +511,13 @@ mod private {
         pub fn tick_election(&mut self) -> bool {
             debug_assert!(!self.is_leader());
             self.election_delta += 1;
-            self.election_delta >= self.election_timeout
+            if self.election_delta >= self.election_timeout {
+                self.election_timeout = self.config.random_election_timeout();
+                self.election_delta = 0;
+                true
+            } else {
+                false
+            }
         }
 
         pub fn tick_heartbeat(&mut self) -> bool {
@@ -553,6 +577,25 @@ mod private {
             self.term
         }
 
+        pub fn received_prevote(&mut self) {
+            assert!(
+                self.is_follower(),
+                "cannot receive a prevote when not a follower"
+            );
+            self.received_prevotes += 1;
+            if self.check_quorum(self.received_prevotes) {
+                let term = self.term() + 1;
+                let last_index = self.log.last_index();
+                let last_term = self.log.last_term();
+                self.become_candidate(term);
+                self.broadcast_req(Request::RequestVote(RequestVoteReq {
+                    term,
+                    last_index,
+                    last_term,
+                }));
+            }
+        }
+
         pub fn received_vote(&mut self) {
             assert!(
                 self.is_candidate(),
@@ -568,6 +611,10 @@ mod private {
             self.election_delta = 0;
         }
 
+        pub fn election_delta(&self) -> u32 {
+            self.election_delta
+        }
+
         pub fn vote(&mut self, candidate_id: NodeId) {
             if let Some(current_id) = self.candidate_id {
                 if current_id != candidate_id {
@@ -577,8 +624,11 @@ mod private {
             self.candidate_id = Some(candidate_id);
         }
 
-        pub fn voted_for(&self) -> Option<NodeId> {
-            self.candidate_id
+        pub fn can_vote(&self, id: NodeId) -> bool {
+            match self.candidate_id {
+                Some(current_candid) => current_candid == id,
+                None => true,
+            }
         }
 
         pub fn assign_leader(&mut self, id: NodeId) {
@@ -641,8 +691,9 @@ mod private {
             self.candidate_id = None;
             self.election_delta = 0;
             self.election_timeout = self.config.random_election_timeout();
-            self.received_votes = 0;
             self.heartbeat_delta = 0;
+            self.received_votes = 0;
+            self.received_prevotes = 0;
             self.outbound_entries.clear();
         }
     }
