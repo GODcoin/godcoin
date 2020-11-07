@@ -30,6 +30,10 @@ impl Config {
             return Err("Minimum election timeout cannot be 0");
         }
 
+        if self.min_election_timeout <= self.heartbeat_timeout {
+            return Err("Minimum election timeout must be greater than the heartbeat timeout");
+        }
+
         if self.min_election_timeout >= self.max_election_timeout {
             return Err("Maximum election timeout must be greater than the minimum timeout");
         }
