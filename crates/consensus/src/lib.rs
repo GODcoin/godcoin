@@ -201,6 +201,13 @@ impl<S: Storage> Node<S> {
                         let mut inner = node.inner.lock().await;
                         let peer = inner.peers.get_mut(&peer_id).unwrap();
                         peer.tick_connection();
+
+                        if inner.leader() == peer_id && inner.is_syncing {
+                            warn!("The leader we were syncing from has disconnected");
+                            // The flag must be reset in order to send another sync request when
+                            // another leader becomes available.
+                            inner.is_syncing = false;
+                        }
                     };
                     task.instrument(span)
                 });
