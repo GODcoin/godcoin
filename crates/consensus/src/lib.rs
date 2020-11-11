@@ -129,7 +129,7 @@ impl<S: Storage> Node<S> {
             let last_index = inner.log.last_index();
             let last_term = inner.log.last_term();
             // Always vote for ourself
-            inner.received_prevote();
+            inner.received_prevote(self.config.id);
             inner.broadcast_req(Request::PreVote(PreVoteReq {
                 last_index,
                 last_term,
@@ -409,13 +409,13 @@ impl<S: Storage> Node<S> {
         match res {
             Response::PreVote(res) => {
                 if inner.is_follower() && res.approved {
-                    inner.received_prevote();
+                    inner.received_prevote(peer_id);
                 }
             }
             Response::RequestVote(res) => {
                 inner.maybe_update_term(res.current_term);
                 if inner.is_candidate() && res.approved {
-                    inner.received_vote();
+                    inner.received_vote(peer_id);
                 }
             }
             Response::AppendEntries(res) => {
@@ -445,6 +445,7 @@ impl<S: Storage> Node<S> {
 
 mod private {
     use super::*;
+    use std::collections::HashSet;
 
     #[derive(Debug)]
     pub struct Inner<S: Storage> {
@@ -461,8 +462,8 @@ mod private {
         election_delta: u32,
         election_timeout: u32,
         heartbeat_delta: u32,
-        received_votes: u32,
-        received_prevotes: u32,
+        received_votes: HashSet<NodeId>,
+        received_prevotes: HashSet<NodeId>,
     }
 
     impl<S: Storage> Inner<S> {
@@ -482,8 +483,8 @@ mod private {
                 election_delta: 0,
                 election_timeout,
                 heartbeat_delta: 0,
-                received_votes: 0,
-                received_prevotes: 0,
+                received_votes: Default::default(),
+                received_prevotes: Default::default(),
             }
         }
 
@@ -546,7 +547,7 @@ mod private {
             self.reset(term);
             self.vote(self.config.id);
             // We always vote for ourself when becoming a candidate
-            self.received_vote();
+            self.received_vote(self.config.id);
         }
 
         pub fn become_leader(&mut self) {
@@ -584,13 +585,13 @@ mod private {
             self.term
         }
 
-        pub fn received_prevote(&mut self) {
+        pub fn received_prevote(&mut self, peer_id: NodeId) {
             assert!(
                 self.is_follower(),
                 "cannot receive a prevote when not a follower"
             );
-            self.received_prevotes += 1;
-            if self.check_quorum(self.received_prevotes) {
+            self.received_prevotes.insert(peer_id);
+            if self.check_quorum(self.received_prevotes.len()) {
                 let term = self.term() + 1;
                 let last_index = self.log.last_index();
                 let last_term = self.log.last_term();
@@ -603,13 +604,13 @@ mod private {
             }
         }
 
-        pub fn received_vote(&mut self) {
+        pub fn received_vote(&mut self, peer_id: NodeId) {
             assert!(
                 self.is_candidate(),
                 "cannot receive vote when not a candidate"
             );
-            self.received_votes += 1;
-            if self.check_quorum(self.received_votes) {
+            self.received_votes.insert(peer_id);
+            if self.check_quorum(self.received_votes.len()) {
                 self.become_leader();
             }
         }
@@ -680,8 +681,8 @@ mod private {
         }
 
         #[inline]
-        fn check_quorum(&self, count: u32) -> bool {
-            count as usize > self.get_quorum_count()
+        fn check_quorum(&self, count: usize) -> bool {
+            count > self.get_quorum_count()
         }
 
         #[inline]
@@ -699,8 +700,8 @@ mod private {
             self.election_delta = 0;
             self.election_timeout = self.config.random_election_timeout();
             self.heartbeat_delta = 0;
-            self.received_votes = 0;
-            self.received_prevotes = 0;
+            self.received_votes.clear();
+            self.received_prevotes.clear();
             self.outbound_entries.clear();
         }
     }
