@@ -118,7 +118,7 @@ impl<S: Storage> Node<S> {
             }
         }
 
-        if !inner.is_leader() && inner.tick_election() {
+        if !(inner.is_leader() || inner.is_out_of_sync) && inner.tick_election() {
             if inner.is_candidate() {
                 // Reset back to follower state so that we can try becoming a leader once more
                 let term = inner.term();
@@ -310,7 +310,9 @@ impl<S: Storage> Node<S> {
                         .try_commit(req.entries)
                         .expect("Failed to commit entries");
                     inner.is_syncing = false;
+                    inner.is_out_of_sync = false;
                 } else if !inner.is_syncing {
+                    inner.is_out_of_sync = true;
                     let leader_id = inner.leader();
                     let peer = inner.peers.get_mut(&leader_id).unwrap();
                     if let Some(mut sender) = peer.get_sender() {
@@ -454,6 +456,7 @@ mod private {
         pub log_last_term: u64,
         pub log_last_index: u64,
         pub is_syncing: bool,
+        pub is_out_of_sync: bool,
         config: Config,
         outbound_entries: Vec<Entry>,
         term: u64,
@@ -475,6 +478,7 @@ mod private {
                 log_last_term: 0,
                 log_last_index: 0,
                 is_syncing: false,
+                is_out_of_sync: false,
                 config,
                 outbound_entries: Vec::with_capacity(32),
                 term: 0,
@@ -633,10 +637,11 @@ mod private {
         }
 
         pub fn can_vote(&self, id: NodeId) -> bool {
-            match self.candidate_id {
+            let id_approved = match self.candidate_id {
                 Some(current_candid) => current_candid == id,
                 None => true,
-            }
+            };
+            id_approved && !self.is_out_of_sync
         }
 
         pub fn assign_leader(&mut self, id: NodeId) {
@@ -694,6 +699,8 @@ mod private {
 
         fn reset(&mut self, term: u64) {
             assert!(term >= self.term, "term cannot be smaller than ours");
+            self.is_syncing = false;
+            self.is_out_of_sync = false;
             self.term = term;
             self.leader_id = 0;
             self.candidate_id = None;
