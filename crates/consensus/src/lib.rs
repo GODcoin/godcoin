@@ -309,6 +309,7 @@ impl<S: Storage> Node<S> {
                         .log
                         .try_commit(req.entries)
                         .expect("Failed to commit entries");
+                    inner.log.stabilize_to(req.leader_commit);
                     inner.is_syncing = false;
                     inner.is_out_of_sync = false;
                 } else if !inner.is_syncing {
@@ -334,7 +335,6 @@ impl<S: Storage> Node<S> {
                     }
                 }
 
-                inner.log.stabilize_to(req.leader_commit);
                 let index = inner.log.last_index();
                 Some(Response::AppendEntries(AppendEntriesRes {
                     current_term: inner.term(),
