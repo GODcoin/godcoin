@@ -736,7 +736,7 @@ mod tests {
         let cluster = setup_cluster(3).await;
 
         // Limit iterations to negotiate a leader before failing
-        'outer: for _ in 0..50u8 {
+        'outer: for _ in 0..100u8 {
             for node in &cluster {
                 node.tick().await;
                 delay_for(Duration::from_millis(1)).await;
@@ -773,6 +773,8 @@ mod tests {
         );
         assert_eq!(leader_cnt, 1, "failed to properly negotiate a leader");
 
+        // Delay here to allow network broadcasts to propagate
+        delay_for(Duration::from_millis(50)).await;
         for node in &cluster {
             assert_eq!(node.leader().await, leader_id);
         }
