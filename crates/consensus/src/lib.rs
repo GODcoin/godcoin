@@ -47,7 +47,8 @@ impl<S: Storage> Node<S> {
     pub async fn add_peer(&self, id: NodeId, addr: SocketAddr) {
         let inner = &mut self.inner.lock().await;
         assert_ne!(self.config.id, id, "cannot add self as a peer");
-        if inner.peers.insert(id, Peer::new(addr)).is_some() {
+        let peer = Peer::new(addr, self.config.min_election_timeout);
+        if inner.peers.insert(id, peer).is_some() {
             panic!("Peer id {} already registered", id);
         }
     }
@@ -81,7 +82,7 @@ impl<S: Storage> Node<S> {
     /// on success.
     pub async fn append_entries(&self, mut entries: Vec<Bytes>) -> Option<Vec<Bytes>> {
         let mut inner = self.inner.lock().await;
-        if !inner.is_leader() {
+        if !inner.write_ready() {
             return Some(entries);
         }
         let index_start = inner.log.last_index() + 1;
@@ -136,17 +137,22 @@ impl<S: Storage> Node<S> {
             }));
         }
 
-        if inner.is_leader() && inner.tick_heartbeat() {
-            let append_entries = AppendEntriesReq {
-                term: inner.term(),
-                prev_index: inner.log_last_index,
-                prev_term: inner.log_last_term,
-                leader_commit: inner.log.stable_index(),
-                entries: inner.take_outbound_entries(),
-            };
-            inner.log_last_index = inner.log.last_index();
-            inner.log_last_term = inner.log.last_term();
-            inner.broadcast_req(Request::AppendEntries(append_entries));
+        if inner.is_leader() {
+            for peer in inner.peers.values_mut() {
+                peer.tick_heartbeat_ack();
+            }
+            if inner.tick_heartbeat() {
+                let append_entries = AppendEntriesReq {
+                    term: inner.term(),
+                    prev_index: inner.log_last_index,
+                    prev_term: inner.log_last_term,
+                    leader_commit: inner.log.stable_index(),
+                    entries: inner.take_outbound_entries(),
+                };
+                inner.log_last_index = inner.log.last_index();
+                inner.log_last_term = inner.log.last_term();
+                inner.broadcast_req(Request::AppendEntries(append_entries));
+            }
         }
     }
 
@@ -312,6 +318,9 @@ impl<S: Storage> Node<S> {
                     inner.log.stabilize_to(req.leader_commit);
                     inner.is_syncing = false;
                     inner.is_out_of_sync = false;
+
+                    let peer = inner.peers.get_mut(&peer_id).unwrap();
+                    peer.reset_heartbeat_ack();
                 } else if !inner.is_syncing {
                     inner.is_out_of_sync = true;
                     let leader_id = inner.leader();
@@ -507,6 +516,20 @@ mod private {
                         let _ = tx.send(msg).await;
                     });
                 }
+            }
+        }
+
+        pub fn write_ready(&self) -> bool {
+            if self.is_leader() {
+                let mut active_peers = 1;
+                for peer in self.peers.values() {
+                    if peer.is_available() {
+                        active_peers += 1;
+                    }
+                }
+                self.check_quorum(active_peers)
+            } else {
+                false
             }
         }
 
@@ -710,6 +733,9 @@ mod private {
             self.received_votes.clear();
             self.received_prevotes.clear();
             self.outbound_entries.clear();
+            for peer in self.peers.values_mut() {
+                peer.reset_heartbeat_ack();
+            }
         }
     }
 }

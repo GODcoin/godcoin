@@ -32,10 +32,14 @@ pub struct Peer {
     next_msg_id: u64,
     /// Last known index this peer has acknowledged.
     last_ack_index: u64,
+    /// Maximum allowed heartbeat delta before we assume this peer is inactive.
+    heartbeat_delta_max: u32,
+    /// Last heartbeat request acknowledged.
+    heartbeat_ack_delta: u32,
 }
 
 impl Peer {
-    pub fn new(address: SocketAddr) -> Self {
+    pub fn new(address: SocketAddr, heartbeat_delta_max: u32) -> Self {
         Self {
             address,
             connection_sink: None,
@@ -44,6 +48,8 @@ impl Peer {
             tries: 0,
             next_msg_id: 0,
             last_ack_index: 0,
+            heartbeat_delta_max,
+            heartbeat_ack_delta: 0,
         }
     }
 
@@ -80,6 +86,18 @@ impl Peer {
 
     pub fn get_sender(&self) -> Option<ActiveConnSink> {
         self.connection_sink.clone()
+    }
+
+    pub fn is_available(&self) -> bool {
+        self.is_connected() && self.heartbeat_ack_delta < self.heartbeat_delta_max
+    }
+
+    pub fn tick_heartbeat_ack(&mut self) {
+        self.heartbeat_ack_delta = self.heartbeat_ack_delta.saturating_add(1);
+    }
+
+    pub fn reset_heartbeat_ack(&mut self) {
+        self.heartbeat_ack_delta = 0;
     }
 
     /// Returns whether a connection should be established or not. This should only be called when

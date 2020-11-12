@@ -10,8 +10,8 @@ pub struct Config {
 }
 
 impl Config {
-    /// Creates a default configuration with the specified raft ID and the assumption that every
-    /// 100ms is a tick.
+    /// Creates a default configuration with the specified ID and the assumption that every 100ms is
+    /// a tick.
     pub fn new(id: NodeId) -> Self {
         Self {
             id,
